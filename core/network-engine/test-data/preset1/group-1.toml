@@ -1,0 +1,9 @@
+type = "labeledGroup"
+
+label = "Labeled Group"
+width = 700
+height = 300
+
+[position]
+x = 0
+y = 0

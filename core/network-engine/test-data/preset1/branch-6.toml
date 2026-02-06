@@ -1,0 +1,28 @@
+type = "branch"
+
+label = "Branch 6"
+
+[position]
+x = 1200
+y = 320
+
+[[block]]
+quantity = 1
+type = "Pipe"
+
+[[block]]
+quantity = 1
+type = "Pipe"
+
+[[block]]
+quantity = 1
+type = "Pipe"
+
+[[block]]
+quantity = 1
+type = "Pipe"
+
+[[block]]
+quantity = 1
+type = "Sink"
+

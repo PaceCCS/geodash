@@ -1,0 +1,32 @@
+type = "branch"
+
+label = "Branch 7"
+
+[position]
+x = 300
+y = 380
+
+[[block]]
+quantity = 1
+type = "Source"
+
+[[block]]
+quantity = 1
+type = "Pipe"
+
+[[block]]
+quantity = 1
+type = "Pipe"
+
+[[block]]
+quantity = 1
+type = "Pipe"
+
+[[block]]
+quantity = 1
+type = "Pipe"
+
+[[block]]
+quantity = 1
+type = "Sink"
+

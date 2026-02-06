@@ -1,0 +1,40 @@
+type = "branch"
+
+label = "Branch 4"
+
+[position]
+x = -100
+y = 350
+
+[[outgoing]]
+target = "branch-2"
+weight = 1
+
+[[block]]
+quantity = 1
+type = "Source"
+pressure = 15.5
+
+[[block]]
+quantity = 1
+type = "Pipe"
+
+[[block]]
+quantity = 1
+type = "Pipe"
+
+[[block]]
+quantity = 1
+type = "Pipe"
+
+[[block]]
+quantity = 1
+type = "Pipe"
+
+[[block]]
+quantity = 1
+type = "Pipe"
+
+[[block]]
+quantity = 1
+type = "Pipe"
