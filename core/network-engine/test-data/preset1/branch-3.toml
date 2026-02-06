@@ -1,0 +1,27 @@
+type = "branch"
+
+label = "Branch 3"
+
+[position]
+x = 900
+y = 150
+
+[[block]]
+quantity = 1
+type = "Pipe"
+
+[[block]]
+quantity = 1
+type = "Pipe"
+
+[[block]]
+quantity = 1
+type = "Pipe"
+
+[[block]]
+quantity = 1
+type = "Pipe"
+
+[[block]]
+quantity = 1
+type = "Sink"

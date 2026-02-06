@@ -1,0 +1,13 @@
+# Global properties (preset-level defaults)
+[properties]
+ambientTemperature = 20.0
+pressure = 14.7
+
+# Inheritance rules
+[inheritance]
+general = ["block", "branch", "group", "global"]
+
+[inheritance.rules]
+ambientTemperature = ["group", "global"]
+pressure = ["block"]
+

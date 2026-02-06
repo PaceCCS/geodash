@@ -1,0 +1,20 @@
+type = "branch"
+
+label = "Branch 5"
+
+[position]
+x = 800
+y = 350
+
+[[outgoing]]
+target = "branch-6"
+weight = 1
+
+[[block]]
+quantity = 1
+type = "Pipe"
+
+[[block]]
+quantity = 1
+type = "Pipe"
+
