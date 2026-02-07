@@ -243,14 +243,14 @@ pub const QueryExecutor = struct {
                     // Try direct property access first
                     const direct = self.getProperty(current, name);
                     if (direct) |val| {
-                        break :blk try cloneValue(self.allocator, val);
+                        break :blk try val.clone(self.allocator);
                     }
 
                     // Try scope resolution if we have context
                     if (self.scope_resolver) |resolver| {
                         if (node_id != null and block_index != null) {
                             if (self.tryResolveScoped(resolver, name, node_id.?, block_index.?, query.params.scopes)) |val| {
-                                break :blk try cloneValue(self.allocator, val);
+                                break :blk try val.clone(self.allocator);
                             }
                         }
                     }
@@ -260,7 +260,7 @@ pub const QueryExecutor = struct {
                     block_index = idx;
                     const arr = current.getArray() orelse return QueryError.InvalidType;
                     if (idx >= arr.len) return QueryError.IndexOutOfRange;
-                    break :blk try cloneValue(self.allocator, arr[idx]);
+                    break :blk try arr[idx].clone(self.allocator);
                 },
                 .range => |r| blk: {
                     const arr = current.getArray() orelse return QueryError.InvalidType;
@@ -270,7 +270,7 @@ pub const QueryExecutor = struct {
 
                     var result_arr = Value.Array{};
                     for (arr[start .. end + 1]) |item| {
-                        try result_arr.append(self.allocator, try cloneValue(self.allocator, item));
+                        try result_arr.append(self.allocator, try item.clone(self.allocator));
                     }
                     break :blk Value{ .array = result_arr };
                 },
@@ -280,7 +280,7 @@ pub const QueryExecutor = struct {
 
                     for (arr) |item| {
                         if (self.matchesFilter(item, f)) {
-                            try result_arr.append(self.allocator, try cloneValue(self.allocator, item));
+                            try result_arr.append(self.allocator, try item.clone(self.allocator));
                         }
                     }
                     break :blk Value{ .array = result_arr };
@@ -339,7 +339,7 @@ pub const QueryExecutor = struct {
                     // Add extra properties
                     var extra_it = block.extra.iterator();
                     while (extra_it.next()) |entry| {
-                        try block_table.put(self.allocator, try self.allocator.dupe(u8, entry.key_ptr.*), try cloneValue(self.allocator, entry.value_ptr.*));
+                        try block_table.put(self.allocator, try self.allocator.dupe(u8, entry.key_ptr.*), try entry.value_ptr.clone(self.allocator));
                     }
                     try blocks_arr.append(self.allocator, Value{ .table = block_table });
                 }
@@ -444,6 +444,10 @@ fn matchesValue(val: Value, filter_value: []const u8) bool {
             if (std.mem.eql(u8, filter_value, "false")) return !b;
             return false;
         },
+        .quantity => |q| {
+            const fv = std.fmt.parseFloat(f64, filter_value) catch return false;
+            return @abs(q.value - fv) < 1e-9;
+        },
         else => return false,
     }
 }
@@ -458,30 +462,6 @@ fn compareNumeric(val: Value, filter_value: []const u8, op: FilterOperator) bool
         .gte => num >= fv,
         .lte => num <= fv,
         else => false,
-    };
-}
-
-fn cloneValue(allocator: Allocator, val: Value) !Value {
-    return switch (val) {
-        .string => |s| Value{ .string = try allocator.dupe(u8, s) },
-        .integer => |i| Value{ .integer = i },
-        .float => |f| Value{ .float = f },
-        .boolean => |b| Value{ .boolean = b },
-        .table => |t| {
-            var new_table = Value.Table{};
-            var it = t.iterator();
-            while (it.next()) |entry| {
-                try new_table.put(allocator, try allocator.dupe(u8, entry.key_ptr.*), try cloneValue(allocator, entry.value_ptr.*));
-            }
-            return Value{ .table = new_table };
-        },
-        .array => |a| {
-            var new_arr = Value.Array{};
-            for (a.items) |item| {
-                try new_arr.append(allocator, try cloneValue(allocator, item));
-            }
-            return Value{ .array = new_arr };
-        },
     };
 }
 

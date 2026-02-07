@@ -90,7 +90,7 @@ pub const Config = struct {
             while (it.next()) |entry| {
                 const key = try allocator.dupe(u8, entry.key_ptr.*);
                 errdefer allocator.free(key);
-                const val = try cloneValue(allocator, entry.value_ptr.*);
+                const val = try entry.value_ptr.clone(allocator);
                 try config.properties.put(allocator, key, val);
             }
         }
@@ -145,32 +145,6 @@ pub const Config = struct {
         return config;
     }
 };
-
-fn cloneValue(allocator: Allocator, val: Value) !Value {
-    return switch (val) {
-        .string => |s| Value{ .string = try allocator.dupe(u8, s) },
-        .integer => |i| Value{ .integer = i },
-        .float => |f| Value{ .float = f },
-        .boolean => |b| Value{ .boolean = b },
-        .table => |t| {
-            var new_table = Value.Table{};
-            var it = t.iterator();
-            while (it.next()) |entry| {
-                const k = try allocator.dupe(u8, entry.key_ptr.*);
-                const v = try cloneValue(allocator, entry.value_ptr.*);
-                try new_table.put(allocator, k, v);
-            }
-            return Value{ .table = new_table };
-        },
-        .array => |a| {
-            var new_arr = Value.Array{};
-            for (a.items) |item| {
-                try new_arr.append(allocator, try cloneValue(allocator, item));
-            }
-            return Value{ .array = new_arr };
-        },
-    };
-}
 
 // ─── Resolver ───────────────────────────────────────────────────────────
 
