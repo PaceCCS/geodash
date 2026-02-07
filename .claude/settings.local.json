@@ -4,7 +4,8 @@
       "WebFetch(domain:github.com)",
       "WebSearch",
       "Bash(zig test:*)",
-      "Bash(zig build test:*)"
+      "Bash(zig build test:*)",
+      "Bash(zig fetch:*)"
     ]
   }
 }
