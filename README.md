@@ -117,15 +117,20 @@ Global (config.toml)
 - **Branch** — A network segment (e.g. a pipeline section)
 - **Block** — Individual component within a branch (e.g. a pipe, valve, compressor)
 
-## Suggested Plan
+## Progress
 
-### Phase 1: Zig Core Foundation
+### Phase 1: Zig Core Foundation — Complete
 
-- Port the scope hierarchy and property inheritance system from dagger to Zig
-- Integrate `dim` for compile-time unit safety on all quantity values
-- Implement TOML parsing for network definitions
-- Port the query language for property navigation and filtering
-- Implement versioned schema validation
+The network engine (`core/network-engine/`) is implemented with 52 passing tests:
+
+- Custom TOML parser for the dagger file format (tables, arrays of tables, dotted keys)
+- Network loader: reads a directory of `.toml` files, derives node IDs from filenames, builds edges from outgoing connections, validates references
+- Scope system: `Config` loaded from `config.toml`, `ScopeResolver` walks configurable inheritance chains (per-property, per-block-type rules)
+- Schema system: `SchemaRegistry` with versioned `SchemaDefinition` per block type, non-blocking `SchemaValidator`
+- Query engine: path-based queries (`branch-4/blocks/0/pressure`), array indexing, range slicing, filter expressions (`[type=Pipe]`), scope resolution via `?scope=` params
+- Integration tests against actual dagger preset1 data (14 nodes across 5 types, 9 branches)
+
+Still to do in this layer: `dim` integration (unit string parsing + dimensional validation), TOML write path for round-trip serialization.
 
 ### Phase 2: Shapefile Parser & Geospatial I/O
 

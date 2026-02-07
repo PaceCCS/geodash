@@ -3,6 +3,7 @@ pub const network = @import("network.zig");
 pub const scope = @import("scope.zig");
 pub const schema = @import("schema.zig");
 pub const query = @import("query.zig");
+pub const units = @import("units.zig");
 
 // Re-export key types for convenience
 pub const Value = toml.Value;
@@ -20,6 +21,8 @@ pub const QueryExecutor = query.QueryExecutor;
 
 pub const loadNetworkFromFiles = network.loadNetworkFromFiles;
 pub const parseQuery = query.parseQuery;
+pub const tryParseQuantity = units.tryParseQuantity;
+pub const ParsedQuantity = units.ParsedQuantity;
 
 test {
     // Pull in all tests from submodules
