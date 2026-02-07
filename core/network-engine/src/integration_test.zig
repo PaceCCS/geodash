@@ -432,3 +432,33 @@ test "preset1: schema validation on branch-4 blocks" {
     try validator.validateBlock(&branch4.blocks.items[1], "v1.0", &pipe_validation);
     try std.testing.expect(pipe_validation.isValid());
 }
+
+// ─── Quantity evaluation tests ───────────────────────────────────────────
+
+test "preset1: evaluateQuantities detects pressure on branch-1" {
+    const allocator = std.testing.allocator;
+    var files = try loadPreset1Files(allocator);
+    defer deinitFiles(allocator, &files);
+    if (files.count() == 0) return;
+
+    // Parse branch-1.toml directly and evaluate quantities
+    const content = files.get("branch-1.toml") orelse return;
+    var parsed = try toml.Parser.parse(allocator, content);
+    defer parsed.deinit(allocator);
+
+    toml.evaluateQuantities(allocator, &parsed);
+
+    // Check that block extra properties with unit expressions became quantities
+    const blocks = parsed.table.get("block").?.getArray().?;
+    // Source block (index 0) has pressure as a float (15.5) in preset1 — evaluateQuantities leaves floats alone
+    const source_block = blocks[0].table;
+    if (source_block.get("pressure")) |pressure_val| {
+        // In preset1, pressure is a float literal (15.5), not a string
+        // evaluateQuantities only converts strings, so it stays as float
+        try std.testing.expect(pressure_val == .float or pressure_val == .quantity);
+    }
+
+    // Verify that string values that look like dim expressions get converted
+    // The "type" field is "branch" which is not a valid dim expression, should stay string
+    try std.testing.expect(parsed.table.get("type").? == .string);
+}

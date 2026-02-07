@@ -1,4 +1,5 @@
 const std = @import("std");
+const dim = @import("dim");
 const Allocator = std.mem.Allocator;
 
 pub const Value = union(enum) {
@@ -8,6 +9,7 @@ pub const Value = union(enum) {
     boolean: bool,
     table: Table,
     array: Array,
+    quantity: dim.DisplayQuantity,
 
     pub const Table = std.StringArrayHashMapUnmanaged(Value);
     pub const Array = std.ArrayListUnmanaged(Value);
@@ -29,6 +31,7 @@ pub const Value = union(enum) {
                 }
                 a.deinit(allocator);
             },
+            .quantity => |q| allocator.free(q.unit),
             .integer, .float, .boolean => {},
         }
     }
@@ -58,6 +61,14 @@ pub const Value = union(enum) {
         return switch (self) {
             .float => |f| f,
             .integer => |i| @as(f64, @floatFromInt(i)),
+            .quantity => |q| q.value,
+            else => null,
+        };
+    }
+
+    pub fn getQuantity(self: Value) ?dim.DisplayQuantity {
+        return switch (self) {
+            .quantity => |q| q,
             else => null,
         };
     }
@@ -73,6 +84,39 @@ pub const Value = union(enum) {
         return switch (self) {
             .array => |a| a.items,
             else => null,
+        };
+    }
+
+    pub fn clone(self: Value, allocator: Allocator) !Value {
+        return switch (self) {
+            .string => |s| Value{ .string = try allocator.dupe(u8, s) },
+            .integer => |i| Value{ .integer = i },
+            .float => |f| Value{ .float = f },
+            .boolean => |b| Value{ .boolean = b },
+            .quantity => |q| Value{ .quantity = .{
+                .value = q.value,
+                .dim = q.dim,
+                .unit = try allocator.dupe(u8, q.unit),
+                .mode = q.mode,
+                .is_delta = q.is_delta,
+            } },
+            .table => |t| {
+                var new_table = Value.Table{};
+                var it = t.iterator();
+                while (it.next()) |entry| {
+                    const k = try allocator.dupe(u8, entry.key_ptr.*);
+                    const v = try entry.value_ptr.clone(allocator);
+                    try new_table.put(allocator, k, v);
+                }
+                return Value{ .table = new_table };
+            },
+            .array => |a| {
+                var new_arr = Value.Array{};
+                for (a.items) |item| {
+                    try new_arr.append(allocator, try item.clone(allocator));
+                }
+                return Value{ .array = new_arr };
+            },
         };
     }
 };
@@ -512,6 +556,230 @@ pub const Parser = struct {
     }
 };
 
+// ─── Quantity evaluation ─────────────────────────────────────────────────
+
+/// Walk a Value tree and convert qualifying strings to quantity values
+/// using dim.evaluate(). Only strings that evaluate to a DisplayQuantity
+/// are converted; labels, bare numbers, etc. are left as strings.
+pub fn evaluateQuantities(allocator: Allocator, value: *Value) void {
+    switch (value.*) {
+        .string => |s| {
+            const result = dim.evaluate(allocator, s, null) orelse return;
+            switch (result) {
+                .display_quantity => |dq| {
+                    allocator.free(s);
+                    value.* = Value{ .quantity = dq };
+                },
+                else => {},
+            }
+        },
+        .table => |*t| {
+            var it = t.iterator();
+            while (it.next()) |entry| {
+                evaluateQuantities(allocator, entry.value_ptr);
+            }
+        },
+        .array => |*a| {
+            for (a.items) |*item| {
+                evaluateQuantities(allocator, item);
+            }
+        },
+        .integer, .float, .boolean, .quantity => {},
+    }
+}
+
+// ─── TOML serializer ─────────────────────────────────────────────────────
+
+const PathStack = struct {
+    items: [8][]const u8 = undefined,
+    len: usize = 0,
+
+    fn push(self: *PathStack, val: []const u8) void {
+        self.items[self.len] = val;
+        self.len += 1;
+    }
+
+    fn pop(self: *PathStack) void {
+        self.len -= 1;
+    }
+
+    fn slice(self: *const PathStack) []const []const u8 {
+        return self.items[0..self.len];
+    }
+};
+
+pub fn serialize(allocator: Allocator, value: Value) ![]u8 {
+    var buf = std.ArrayListUnmanaged(u8){};
+    errdefer buf.deinit(allocator);
+
+    var path = PathStack{};
+    try serializeTable(allocator, &buf, value.table, &path);
+
+    return buf.toOwnedSlice(allocator);
+}
+
+fn serializeTable(
+    allocator: Allocator,
+    buf: *std.ArrayListUnmanaged(u8),
+    table: Value.Table,
+    path: *PathStack,
+) !void {
+    // Pass 1: scalar key-value pairs + inline arrays
+    var it = table.iterator();
+    while (it.next()) |entry| {
+        switch (entry.value_ptr.*) {
+            .table => {},
+            .array => |a| {
+                // Check if this is an array of tables
+                if (a.items.len > 0 and a.items[0] == .table) continue;
+                try writeKey(allocator, buf, entry.key_ptr.*);
+                try buf.appendSlice(allocator, " = ");
+                try serializeValue(allocator, buf, entry.value_ptr.*);
+                try buf.append(allocator, '\n');
+            },
+            else => {
+                try writeKey(allocator, buf, entry.key_ptr.*);
+                try buf.appendSlice(allocator, " = ");
+                try serializeValue(allocator, buf, entry.value_ptr.*);
+                try buf.append(allocator, '\n');
+            },
+        }
+    }
+
+    // Pass 2: subtables as [section] headers
+    it = table.iterator();
+    while (it.next()) |entry| {
+        switch (entry.value_ptr.*) {
+            .table => |sub| {
+                try buf.append(allocator, '\n');
+                path.push(entry.key_ptr.*);
+                defer path.pop();
+
+                try buf.append(allocator, '[');
+                for (path.slice(), 0..) |part, i| {
+                    if (i > 0) try buf.append(allocator, '.');
+                    try writeKey(allocator, buf, part);
+                }
+                try buf.appendSlice(allocator, "]\n");
+
+                try serializeTable(allocator, buf, sub, path);
+            },
+            else => {},
+        }
+    }
+
+    // Pass 3: arrays of tables as [[section]] headers
+    it = table.iterator();
+    while (it.next()) |entry| {
+        switch (entry.value_ptr.*) {
+            .array => |a| {
+                if (a.items.len == 0 or a.items[0] != .table) continue;
+                path.push(entry.key_ptr.*);
+                defer path.pop();
+
+                for (a.items) |item| {
+                    try buf.append(allocator, '\n');
+                    try buf.appendSlice(allocator, "[[");
+                    for (path.slice(), 0..) |part, i| {
+                        if (i > 0) try buf.append(allocator, '.');
+                        try writeKey(allocator, buf, part);
+                    }
+                    try buf.appendSlice(allocator, "]]\n");
+                    var empty_path = PathStack{};
+                    try serializeTable(allocator, buf, item.table, &empty_path);
+                }
+            },
+            else => {},
+        }
+    }
+}
+
+fn serializeValue(allocator: Allocator, buf: *std.ArrayListUnmanaged(u8), value: Value) !void {
+    switch (value) {
+        .string => |s| try writeQuotedString(allocator, buf, s),
+        .integer => |i| {
+            var tmp: [32]u8 = undefined;
+            const slice = std.fmt.bufPrint(&tmp, "{d}", .{i}) catch unreachable;
+            try buf.appendSlice(allocator, slice);
+        },
+        .float => |f| {
+            var tmp: [64]u8 = undefined;
+            const slice = std.fmt.bufPrint(&tmp, "{d}", .{f}) catch unreachable;
+            try buf.appendSlice(allocator, slice);
+        },
+        .boolean => |b| try buf.appendSlice(allocator, if (b) "true" else "false"),
+        .quantity => |q| {
+            // Convert canonical value back to display units and serialize as string
+            if (dim.findUnitAll(q.unit)) |unit| {
+                const display_val = unit.fromCanonical(q.value);
+                var tmp: [64]u8 = undefined;
+                const num_str = std.fmt.bufPrint(&tmp, "{d}", .{display_val}) catch unreachable;
+                try buf.append(allocator, '"');
+                try buf.appendSlice(allocator, num_str);
+                try buf.append(allocator, ' ');
+                try buf.appendSlice(allocator, q.unit);
+                try buf.append(allocator, '"');
+            } else {
+                // Fallback: use canonical value with unit symbol
+                var tmp: [64]u8 = undefined;
+                const num_str = std.fmt.bufPrint(&tmp, "{d}", .{q.value}) catch unreachable;
+                try buf.append(allocator, '"');
+                try buf.appendSlice(allocator, num_str);
+                try buf.append(allocator, ' ');
+                try buf.appendSlice(allocator, q.unit);
+                try buf.append(allocator, '"');
+            }
+        },
+        .array => |a| {
+            try buf.append(allocator, '[');
+            for (a.items, 0..) |item, i| {
+                if (i > 0) try buf.appendSlice(allocator, ", ");
+                try serializeValue(allocator, buf, item);
+            }
+            try buf.append(allocator, ']');
+        },
+        .table => {
+            // Inline tables not expected at this level; handled by serializeTable
+            try buf.appendSlice(allocator, "{}");
+        },
+    }
+}
+
+fn writeKey(allocator: Allocator, buf: *std.ArrayListUnmanaged(u8), key: []const u8) !void {
+    // Bare key if it matches [a-zA-Z0-9_-]+
+    var bare = true;
+    if (key.len == 0) {
+        bare = false;
+    } else {
+        for (key) |c| {
+            if (!std.ascii.isAlphanumeric(c) and c != '_' and c != '-') {
+                bare = false;
+                break;
+            }
+        }
+    }
+    if (bare) {
+        try buf.appendSlice(allocator, key);
+    } else {
+        try writeQuotedString(allocator, buf, key);
+    }
+}
+
+fn writeQuotedString(allocator: Allocator, buf: *std.ArrayListUnmanaged(u8), s: []const u8) !void {
+    try buf.append(allocator, '"');
+    for (s) |c| {
+        switch (c) {
+            '"' => try buf.appendSlice(allocator, "\\\""),
+            '\\' => try buf.appendSlice(allocator, "\\\\"),
+            '\n' => try buf.appendSlice(allocator, "\\n"),
+            '\r' => try buf.appendSlice(allocator, "\\r"),
+            '\t' => try buf.appendSlice(allocator, "\\t"),
+            else => try buf.append(allocator, c),
+        }
+    }
+    try buf.append(allocator, '"');
+}
+
 // Tests
 test "parse simple key-value pairs" {
     const allocator = std.testing.allocator;
@@ -746,4 +1014,164 @@ test "parse dotted table headers" {
     const rules = inheritance.get("rules").?.table;
     const pressure = rules.get("pressure").?.getArray().?;
     try std.testing.expectEqualStrings("block", pressure[0].getString().?);
+}
+
+// ─── evaluateQuantities tests ────────────────────────────────────────────
+
+test "evaluateQuantities converts pressure string to quantity" {
+    const allocator = std.testing.allocator;
+    var val = Value{ .string = try allocator.dupe(u8, "120 bar") };
+    defer val.deinit(allocator);
+
+    evaluateQuantities(allocator, &val);
+
+    try std.testing.expect(val == .quantity);
+    const q = val.quantity;
+    // 120 bar = 12,000,000 Pa canonical
+    try std.testing.expectApproxEqAbs(@as(f64, 12_000_000), q.value, 1.0);
+    // dim normalizes unit symbols to canonical (Pa for pressure)
+    try std.testing.expectEqualStrings("Pa", q.unit);
+}
+
+test "evaluateQuantities leaves plain strings unchanged" {
+    const allocator = std.testing.allocator;
+    var val = Value{ .string = try allocator.dupe(u8, "branch") };
+    defer val.deinit(allocator);
+
+    evaluateQuantities(allocator, &val);
+
+    try std.testing.expect(val == .string);
+    try std.testing.expectEqualStrings("branch", val.string);
+}
+
+test "evaluateQuantities recurses into tables" {
+    const allocator = std.testing.allocator;
+
+    var inner = Value.Table{};
+    const key = try allocator.dupe(u8, "pressure");
+    try inner.put(allocator, key, Value{ .string = try allocator.dupe(u8, "120 bar") });
+
+    var val = Value{ .table = inner };
+    defer val.deinit(allocator);
+
+    evaluateQuantities(allocator, &val);
+
+    const q = val.table.get("pressure").?.getQuantity().?;
+    try std.testing.expectApproxEqAbs(@as(f64, 12_000_000), q.value, 1.0);
+}
+
+// ─── serialize tests ─────────────────────────────────────────────────────
+
+test "serialize round-trips simple table" {
+    const allocator = std.testing.allocator;
+
+    const source =
+        \\name = "test"
+        \\count = 42
+        \\ratio = 3.14
+        \\active = true
+    ;
+
+    var parsed = try Parser.parse(allocator, source);
+    defer parsed.deinit(allocator);
+
+    const serialized = try serialize(allocator, parsed);
+    defer allocator.free(serialized);
+
+    // Re-parse the serialized output
+    var reparsed = try Parser.parse(allocator, serialized);
+    defer reparsed.deinit(allocator);
+
+    try std.testing.expectEqualStrings("test", reparsed.table.get("name").?.getString().?);
+    try std.testing.expectEqual(@as(i64, 42), reparsed.table.get("count").?.getInteger().?);
+    try std.testing.expectApproxEqAbs(@as(f64, 3.14), reparsed.table.get("ratio").?.getFloat().?, 0.001);
+    try std.testing.expectEqual(true, reparsed.table.get("active").?.getBool().?);
+}
+
+test "serialize round-trips quantity back to string" {
+    const allocator = std.testing.allocator;
+
+    // Create a quantity value (120 bar = 12,000,000 Pa canonical)
+    var table = Value.Table{};
+    const key = try allocator.dupe(u8, "pressure");
+    try table.put(allocator, key, Value{ .string = try allocator.dupe(u8, "120 bar") });
+
+    var val = Value{ .table = table };
+    defer val.deinit(allocator);
+
+    evaluateQuantities(allocator, &val);
+
+    // Verify it's now a quantity (dim normalizes to Pa)
+    try std.testing.expect(val.table.get("pressure").? == .quantity);
+
+    // Serialize and re-parse
+    const serialized = try serialize(allocator, val);
+    defer allocator.free(serialized);
+
+    var reparsed = try Parser.parse(allocator, serialized);
+    defer reparsed.deinit(allocator);
+
+    // Should be a string with the unit (serialized as "12000000 Pa")
+    const pressure_str = reparsed.table.get("pressure").?.getString().?;
+    try std.testing.expect(std.mem.indexOf(u8, pressure_str, "Pa") != null);
+
+    // Re-evaluate to verify round-trip
+    evaluateQuantities(allocator, &reparsed);
+    const q = reparsed.table.get("pressure").?.getQuantity().?;
+    try std.testing.expectApproxEqAbs(@as(f64, 12_000_000), q.value, 1.0);
+}
+
+test "serialize handles nested [section] tables" {
+    const allocator = std.testing.allocator;
+
+    const source =
+        \\name = "test"
+        \\
+        \\[position]
+        \\x = 100
+        \\y = 200
+    ;
+
+    var parsed = try Parser.parse(allocator, source);
+    defer parsed.deinit(allocator);
+
+    const serialized = try serialize(allocator, parsed);
+    defer allocator.free(serialized);
+
+    var reparsed = try Parser.parse(allocator, serialized);
+    defer reparsed.deinit(allocator);
+
+    try std.testing.expectEqualStrings("test", reparsed.table.get("name").?.getString().?);
+    const pos = reparsed.table.get("position").?.table;
+    try std.testing.expectEqual(@as(i64, 100), pos.get("x").?.getInteger().?);
+    try std.testing.expectEqual(@as(i64, 200), pos.get("y").?.getInteger().?);
+}
+
+test "serialize handles [[array]] of tables" {
+    const allocator = std.testing.allocator;
+
+    const source =
+        \\[[block]]
+        \\type = "Source"
+        \\pressure = 15.5
+        \\
+        \\[[block]]
+        \\type = "Pipe"
+        \\quantity = 1
+    ;
+
+    var parsed = try Parser.parse(allocator, source);
+    defer parsed.deinit(allocator);
+
+    const serialized = try serialize(allocator, parsed);
+    defer allocator.free(serialized);
+
+    var reparsed = try Parser.parse(allocator, serialized);
+    defer reparsed.deinit(allocator);
+
+    const blocks = reparsed.table.get("block").?.getArray().?;
+    try std.testing.expectEqual(@as(usize, 2), blocks.len);
+    try std.testing.expectEqualStrings("Source", blocks[0].table.get("type").?.getString().?);
+    try std.testing.expectApproxEqAbs(@as(f64, 15.5), blocks[0].table.get("pressure").?.getFloat().?, 0.001);
+    try std.testing.expectEqualStrings("Pipe", blocks[1].table.get("type").?.getString().?);
 }

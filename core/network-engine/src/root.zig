@@ -20,6 +20,8 @@ pub const QueryExecutor = query.QueryExecutor;
 
 pub const loadNetworkFromFiles = network.loadNetworkFromFiles;
 pub const parseQuery = query.parseQuery;
+pub const evaluateQuantities = toml.evaluateQuantities;
+pub const serialize = toml.serialize;
 
 test {
     // Pull in all tests from submodules
