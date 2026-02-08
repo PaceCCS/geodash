@@ -1,7 +1,6 @@
 pub const toml = @import("toml.zig");
 pub const network = @import("network.zig");
 pub const scope = @import("scope.zig");
-pub const schema = @import("schema.zig");
 pub const query = @import("query.zig");
 
 // Re-export key types for convenience
@@ -14,8 +13,6 @@ pub const ValidationResult = network.ValidationResult;
 pub const Config = scope.Config;
 pub const ScopeLevel = scope.ScopeLevel;
 pub const ScopeResolver = scope.ScopeResolver;
-pub const SchemaRegistry = schema.SchemaRegistry;
-pub const SchemaValidator = schema.SchemaValidator;
 pub const QueryExecutor = query.QueryExecutor;
 
 pub const loadNetworkFromFiles = network.loadNetworkFromFiles;
