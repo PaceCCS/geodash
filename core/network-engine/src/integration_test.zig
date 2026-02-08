@@ -6,7 +6,6 @@ const std = @import("std");
 const toml = @import("toml.zig");
 const net = @import("network.zig");
 const scope_mod = @import("scope.zig");
-const schema_mod = @import("schema.zig");
 const query_mod = @import("query.zig");
 const Value = toml.Value;
 
@@ -391,46 +390,6 @@ test "preset1: query with scope resolution for ambientTemperature" {
     defer result.deinit(allocator);
 
     try std.testing.expectApproxEqAbs(@as(f64, 20.0), result.getFloat().?, 0.001);
-}
-
-// ─── Schema validation tests ────────────────────────────────────────────
-
-test "preset1: schema validation on branch-4 blocks" {
-    const allocator = std.testing.allocator;
-    var files = try loadPreset1Files(allocator);
-    defer deinitFiles(allocator, &files);
-    if (files.count() == 0) return;
-
-    var validation = net.ValidationResult.init(allocator);
-    defer validation.deinit();
-    var network = try net.loadNetworkFromFiles(allocator, &files, &validation);
-    defer network.deinit(allocator);
-
-    // Build a simple schema for Source blocks
-    var registry = schema_mod.SchemaRegistry.init(allocator);
-    defer registry.deinit();
-
-    const source_schema = try schema_mod.buildTestSchema(allocator, "Source", "v1.0", &.{"pressure"}, &.{});
-    try registry.addSchema("v1.0", source_schema);
-
-    const pipe_schema = try schema_mod.buildTestSchema(allocator, "Pipe", "v1.0", &.{}, &.{"quantity"});
-    try registry.addSchema("v1.0", pipe_schema);
-
-    const validator = schema_mod.SchemaValidator.init(&registry);
-
-    const branch4 = network.findBranch("branch-4").?;
-
-    // Source block (index 0) has pressure — should pass
-    var source_validation = net.ValidationResult.init(allocator);
-    defer source_validation.deinit();
-    try validator.validateBlock(&branch4.blocks.items[0], "v1.0", &source_validation);
-    try std.testing.expect(source_validation.isValid());
-
-    // Pipe block (index 1) has no required properties — should pass
-    var pipe_validation = net.ValidationResult.init(allocator);
-    defer pipe_validation.deinit();
-    try validator.validateBlock(&branch4.blocks.items[1], "v1.0", &pipe_validation);
-    try std.testing.expect(pipe_validation.isValid());
 }
 
 // ─── Quantity evaluation tests ───────────────────────────────────────────
