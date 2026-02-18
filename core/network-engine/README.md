@@ -133,8 +133,3 @@ Tests include:
 - **Query engine**: property access, indexing, filtering, range, scope resolution
 - **Integration tests**: full pipeline against dagger preset1 data (14 nodes, 9 branches)
 
-## Not yet implemented
-
-- **dim integration** — Unit strings like `"120 bar"` are currently stored as raw strings in block.extra. Future: parse with dim at load time, store as Quantity types, validate dimensions against schema.
-- **TOML serialization (write path)** — Round-trip network back to TOML files.
-- **Complex inheritance rules** — Per-block-type overrides in PropertyInheritanceRule.Complex are parsed but not yet tested against real data.
