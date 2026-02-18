@@ -247,6 +247,13 @@ pub fn readPrj(allocator: std.mem.Allocator, path: []const u8) ![]u8 {
     return file.readToEndAlloc(allocator, 64 * 1024);
 }
 
+/// Write a WKT string to a .prj file.
+pub fn writePrj(path: []const u8, wkt: []const u8) !void {
+    const file = try std.fs.cwd().createFile(path, .{});
+    defer file.close();
+    try file.writeAll(wkt);
+}
+
 // ---------------------------------------------------------------------------
 // Public write API
 // ---------------------------------------------------------------------------
@@ -454,4 +461,24 @@ test "shp round-trip PointZ" {
     try std.testing.expectEqual(@as(i32, 11), st1);
     try std.testing.expectApproxEqAbs(@as(f64, 491542.058), p1.x, 1e-6);
     try std.testing.expectApproxEqAbs(@as(f64, 5918507.093), p1.y, 1e-6);
+}
+
+test "prj round-trip" {
+    const allocator = std.testing.allocator;
+    const wkt = "GEOGCS[\"WGS 84\",DATUM[\"WGS_1984\",SPHEROID[\"WGS 84\",6378137,298.257223563]],PRIMEM[\"Greenwich\",0],UNIT[\"degree\",0.0174532925199433]]";
+
+    var tmp_dir = std.testing.tmpDir(.{});
+    defer tmp_dir.cleanup();
+    const tmp_path = try tmp_dir.dir.realpathAlloc(allocator, ".");
+    defer allocator.free(tmp_path);
+
+    const prj_path = try std.fmt.allocPrint(allocator, "{s}/test.prj", .{tmp_path});
+    defer allocator.free(prj_path);
+
+    try writePrj(prj_path, wkt);
+
+    const read_back = try readPrj(allocator, prj_path);
+    defer allocator.free(read_back);
+
+    try std.testing.expectEqualStrings(wkt, read_back);
 }
