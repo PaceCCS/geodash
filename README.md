@@ -8,7 +8,7 @@ A geospatial flow network platform for constructing, evaluating, and simulating 
 
 ```
 ┌───────────────────────────────────────────────────┐
-│                  Tauri App (Rust)                  │
+│                  Tauri App (Rust)                 │
 │  ┌─────────────────────────────────────────────┐  │
 │  │                WebGPU Frontend              │  │
 │  │  - Network editor                           │  │
@@ -26,12 +26,12 @@ A geospatial flow network platform for constructing, evaluating, and simulating 
               │  - Zarr file serving  │
               └───────┬───────┬───────┘
                       │       │
-         ┌────────────▼──┐  ┌─▼──────────────────────┐
-         │   Zig Core    │  │  Python Simulation Server│
+         ┌────────────▼──┐  ┌─▼────────────────────────┐
+         │   Zig Core    │  │ Python Simulation Server │
          │               │  │         (remote)         │
-         │  - Network    │  │  - Transient pipe flow   │
-         │    Engine     │  │  - Incremental Zarr write│
-         │  - Shapefile  │  │  - SSE timestep stream   │
+         │  - Network    │  │ - Transient pipe flow    │
+         │    Engine     │  │ - Incremental Zarr write │
+         │  - Shapefile  │  │ - SSE timestep stream    │
          │  - GeoTIFF    │  └──────────────────────────┘
          │  - CRS        │
          │  - Zarr       │
