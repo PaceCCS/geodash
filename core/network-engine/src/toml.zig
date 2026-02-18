@@ -208,7 +208,6 @@ pub const Parser = struct {
 
             self.skipWhitespaceOnly();
             if (self.pos >= self.source.len or self.source[self.pos] != '=') {
-                self.allocator.free(key);
                 return ParseError.UnexpectedCharacter;
             }
             self.pos += 1; // skip '='
@@ -392,12 +391,63 @@ pub const Parser = struct {
             return self.parseInlineArray();
         }
 
+        if (ch == '{') {
+            return self.parseInlineTable();
+        }
+
         // Number (int or float)
         if (ch == '-' or ch == '+' or std.ascii.isDigit(ch)) {
             return self.parseNumber();
         }
 
         return ParseError.InvalidValue;
+    }
+
+    fn parseInlineTable(self: *Parser) ParseError!Value {
+        self.pos += 1; // skip '{'
+        var table = Value.Table{};
+        errdefer {
+            var v = Value{ .table = table };
+            v.deinit(self.allocator);
+        }
+
+        self.skipWhitespaceOnly();
+        if (self.pos < self.source.len and self.source[self.pos] == '}') {
+            self.pos += 1;
+            return Value{ .table = table };
+        }
+
+        while (true) {
+            self.skipWhitespaceOnly();
+            const key = try self.parseKey();
+            errdefer self.allocator.free(key);
+
+            self.skipWhitespaceOnly();
+            if (self.pos >= self.source.len or self.source[self.pos] != '=') {
+                return ParseError.UnexpectedCharacter;
+            }
+            self.pos += 1; // skip '='
+            self.skipWhitespaceOnly();
+
+            var value = try self.parseValue();
+            errdefer value.deinit(self.allocator);
+
+            try table.put(self.allocator, key, value);
+
+            self.skipWhitespaceOnly();
+            if (self.pos >= self.source.len) return ParseError.InvalidValue;
+            if (self.source[self.pos] == '}') {
+                self.pos += 1;
+                break;
+            }
+            if (self.source[self.pos] == ',') {
+                self.pos += 1;
+            } else {
+                return ParseError.UnexpectedCharacter;
+            }
+        }
+
+        return Value{ .table = table };
     }
 
     fn parseQuotedString(self: *Parser) ParseError![]const u8 {
