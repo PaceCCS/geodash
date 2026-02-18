@@ -10,7 +10,6 @@ src/
 ├── toml.zig             — TOML parser (dynamic Value type, supports tables, arrays of tables, dotted keys)
 ├── network.zig          — Network types (NodeData, Block, Edge) + loader from TOML files
 ├── scope.zig            — Config, ScopeLevel, ScopeResolver for hierarchical property inheritance
-├── schema.zig           — SchemaRegistry, SchemaValidator with non-blocking validation
 ├── query.zig            — Query parser + executor with scope resolution integration
 └── integration_test.zig — Tests against real dagger preset1 data
 ```
@@ -99,27 +98,6 @@ const executor = engine.QueryExecutor.withScopeResolver(allocator, &network, &re
 var result = try executor.execute(&q);
 ```
 
-### Schema validation
-
-Schemas define required/optional properties per block type. Validation is non-blocking — it collects all issues without halting.
-
-```zig
-var registry = engine.SchemaRegistry.init(allocator);
-
-// Register schemas (typically loaded from JSON files)
-const source_schema = try schema.buildTestSchema(allocator, "Source", "v1.0", &.{"pressure"}, &.{"temperature"});
-try registry.addSchema("v1.0", source_schema);
-
-const validator = engine.SchemaValidator.init(&registry);
-
-var validation = engine.ValidationResult.init(allocator);
-try validator.validateBlock(&block, "v1.0", &validation);
-
-if (!validation.isValid()) {
-    for (validation.errors.items) |e| std.debug.print("error: {s}\n", .{e.message});
-}
-```
-
 ## Node types
 
 | Type | TOML `type` value | Description |
@@ -152,7 +130,6 @@ Tests include:
 - **TOML parser**: key-value pairs, tables, arrays of tables, dotted keys, escapes, comments
 - **Network loader**: branch/group/image nodes, edge construction, validation warnings
 - **Scope resolver**: block-level lookup, global fallback, per-property rule enforcement
-- **Schema validator**: required/optional properties, unknown property warnings
 - **Query engine**: property access, indexing, filtering, range, scope resolution
 - **Integration tests**: full pipeline against dagger preset1 data (14 nodes, 9 branches)
 
