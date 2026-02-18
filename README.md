@@ -8,7 +8,7 @@ Website: [geoda.sh](https://geoda.sh)
 
 ```
 ┌───────────────────────────────────────────────────┐
-│                  Tauri App (Rust)                  │
+│                  Tauri App (Rust)                 │
 │  ┌─────────────────────────────────────────────┐  │
 │  │                WebGPU Frontend              │  │
 │  │  - Network editor                           │  │
@@ -26,12 +26,12 @@ Website: [geoda.sh](https://geoda.sh)
               │  - Zarr file serving  │
               └───────┬───────┬───────┘
                       │       │
-         ┌────────────▼──┐  ┌─▼──────────────────────┐
-         │   Zig Core    │  │  Python Simulation Server│
+         ┌────────────▼──┐  ┌─▼────────────────────────┐
+         │   Zig Core    │  │ Python Simulation Server │
          │               │  │         (remote)         │
-         │  - Network    │  │  - Transient pipe flow   │
-         │    Engine     │  │  - Incremental Zarr write│
-         │  - Shapefile  │  │  - SSE timestep stream   │
+         │  - Network    │  │ - Transient pipe flow    │
+         │    Engine     │  │ - Incremental Zarr write │
+         │  - Shapefile  │  │ - SSE timestep stream    │
          │  - GeoTIFF    │  └──────────────────────────┘
          │  - CRS        │
          │  - Zarr       │
