@@ -53,7 +53,8 @@ The computational backbone, composed of:
 - **Network Engine** — The scope-based directed graph system (Global → Group → Branch → Block) with hierarchical property inheritance, TOML serialization, and versioned schema validation. Rebuilt from dagger's Rust/TypeScript implementation.
 - **[dim](https://github.com/PaceCCS/dim)** — Compile-time dimensional analysis library providing type-safe quantities across seven SI base dimensions. Enforces unit correctness throughout the network engine (all values stored in SI internally, converted per block type preferences). Also compiles to WASM for frontend use.
 - **Shapefile Parser** — Native Zig implementation for reading/writing `.shp`, `.shx`, and `.dbf` files. No C dependencies. Priority support for PointZ geometries (dense surveyed pipe routes) and PolyLineZ (pipeline paths). See [bathymetry-tool](https://github.com/Jerell/bathymetry-tool) for the Python prototype of this workflow.
-- **GeoTIFF I/O** — Read georeferenced raster data. Used for global bathymetric surfaces (e.g. GEBCO) to sample seabed elevation along pipe routes.
+- **Route Importer** — Reads KML, KMZ, and Google My Maps CSV exports into PolyLineZ. KML altitude values are preserved as Z; reprojection and KP assignment follow via the CRS transform tool.
+- **GeoTIFF I/O** — Read georeferenced raster data. Used for global bathymetric surfaces (e.g. GEBCO) to sample seabed elevation along pipe routes. *(Planned)*
 - **CRS Transform** — Coordinate reference system conversions (e.g. ED50 UTM Zone 30N ↔ WGS84) needed to reconcile survey data with global datasets. Wraps PROJ via C interop.
 - **Zarr Reader** — Reads Zarr v3 arrays for cases where the Zig core needs to consume simulation results directly.
 
@@ -79,17 +80,35 @@ TOML, shapefiles, GeoTIFF, and Zarr serve complementary roles:
 
 ## Simulation Workflows
 
-### Bathymetry → Network
+### Route → Network
+
+#### Implemented
 
 ```
-GEBCO GeoTIFF (bathymetric surface)
-    ↓ sample along route
-PointZ Shapefile (surveyed pipe profile, e.g. 1m-spaced KP points)
+Route geometry source (one of):
+  - KML / KMZ  →  PolyLineZ in WGS84, Z from embedded altitude if present
+  - Google My Maps CSV (WKT)  →  PolyLineZ in WGS84, Z = 0
+  - Existing PointZ / PolyLineZ shapefile  →  read directly
+      ↓ reproject
+  CRS transform (e.g. WGS84 → ED50 UTM Zone 30N) via PROJ
+      ↓ compute KP
+  Cumulative horizontal distance along route → KP index (metres → km)
+      ↓ write
+  PointZ / PolyLineZ shapefile (metric CRS, KP in M channel)
+```
+
+#### Planned: Bathymetry elevation sampling
+
+```
+GEBCO GeoTIFF (global bathymetric surface)
+    ↓ reproject route to WGS84 if needed
+    ↓ sample raster along route points
+Route PointZ with Z values filled from GEBCO
     ↓ import into network
-Branch/Block elevation properties (KP-indexed via dim)
+Branch/Block elevation properties (KP-indexed)
 ```
 
-This mirrors the workflow in [bathymetry-tool](https://github.com/Jerell/bathymetry-tool), which reads a PointZ shapefile (~66k survey points along the Spirit pipeline at 1m spacing in ED50 UTM Zone 30N), computes cumulative KP values, and compares the high-res profile against GEBCO 2025 GeoTIFF data after coordinate transform to WGS84.
+This follows the workflow from an earlier Python prototype, which reads a PointZ shapefile (~66k survey points along the Spirit pipeline at 1m spacing in ED50 UTM Zone 30N), computes cumulative KP values, and compares the high-res profile against GEBCO 2025 GeoTIFF data. If the source geometry already includes altitude (e.g. from a KML export), the GEBCO step can be skipped.
 
 ### Steady-State Simulation
 
@@ -162,17 +181,20 @@ The network engine (`core/network-engine/`) is implemented with 52 passing tests
 - Query engine: path-based queries (`branch-4/blocks/0/pressure`), array indexing, range slicing, filter expressions (`[type=Pipe]`), scope resolution via `?scope=` params
 - Integration tests against actual dagger preset1 data (14 nodes across 5 types, 9 branches)
 
-Still to do in this layer: `dim` integration (unit string parsing + dimensional validation), TOML write path for round-trip serialization.
+### Phase 2: Shapefile Parser & Geospatial I/O — Substantially Complete
 
-### Phase 2: Shapefile Parser & Geospatial I/O
+Done:
 
-- Implement `.shp` reader with PointZ and PolyLineZ as priority geometry types
-- Implement `.shx` reader (spatial index)
-- Implement `.dbf` reader (attribute data)
-- KP computation from consecutive survey points — cumulative distance along route
-- CRS transform support (wrap PROJ) for reconciling survey and global datasets
+- `.shp` reader/writer — PointZ and PolyLineZ geometry types
+- `.shx` reader/writer — spatial index
+- `.dbf` reader/writer — attribute table
+- KP computation from consecutive survey points — cumulative 2D horizontal distance (metres → km)
+- CRS transform — wraps PROJ 9 via C interop; CLI tool (`crs-tool --to EPSG:4326 input.shp output.shp`); ARM64 ABI workaround for pass-by-value bug
+- Route importer — KML, KMZ, and Google My Maps CSV → PolyLineZ in WGS84; altitude preserved from KML where present
+
+Still to do:
+
 - GeoTIFF reader for sampling bathymetric surfaces (GEBCO) along pipe routes
-- Write support for `.shp`/`.shx`/`.dbf`
 - Map PointZ routes to Branch elevation profiles and Point features to Block locations
 
 ### Phase 3: Hono Server + API
