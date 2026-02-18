@@ -1,0 +1,14 @@
+.{
+    .name = .crs,
+    .fingerprint = 0x61d59799c102f2bd,
+    .version = "0.0.0",
+    .minimum_zig_version = "0.15.2",
+    .dependencies = .{
+        .shapefile = .{ .path = "../shapefile" },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}

@@ -297,7 +297,7 @@ pub fn write(
 
     for (records) |rec| {
         const content_start: i32 = @intCast(shp_buf.items.len);
-        const offset_words: i32 = @intCast(content_start / 2);
+        const offset_words: i32 = @intCast(@divTrunc(content_start, 2));
 
         switch (rec.geometry) {
             .point_z => |p| {
@@ -320,7 +320,7 @@ pub fn write(
                 const np: i32 = @intCast(pl.parts.len);
                 const npt: i32 = @intCast(pl.points.len);
                 const content_bytes: i32 = 4 + 32 + 4 + 4 + np * 4 + npt * 16 + 16 + npt * 8 + 16 + npt * 8;
-                const content_words: i32 = content_bytes / 2;
+                const content_words: i32 = @divTrunc(content_bytes, 2);
 
                 try appendI32Be(&shp_buf, allocator, @intCast(rec.number));
                 try appendI32Be(&shp_buf, allocator, content_words);
@@ -357,7 +357,7 @@ pub fn write(
     }
 
     // Patch header in-place at offset 0
-    const total_words: i32 = @intCast(shp_buf.items.len / 2);
+    const total_words: i32 = @intCast(shp_buf.items.len >> 1);
     const effective_bbox = if (records.len > 0) bbox else BoundingBox{ .min_x = 0, .min_y = 0, .max_x = 0, .max_y = 0 };
     const hdr = ShpHeader{
         .file_length_words = total_words,
@@ -382,7 +382,7 @@ pub fn write(
         var shx_buf: std.ArrayListUnmanaged(u8) = .{};
         defer shx_buf.deinit(allocator);
 
-        const shx_words: i32 = @intCast((100 + records.len * 8) / 2);
+        const shx_words: i32 = @intCast((100 + records.len * 8) >> 1);
         const shx_hdr = ShpHeader{
             .file_length_words = shx_words,
             .shape_type = global_shape_type,
