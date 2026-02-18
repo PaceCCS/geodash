@@ -228,12 +228,13 @@ Global (config.toml)
 
 ### Phase 1: Zig Core Foundation — Complete
 
-The network engine (`core/network-engine/`) is implemented with 52 passing tests:
+The network engine (`core/network-engine/`) is implemented with passing tests:
 
-- Custom TOML parser for the dagger file format (tables, arrays of tables, dotted keys)
+- Custom TOML parser for the dagger file format (tables, arrays of tables, dotted keys, inline tables)
 - Network loader: reads a directory of `.toml` files, derives node IDs from filenames, builds edges from outgoing connections, validates references
 - Scope system: `Config` loaded from `config.toml`, `ScopeResolver` walks configurable inheritance chains (per-property, per-block-type rules)
 - Query engine: path-based queries (`branch-4/blocks/0/pressure`), array indexing, range slicing, filter expressions (`[type=Pipe]`), scope resolution via `?scope=` params
+- Fluid propagation: topological traversal of the DAG from source blocks; at each junction blends incoming compositions weighted by flow rate; assigns a derived composition to every downstream branch
 - Integration tests against actual dagger preset1 data (14 nodes across 5 types, 9 branches)
 
 ### Phase 2: Shapefile Parser & Geospatial I/O — Substantially Complete
