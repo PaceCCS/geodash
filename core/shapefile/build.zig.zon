@@ -1,0 +1,12 @@
+.{
+    .name = .shapefile,
+    .fingerprint = 0xf6c30b11649a0679,
+    .version = "0.0.0",
+    .minimum_zig_version = "0.15.2",
+    .dependencies = .{},
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}
