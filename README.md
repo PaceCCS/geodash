@@ -55,7 +55,8 @@ The computational backbone, composed of:
 - **Shapefile Parser** — Native Zig implementation for reading/writing `.shp`, `.shx`, and `.dbf` files. No C dependencies. Priority support for PointZ geometries (dense surveyed pipe routes) and PolyLineZ (pipeline paths). See [bathymetry-tool](https://github.com/Jerell/bathymetry-tool) for the Python prototype of this workflow.
 - **Route Importer** — Reads KML, KMZ, and Google My Maps CSV exports into PolyLineZ. KML altitude values are preserved as Z; reprojection and KP assignment follow via the CRS transform tool.
 - **GeoTIFF I/O** — Read georeferenced raster data. Used for global bathymetric surfaces (e.g. GEBCO) to sample seabed elevation along pipe routes. *(Planned)*
-- **CRS Transform** — Coordinate reference system conversions (e.g. ED50 UTM Zone 30N ↔ WGS84) needed to reconcile survey data with global datasets. Wraps PROJ via C interop.
+- **CRS Transform** — Coordinate reference system conversions (e.g. ED50 UTM Zone 30N ↔ WGS84) needed to reconcile survey data with global datasets. Wraps PROJ via C interop. Standalone CLI tool; not included in the WASM module.
+- **OLGA I/O** — Read and write OLGA `.key`/`.genkey` files (the OLGA simulator's text-based input format). Import: parse network topology, pipe geometry, boundary conditions, and fluid definitions into the geodash network model. Export: convert a geodash network and shapefile route into an OLGA input file, deriving `LENGTH` and `ELEVATION` per pipe segment from the surveyed KP geometry — replacing manual entry. Reading OLGA output (`.tpl`/`.ppl` binary trend and profile files) is also targeted, initially via Python preprocessing. *(Planned)*
 - **Zarr Reader** — Reads Zarr v3 arrays for cases where the Zig core needs to consume simulation results directly.
 
 ### Python Simulation Server
@@ -64,19 +65,22 @@ External Python service (may run on a separate machine) that performs transient 
 
 ## Geospatial Data Model
 
-TOML, shapefiles, GeoTIFF, and Zarr serve complementary roles:
+TOML, shapefiles, GeoTIFF, Zarr, and OLGA files serve complementary roles:
 
-| Concern | TOML | Shapefile | GeoTIFF | Zarr |
-|---|---|---|---|---|
-| Scope hierarchy & inheritance | Primary | — | — | — |
-| Block type, schema, config | Primary | — | — | — |
-| Route geometry & elevation | — | Primary (PointZ/PolyLineZ) | — | — |
-| Block locations | — | Primary (PointZ) | — | — |
-| Bathymetric surfaces | — | — | Primary (GEBCO) | — |
-| Block properties/attributes | Primary (full) | Secondary (`.dbf` subset) | — | — |
-| Thermodynamic property surface (P×H) | — | — | — | Primary |
-| Steady-state results | — | — | — | Primary (KP-indexed) |
-| Transient simulation results | — | — | — | Primary (KP × time) |
+| Concern | TOML | Shapefile | GeoTIFF | Zarr | OLGA .key |
+|---|---|---|---|---|---|
+| Scope hierarchy & inheritance | Primary | — | — | — | — |
+| Block type, schema, config | Primary | — | — | — | — |
+| Route geometry & elevation | — | Primary (PointZ/PolyLineZ) | — | — | — |
+| Block locations | — | Primary (PointZ) | — | — | — |
+| Bathymetric surfaces | — | — | Primary (GEBCO) | — | — |
+| Block properties/attributes | Primary (full) | Secondary (`.dbf` subset) | — | — | — |
+| Pipe geometry (abstract segments) | — | — | — | — | Primary (LENGTH/ELEVATION) |
+| Network topology & boundary conditions | Secondary | — | — | — | Primary |
+| Fluid & PVT references | — | — | — | — | Primary |
+| Thermodynamic property surface (P×H) | — | — | — | Primary | — |
+| Steady-state results | — | — | — | Primary (KP-indexed) | — |
+| Transient simulation results | — | — | — | Primary (KP × time) | — |
 
 ## Simulation Workflows
 
@@ -137,6 +141,57 @@ Zarr array (KP × time, one array per property)
 Frontend zarr.js (profile plots, time-series, full Hovmöller)
 ```
 
+### OLGA Integration *(Planned)*
+
+OLGA uses a text-based keyword format (`.key`/`.genkey`) to define simulation networks. Pipe geometry is expressed as abstract segments — `LENGTH` and `ELEVATION` per pipe, with no geographic coordinates. Geodash targets two directions of exchange:
+
+**Geodash → OLGA (export):**
+```
+Shapefile route (PointZ, surveyed coordinates)
+    ↓ KP computation
+Segment lengths and elevation changes
+    ↓ combined with block properties (diameter, roughness, wall, fluid)
+OLGA .key file (NETWORKCOMPONENT / PIPE / SOURCE / CONNECTION keywords)
+```
+
+This replaces the manual step of entering pipe geometry into OLGA from survey data. A pipe block in geodash with a `route` shapefile can generate the full `PIPE LENGTH=... ELEVATION=...` sequence automatically.
+
+**OLGA → Geodash (import):**
+```
+OLGA .key file
+    ↓ parse network topology, pipe segments, boundary conditions
+Geodash network (branches, blocks, nodes)
+```
+
+Geographic position is not recoverable from OLGA input alone; import gives topology and hydraulic properties. If a matching shapefile route exists it can be associated separately.
+
+**OLGA output visualisation:**
+```
+OLGA .tpl / .ppl output (binary trend and profile files)
+    ↓ Python preprocessing (pyfas) → CSV / Zarr
+P-T profile along KP route
+    ↓ overlay on P-H diagram with ONNX phase envelope
+Operating trajectory visualisation
+```
+
+## Target Use Cases
+
+These are the specific engineering workflows geodash is designed to improve, targeting flow assurance and process engineers at CCS consultancies.
+
+### Operating Envelope Definition
+
+Defining what inlet conditions (pressure, temperature, composition) a CO₂ transport system can accept while meeting all delivery constraints currently requires running OLGA many times with varying inlet conditions, collecting outputs, and assembling the envelope manually in Python or Excel. This is the primary target for the WebGPU design space explorer: the GPU evaluates a population of candidate inlet conditions simultaneously, constraints cull non-viable candidates, and the surviving envelope is visible in real time. Changing a block property — pipe diameter, delivery pressure, ambient temperature — updates the envelope immediately.
+
+This is especially relevant for multi-source CCS networks where different industrial CO₂ streams (cement, steel, gas processing) have different impurity profiles that shift the phase envelope. What combinations of source streams result in acceptable trunk line conditions is a natural population-of-candidates problem.
+
+### P-H Diagram Overlay on OLGA Results
+
+Flow assurance engineers routinely verify that operating conditions stay in the correct phase (typically dense phase for CO₂) by comparing the P-T profile along a pipeline against the fluid's phase envelope. Currently this involves exporting OLGA results, computing the phase envelope separately using a PVT tool, and overlaying them manually in Python or Excel. Geodash can automate this: load the OLGA output, transform the P-T profile to P-H coordinates using the ONNX thermodynamic models, and plot the operating trajectory against the ONNX-computed phase envelope for the fluid composition. This is a useful standalone capability that requires no trust in geodash's own simulation.
+
+### Compression Train Design
+
+Sizing compressor stages and intercoolers to bring CO₂ from capture facility outlet conditions up to pipeline operating pressure is iterative: adjust stage pressure ratios and intercooling temperatures, recheck phase behaviour, verify power consumption. The P-H diagram is the natural space for this — compression is approximately isentropic (diagonal lines on P-H), intercooling is approximately isobaric (horizontal lines). Assembling these blocks in geodash and watching the fluid state trajectory update in real time is a faster design loop than running a steady-state tool for each configuration.
+
 ## Kilometer Post (KP)
 
 A kilometer post (KP) is a distance marker along a pipeline route, measured as cumulative distance from the route's start point (KP 0). It's the standard way to reference locations on a pipeline — rather than using geographic coordinates, engineers refer to positions like "KP 12.5" meaning 12.5 km along the route.
@@ -196,6 +251,7 @@ Still to do:
 
 - GeoTIFF reader for sampling bathymetric surfaces (GEBCO) along pipe routes
 - Map PointZ routes to Branch elevation profiles and Point features to Block locations
+- OLGA `.key`/`.genkey` reader and writer
 
 ### Phase 3: Hono Server + API
 
@@ -203,7 +259,7 @@ Still to do:
 - Expose the query engine over REST
 - Schema validation endpoints
 - Shapefile import/export endpoints
-- Bridge to Zig core via FFI or subprocess
+- Bridge to Zig core via WASM (Zig compiles to WASM; loaded in-process, matching dagger's Rust WASM pattern)
 - Interface with Python transient simulation server: start runs, proxy SSE stream to frontend
 - Serve Zarr files via static file serving with HTTP range request support
 
