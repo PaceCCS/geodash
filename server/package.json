@@ -1,0 +1,16 @@
+{
+  "name": "geodash-server",
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "start": "bun run src/index.ts",
+    "build:wasm": "cd ../core/network-engine && zig build wasm && cp zig-out/bin/geodash.wasm ../server/wasm/geodash.wasm"
+  },
+  "dependencies": {
+    "hono": "^4.7.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

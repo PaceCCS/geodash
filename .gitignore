@@ -1,13 +1,21 @@
-Olga\ User\ manual.pdf
+# Large reference files
+OLGA\ User\ manual.pdf
 
-# Zig
+# Zig build artifacts
 zig-out/
 zig-cache/
 .zig-cache/
 
-# OS
+# Node / Bun
+node_modules/
+
+# WASM binary (rebuilt via: just build-wasm)
+server/wasm/geodash.wasm
+
+# macOS
 .DS_Store
 
-# IDE
+# Editor
 .vscode/
 .idea/
+*.swp
