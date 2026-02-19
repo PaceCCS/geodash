@@ -34,11 +34,18 @@ pub fn build(b: *std.Build) void {
     });
     const dim_mod = dim_dep.module("dim");
 
+    const shapefile_dep = b.dependency("shapefile", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    const shapefile_mod = shapefile_dep.module("shapefile");
+
     const mod = b.addModule("network_engine", .{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
         .imports = &.{
             .{ .name = "dim", .module = dim_mod },
+            .{ .name = "shapefile", .module = shapefile_mod },
         },
     });
 
@@ -170,6 +177,12 @@ pub fn build(b: *std.Build) void {
     });
     const dim_mod_wasm = dim_dep_wasm.module("dim");
 
+    const shapefile_dep_wasm = b.dependency("shapefile", .{
+        .target = wasm_target,
+        .optimize = .ReleaseSmall,
+    });
+    const shapefile_mod_wasm = shapefile_dep_wasm.module("shapefile");
+
     const wasm_exe = b.addExecutable(.{
         .name = "geodash",
         .root_module = b.createModule(.{
@@ -178,6 +191,7 @@ pub fn build(b: *std.Build) void {
             .optimize = .ReleaseSmall,
             .imports = &.{
                 .{ .name = "dim", .module = dim_mod_wasm },
+                .{ .name = "shapefile", .module = shapefile_mod_wasm },
             },
         }),
     });

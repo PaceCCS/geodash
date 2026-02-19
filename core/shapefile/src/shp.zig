@@ -240,6 +240,214 @@ pub fn read(allocator: std.mem.Allocator, path: []const u8) ![]ShpRecord {
     return records.toOwnedSlice(allocator);
 }
 
+/// Parse records from raw .shp bytes (no file I/O — for WASM).
+pub fn readFromBytes(allocator: std.mem.Allocator, data: []const u8) ![]ShpRecord {
+    var stream = std.io.fixedBufferStream(data);
+    const reader = stream.reader();
+
+    _ = try readHeader(reader);
+
+    var records: std.ArrayListUnmanaged(ShpRecord) = .{};
+    errdefer {
+        for (records.items) |rec| {
+            if (rec.geometry == .poly_line_z) rec.geometry.poly_line_z.deinit(allocator);
+        }
+        records.deinit(allocator);
+    }
+
+    while (true) {
+        var rec_num_buf: [4]u8 = undefined;
+        const n = reader.readAll(&rec_num_buf) catch break;
+        if (n < 4) break;
+        const record_number: u32 = @intCast(std.mem.readInt(i32, &rec_num_buf, .big));
+
+        var content_len_buf: [4]u8 = undefined;
+        try reader.readNoEof(&content_len_buf);
+
+        const shape_type = try readI32Le(reader);
+
+        const geometry: Geometry = switch (shape_type) {
+            11 => .{ .point_z = try readPointZ(reader) },
+            13 => .{ .poly_line_z = try readPolyLineZ(allocator, reader) },
+            else => return ShapefileError.UnsupportedShapeType,
+        };
+
+        try records.append(allocator, ShpRecord{
+            .number = record_number,
+            .geometry = geometry,
+        });
+    }
+
+    return records.toOwnedSlice(allocator);
+}
+
+/// Build .shp bytes in memory from records. Caller must free.
+pub fn buildSHPBytes(allocator: std.mem.Allocator, records: []const ShpRecord) ![]u8 {
+    var global_shape_type: i32 = 0;
+    for (records) |rec| {
+        const st: i32 = switch (rec.geometry) {
+            .point_z => 11,
+            .poly_line_z => 13,
+        };
+        if (global_shape_type == 0) {
+            global_shape_type = st;
+        } else if (global_shape_type != st) {
+            return ShapefileError.MixedShapeTypes;
+        }
+    }
+
+    var shx_offsets: std.ArrayListUnmanaged(i32) = .{};
+    defer shx_offsets.deinit(allocator);
+    var shx_lengths: std.ArrayListUnmanaged(i32) = .{};
+    defer shx_lengths.deinit(allocator);
+
+    var shp_buf: std.ArrayListUnmanaged(u8) = .{};
+    errdefer shp_buf.deinit(allocator);
+
+    try shp_buf.appendNTimes(allocator, 0, 100);
+
+    var bbox = BoundingBox{
+        .min_x = std.math.inf(f64),
+        .min_y = std.math.inf(f64),
+        .max_x = -std.math.inf(f64),
+        .max_y = -std.math.inf(f64),
+    };
+    var z_min: f64 = std.math.inf(f64);
+    var z_max: f64 = -std.math.inf(f64);
+
+    for (records) |rec| {
+        const content_start: i32 = @intCast(shp_buf.items.len);
+        const offset_words: i32 = @intCast(@divTrunc(content_start, 2));
+
+        switch (rec.geometry) {
+            .point_z => |p| {
+                try appendI32Be(&shp_buf, allocator, @intCast(rec.number));
+                try appendI32Be(&shp_buf, allocator, 18);
+                try appendPointZContent(&shp_buf, allocator, p);
+
+                bbox.min_x = @min(bbox.min_x, p.x);
+                bbox.min_y = @min(bbox.min_y, p.y);
+                bbox.max_x = @max(bbox.max_x, p.x);
+                bbox.max_y = @max(bbox.max_y, p.y);
+                z_min = @min(z_min, p.z);
+                z_max = @max(z_max, p.z);
+
+                try shx_offsets.append(allocator, offset_words);
+                try shx_lengths.append(allocator, 18);
+            },
+            .poly_line_z => |pl| {
+                const np: i32 = @intCast(pl.parts.len);
+                const npt: i32 = @intCast(pl.points.len);
+                const content_bytes: i32 = 4 + 32 + 4 + 4 + np * 4 + npt * 16 + 16 + npt * 8 + 16 + npt * 8;
+                const content_words: i32 = @divTrunc(content_bytes, 2);
+
+                try appendI32Be(&shp_buf, allocator, @intCast(rec.number));
+                try appendI32Be(&shp_buf, allocator, content_words);
+                try appendI32Le(&shp_buf, allocator, 13);
+                try appendF64Le(&shp_buf, allocator, pl.bbox.min_x);
+                try appendF64Le(&shp_buf, allocator, pl.bbox.min_y);
+                try appendF64Le(&shp_buf, allocator, pl.bbox.max_x);
+                try appendF64Le(&shp_buf, allocator, pl.bbox.max_y);
+                try appendI32Le(&shp_buf, allocator, np);
+                try appendI32Le(&shp_buf, allocator, npt);
+                for (pl.parts) |p| try appendI32Le(&shp_buf, allocator, @intCast(p));
+                for (pl.points) |pt| {
+                    try appendF64Le(&shp_buf, allocator, pt[0]);
+                    try appendF64Le(&shp_buf, allocator, pt[1]);
+                }
+                try appendF64Le(&shp_buf, allocator, pl.z_range.min);
+                try appendF64Le(&shp_buf, allocator, pl.z_range.max);
+                for (pl.z) |v| try appendF64Le(&shp_buf, allocator, v);
+                try appendF64Le(&shp_buf, allocator, pl.m_range.min);
+                try appendF64Le(&shp_buf, allocator, pl.m_range.max);
+                for (pl.m) |v| try appendF64Le(&shp_buf, allocator, v);
+
+                bbox.min_x = @min(bbox.min_x, pl.bbox.min_x);
+                bbox.min_y = @min(bbox.min_y, pl.bbox.min_y);
+                bbox.max_x = @max(bbox.max_x, pl.bbox.max_x);
+                bbox.max_y = @max(bbox.max_y, pl.bbox.max_y);
+                z_min = @min(z_min, pl.z_range.min);
+                z_max = @max(z_max, pl.z_range.max);
+
+                try shx_offsets.append(allocator, offset_words);
+                try shx_lengths.append(allocator, content_words);
+            },
+        }
+    }
+
+    const total_words: i32 = @intCast(shp_buf.items.len >> 1);
+    const effective_bbox = if (records.len > 0) bbox else BoundingBox{ .min_x = 0, .min_y = 0, .max_x = 0, .max_y = 0 };
+    const hdr = ShpHeader{
+        .file_length_words = total_words,
+        .shape_type = global_shape_type,
+        .bbox = effective_bbox,
+        .z_range = ZRange{ .min = z_min, .max = z_max },
+        .m_range = ZRange{ .min = 0, .max = 0 },
+    };
+    var hdr_buf: std.ArrayListUnmanaged(u8) = .{};
+    defer hdr_buf.deinit(allocator);
+    try appendHeader(&hdr_buf, allocator, hdr);
+    @memcpy(shp_buf.items[0..100], hdr_buf.items[0..100]);
+
+    return shp_buf.toOwnedSlice(allocator);
+}
+
+/// Build .shx bytes in memory from records. Caller must free.
+pub fn buildSHXBytes(allocator: std.mem.Allocator, records: []const ShpRecord) ![]u8 {
+    var global_shape_type: i32 = 0;
+    for (records) |rec| {
+        const st: i32 = switch (rec.geometry) {
+            .point_z => 11,
+            .poly_line_z => 13,
+        };
+        if (global_shape_type == 0) global_shape_type = st;
+    }
+
+    var shx_offsets: std.ArrayListUnmanaged(i32) = .{};
+    defer shx_offsets.deinit(allocator);
+    var shx_lengths: std.ArrayListUnmanaged(i32) = .{};
+    defer shx_lengths.deinit(allocator);
+
+    // Compute offsets/lengths by simulating the shp layout
+    var shp_offset: i32 = 50; // 100 bytes header = 50 words
+    for (records) |rec| {
+        const offset_words = shp_offset;
+        const content_words: i32 = switch (rec.geometry) {
+            .point_z => 18,
+            .poly_line_z => |pl| blk: {
+                const np: i32 = @intCast(pl.parts.len);
+                const npt: i32 = @intCast(pl.points.len);
+                break :blk @divTrunc(4 + 32 + 4 + 4 + np * 4 + npt * 16 + 16 + npt * 8 + 16 + npt * 8, 2);
+            },
+        };
+        try shx_offsets.append(allocator, offset_words);
+        try shx_lengths.append(allocator, content_words);
+        // Each record: 8 byte header + content_words*2 bytes
+        shp_offset += 4 + content_words; // 4 words (8 bytes) header + content
+    }
+
+    var shx_buf: std.ArrayListUnmanaged(u8) = .{};
+    errdefer shx_buf.deinit(allocator);
+
+    const shx_words: i32 = @intCast((100 + records.len * 8) >> 1);
+    const bbox = BoundingBox{ .min_x = 0, .min_y = 0, .max_x = 0, .max_y = 0 };
+    const shx_hdr = ShpHeader{
+        .file_length_words = shx_words,
+        .shape_type = global_shape_type,
+        .bbox = bbox,
+        .z_range = ZRange{ .min = 0, .max = 0 },
+        .m_range = ZRange{ .min = 0, .max = 0 },
+    };
+    try appendHeader(&shx_buf, allocator, shx_hdr);
+
+    for (shx_offsets.items, shx_lengths.items) |off, len| {
+        try appendI32Be(&shx_buf, allocator, off);
+        try appendI32Be(&shx_buf, allocator, len);
+    }
+
+    return shx_buf.toOwnedSlice(allocator);
+}
+
 /// Read and return the raw WKT string from a .prj file. Caller owns the slice.
 pub fn readPrj(allocator: std.mem.Allocator, path: []const u8) ![]u8 {
     const file = try std.fs.cwd().openFile(path, .{});

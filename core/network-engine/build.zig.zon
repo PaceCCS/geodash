@@ -36,6 +36,7 @@
             .url = "git+https://github.com/PaceCCS/dim?ref=main#d73989a87c89c3257663f64da1dcccce8f2e9b21",
             .hash = "dim-0.0.0-5B9evAUyAgB7NpwOHrh8USk2CvWH9nqmq0Ewg2h0hDca",
         },
+        .shapefile = .{ .path = "../shapefile" },
     },
     .paths = .{
         "build.zig",

@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { queryRoutes } from "./routes/query";
 import { networkRoutes } from "./routes/network";
+import { olgaRoutes } from "./routes/olga";
 
 const app = new Hono();
 
@@ -16,6 +17,7 @@ app.get("/health", (c) =>
 // API routes
 app.route("/api/query", queryRoutes);
 app.route("/api/network", networkRoutes);
+app.route("/api/operations/olga", olgaRoutes);
 
 // 404
 app.notFound((c) => c.json({ error: "Not found" }, 404));
