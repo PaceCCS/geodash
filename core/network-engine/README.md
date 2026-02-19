@@ -11,6 +11,9 @@ src/
 ├── network.zig          — Network types (NodeData, Block, Edge) + loader from TOML files
 ├── scope.zig            — Config, ScopeLevel, ScopeResolver for hierarchical property inheritance
 ├── query.zig            — Query parser + executor with scope resolution integration
+├── fluid.zig            — Fluid propagation: topological traversal, junction blending, composition injection
+├── olga.zig             — OLGA .key parser (→ geodash TOML + optional PolyLineZ shapefile) and writer
+├── wasm.zig             — WASM entry point; JSON-in/JSON-out exports for the Hono server
 └── integration_test.zig — Tests against real dagger preset1 data
 ```
 
@@ -123,7 +126,7 @@ efficiency = 0.85       # → stored in block.extra
 
 ```sh
 zig build test          # Run all tests via build system
-zig test src/root.zig   # Run all tests directly (52 tests)
+just test-network-engine
 ```
 
 Tests include:
@@ -131,5 +134,7 @@ Tests include:
 - **Network loader**: branch/group/image nodes, edge construction, validation warnings
 - **Scope resolver**: block-level lookup, global fallback, per-property rule enforcement
 - **Query engine**: property access, indexing, filtering, range, scope resolution
+- **Fluid propagation**: composition blending at junctions, injection into branch blocks
+- **OLGA parser/writer**: keyword line parsing, comment stripping, backslash continuation, round-trip
 - **Integration tests**: full pipeline against dagger preset1 data (14 nodes, 9 branches)
 
