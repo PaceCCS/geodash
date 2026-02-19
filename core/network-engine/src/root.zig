@@ -3,6 +3,7 @@ pub const network = @import("network.zig");
 pub const scope = @import("scope.zig");
 pub const query = @import("query.zig");
 pub const fluid = @import("fluid.zig");
+pub const olga = @import("olga.zig");
 
 // Re-export key types for convenience
 pub const Value = toml.Value;

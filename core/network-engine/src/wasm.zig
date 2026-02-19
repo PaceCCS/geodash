@@ -15,6 +15,8 @@ const net_mod = @import("network.zig");
 const scope_mod = @import("scope.zig");
 const query_mod = @import("query.zig");
 const fluid_mod = @import("fluid.zig");
+const olga_mod = @import("olga.zig");
+const shapefile = @import("shapefile");
 
 const Value = toml_mod.Value;
 const Allocator = std.mem.Allocator;
@@ -293,6 +295,363 @@ fn runLoadNetwork(input: []const u8) ![]u8 {
         try bufAppend(&out_buf, wasm_alloc, '"');
     }
     try bufAppendSlice(&out_buf, wasm_alloc, "]}");
+
+    return out_buf.toOwnedSlice(wasm_alloc);
+}
+
+// ── geodash_olga_import ───────────────────────────────────────────────────────
+//
+// Input:  { key_content: string, root_location?: {x, y, z} }
+// Output: { files: Record<string,string>, shapefiles: Record<string,string>, warnings: string[] }
+// (shapefiles values are base64-encoded bytes)
+
+export fn geodash_olga_import(in_ptr: u32, in_len: u32, out_ptr: u32, out_len: u32) i32 {
+    const input = @as([*]const u8, @ptrFromInt(in_ptr))[0..in_len];
+    const data = runOlgaImport(input) catch |e| return setError(e, out_ptr, out_len);
+    return setOutput(out_ptr, out_len, data);
+}
+
+fn runOlgaImport(input: []const u8) ![]u8 {
+    const json_parsed = try std.json.parseFromSlice(std.json.Value, wasm_alloc, input, .{});
+    defer json_parsed.deinit();
+
+    const obj = switch (json_parsed.value) {
+        .object => |o| o,
+        else => return error.InvalidInput,
+    };
+
+    const key_content: []const u8 = switch (obj.get("key_content") orelse return error.MissingKeyContent) {
+        .string => |s| s,
+        else => return error.InvalidInput,
+    };
+
+    var root_loc: ?olga_mod.RootLocation = null;
+    if (obj.get("root_location")) |rl| {
+        if (rl == .object) {
+            const rlo = rl.object;
+            root_loc = olga_mod.RootLocation{
+                .x = switch (rlo.get("x") orelse .null) {
+                    .float => |f| f,
+                    .integer => |i| @as(f64, @floatFromInt(i)),
+                    else => 0,
+                },
+                .y = switch (rlo.get("y") orelse .null) {
+                    .float => |f| f,
+                    .integer => |i| @as(f64, @floatFromInt(i)),
+                    else => 0,
+                },
+                .z = switch (rlo.get("z") orelse .null) {
+                    .float => |f| f,
+                    .integer => |i| @as(f64, @floatFromInt(i)),
+                    else => 0,
+                },
+            };
+        }
+    }
+
+    var validation = net_mod.ValidationResult.init(wasm_alloc);
+    defer validation.deinit();
+
+    var parsed = try olga_mod.parseKey(wasm_alloc, key_content, root_loc, &validation);
+    defer parsed.deinit(wasm_alloc);
+
+    var out_buf: Buf = .{};
+    errdefer out_buf.deinit(wasm_alloc);
+
+    try bufAppendSlice(&out_buf, wasm_alloc, "{\"files\":{");
+    var first = true;
+    var fit = parsed.files.iterator();
+    while (fit.next()) |e| {
+        if (!first) try bufAppend(&out_buf, wasm_alloc, ',');
+        first = false;
+        try bufAppend(&out_buf, wasm_alloc, '"');
+        try bufAppendSlice(&out_buf, wasm_alloc, e.key_ptr.*);
+        try bufAppendSlice(&out_buf, wasm_alloc, "\":\"");
+        // Escape the TOML content for JSON
+        for (e.value_ptr.*) |c| {
+            switch (c) {
+                '"' => try bufAppendSlice(&out_buf, wasm_alloc, "\\\""),
+                '\\' => try bufAppendSlice(&out_buf, wasm_alloc, "\\\\"),
+                '\n' => try bufAppendSlice(&out_buf, wasm_alloc, "\\n"),
+                '\r' => try bufAppendSlice(&out_buf, wasm_alloc, "\\r"),
+                '\t' => try bufAppendSlice(&out_buf, wasm_alloc, "\\t"),
+                else => try bufAppend(&out_buf, wasm_alloc, c),
+            }
+        }
+        try bufAppend(&out_buf, wasm_alloc, '"');
+    }
+
+    try bufAppendSlice(&out_buf, wasm_alloc, "},\"shapefiles\":{");
+    first = true;
+    var sit = parsed.shapefiles.iterator();
+    while (sit.next()) |e| {
+        if (!first) try bufAppend(&out_buf, wasm_alloc, ',');
+        first = false;
+        try bufAppend(&out_buf, wasm_alloc, '"');
+        try bufAppendSlice(&out_buf, wasm_alloc, e.key_ptr.*);
+        try bufAppendSlice(&out_buf, wasm_alloc, "\":\"");
+        // Base64 encode the binary bytes
+        const enc = std.base64.standard.Encoder;
+        const b64_len = enc.calcSize(e.value_ptr.len);
+        const b64_buf = try wasm_alloc.alloc(u8, b64_len);
+        defer wasm_alloc.free(b64_buf);
+        _ = enc.encode(b64_buf, e.value_ptr.*);
+        try bufAppendSlice(&out_buf, wasm_alloc, b64_buf);
+        try bufAppend(&out_buf, wasm_alloc, '"');
+    }
+
+    try bufAppendSlice(&out_buf, wasm_alloc, "},\"warnings\":[");
+    for (validation.warnings.items, 0..) |warn, i| {
+        if (i > 0) try bufAppend(&out_buf, wasm_alloc, ',');
+        try bufAppend(&out_buf, wasm_alloc, '"');
+        for (warn.message) |c| {
+            if (c == '"') try bufAppendSlice(&out_buf, wasm_alloc, "\\\"") else try bufAppend(&out_buf, wasm_alloc, c);
+        }
+        try bufAppend(&out_buf, wasm_alloc, '"');
+    }
+    try bufAppendSlice(&out_buf, wasm_alloc, "]}");
+
+    return out_buf.toOwnedSlice(wasm_alloc);
+}
+
+// ── geodash_olga_export ───────────────────────────────────────────────────────
+//
+// Input:  { files: Record<string,string>, config?: string,
+//           route_segments?: Record<string, [{length_m, elevation_m}]> }
+// Output: { key_content: string, warnings: string[] }
+
+export fn geodash_olga_export(in_ptr: u32, in_len: u32, out_ptr: u32, out_len: u32) i32 {
+    const input = @as([*]const u8, @ptrFromInt(in_ptr))[0..in_len];
+    const data = runOlgaExport(input) catch |e| return setError(e, out_ptr, out_len);
+    return setOutput(out_ptr, out_len, data);
+}
+
+fn runOlgaExport(input: []const u8) ![]u8 {
+    const json_parsed = try std.json.parseFromSlice(std.json.Value, wasm_alloc, input, .{});
+    defer json_parsed.deinit();
+
+    var arena = std.heap.ArenaAllocator.init(wasm_alloc);
+    defer arena.deinit();
+    const a = arena.allocator();
+
+    const pi = try parseInput(a, json_parsed.value);
+
+    var validation = net_mod.ValidationResult.init(a);
+    var network = try net_mod.loadNetworkFromFiles(a, &pi.files, &validation);
+    try fluid_mod.propagateAndInject(a, &network, &validation);
+
+    // Parse route_segments if provided
+    var route_segs: ?std.StringArrayHashMapUnmanaged([]const olga_mod.RouteSegment) = null;
+    const obj = switch (json_parsed.value) {
+        .object => |o| o,
+        else => return error.InvalidInput,
+    };
+
+    if (obj.get("route_segments")) |rs_val| {
+        if (rs_val == .object) {
+            var rs_map = std.StringArrayHashMapUnmanaged([]const olga_mod.RouteSegment){};
+            var rs_it = rs_val.object.iterator();
+            while (rs_it.next()) |e| {
+                if (e.value_ptr.* != .array) continue;
+                const arr = e.value_ptr.array.items;
+                const segs = try a.alloc(olga_mod.RouteSegment, arr.len);
+                for (arr, segs) |item, *seg| {
+                    if (item != .object) { seg.* = .{ .length_m = 0, .elevation_m = 0 }; continue; }
+                    seg.length_m = switch (item.object.get("length_m") orelse .null) {
+                        .float => |f| f,
+                        .integer => |i| @as(f64, @floatFromInt(i)),
+                        else => 0,
+                    };
+                    seg.elevation_m = switch (item.object.get("elevation_m") orelse .null) {
+                        .float => |f| f,
+                        .integer => |i| @as(f64, @floatFromInt(i)),
+                        else => 0,
+                    };
+                }
+                try rs_map.put(a, e.key_ptr.*, segs);
+            }
+            route_segs = rs_map;
+        }
+    }
+
+    const key_content = try olga_mod.writeKey(wasm_alloc, &network, route_segs, &validation);
+    defer wasm_alloc.free(key_content);
+
+    var out_buf: Buf = .{};
+    errdefer out_buf.deinit(wasm_alloc);
+
+    try bufAppendSlice(&out_buf, wasm_alloc, "{\"key_content\":\"");
+    for (key_content) |c| {
+        switch (c) {
+            '"' => try bufAppendSlice(&out_buf, wasm_alloc, "\\\""),
+            '\\' => try bufAppendSlice(&out_buf, wasm_alloc, "\\\\"),
+            '\n' => try bufAppendSlice(&out_buf, wasm_alloc, "\\n"),
+            '\r' => try bufAppendSlice(&out_buf, wasm_alloc, "\\r"),
+            '\t' => try bufAppendSlice(&out_buf, wasm_alloc, "\\t"),
+            else => try bufAppend(&out_buf, wasm_alloc, c),
+        }
+    }
+    try bufAppendSlice(&out_buf, wasm_alloc, "\",\"warnings\":[");
+    for (validation.warnings.items, 0..) |warn, i| {
+        if (i > 0) try bufAppend(&out_buf, wasm_alloc, ',');
+        try bufAppend(&out_buf, wasm_alloc, '"');
+        for (warn.message) |c| {
+            if (c == '"') try bufAppendSlice(&out_buf, wasm_alloc, "\\\"") else try bufAppend(&out_buf, wasm_alloc, c);
+        }
+        try bufAppend(&out_buf, wasm_alloc, '"');
+    }
+    try bufAppendSlice(&out_buf, wasm_alloc, "]}");
+
+    return out_buf.toOwnedSlice(wasm_alloc);
+}
+
+// ── geodash_compute_route_kp ──────────────────────────────────────────────────
+//
+// Input:  { shp_b64: string }
+// Output: { segments: [{length_m: number, elevation_m: number}] }
+
+export fn geodash_compute_route_kp(in_ptr: u32, in_len: u32, out_ptr: u32, out_len: u32) i32 {
+    const input = @as([*]const u8, @ptrFromInt(in_ptr))[0..in_len];
+    const data = runComputeRouteKp(input) catch |e| return setError(e, out_ptr, out_len);
+    return setOutput(out_ptr, out_len, data);
+}
+
+fn runComputeRouteKp(input: []const u8) ![]u8 {
+    const json_parsed = try std.json.parseFromSlice(std.json.Value, wasm_alloc, input, .{});
+    defer json_parsed.deinit();
+
+    const obj = switch (json_parsed.value) {
+        .object => |o| o,
+        else => return error.InvalidInput,
+    };
+    const b64_str: []const u8 = switch (obj.get("shp_b64") orelse return error.MissingShpB64) {
+        .string => |s| s,
+        else => return error.InvalidInput,
+    };
+
+    const dec = std.base64.standard.Decoder;
+    const decoded_len = try dec.calcSizeForSlice(b64_str);
+    const shp_bytes = try wasm_alloc.alloc(u8, decoded_len);
+    defer wasm_alloc.free(shp_bytes);
+    try dec.decode(shp_bytes, b64_str);
+
+    var validation = net_mod.ValidationResult.init(wasm_alloc);
+    defer validation.deinit();
+
+    const segs = try olga_mod.computeRouteSegmentsFromShp(wasm_alloc, shp_bytes);
+    defer wasm_alloc.free(segs);
+
+    var out_buf: Buf = .{};
+    errdefer out_buf.deinit(wasm_alloc);
+
+    try bufAppendSlice(&out_buf, wasm_alloc, "{\"segments\":[");
+    for (segs, 0..) |seg, i| {
+        if (i > 0) try bufAppend(&out_buf, wasm_alloc, ',');
+        try bufPrint(&out_buf, wasm_alloc, "{{\"length_m\":{d},\"elevation_m\":{d}}}", .{
+            seg.length_m, seg.elevation_m,
+        });
+    }
+    try bufAppendSlice(&out_buf, wasm_alloc, "]}");
+
+    return out_buf.toOwnedSlice(wasm_alloc);
+}
+
+// ── geodash_create_route ──────────────────────────────────────────────────────
+//
+// Input:  { segments: [{length_m, elevation_m}], root: {x, y, z} }
+// Output: { shp_b64: string, shx_b64: string, dbf_b64: string }
+
+export fn geodash_create_route(in_ptr: u32, in_len: u32, out_ptr: u32, out_len: u32) i32 {
+    const input = @as([*]const u8, @ptrFromInt(in_ptr))[0..in_len];
+    const data = runCreateRoute(input) catch |e| return setError(e, out_ptr, out_len);
+    return setOutput(out_ptr, out_len, data);
+}
+
+fn runCreateRoute(input: []const u8) ![]u8 {
+    const json_parsed = try std.json.parseFromSlice(std.json.Value, wasm_alloc, input, .{});
+    defer json_parsed.deinit();
+
+    var arena = std.heap.ArenaAllocator.init(wasm_alloc);
+    defer arena.deinit();
+    const a = arena.allocator();
+
+    const obj = switch (json_parsed.value) {
+        .object => |o| o,
+        else => return error.InvalidInput,
+    };
+
+    // Parse root
+    const root_val = obj.get("root") orelse return error.MissingRoot;
+    if (root_val != .object) return error.InvalidInput;
+    const ro = root_val.object;
+    const root = olga_mod.RootLocation{
+        .x = switch (ro.get("x") orelse .null) {
+            .float => |f| f,
+            .integer => |i| @as(f64, @floatFromInt(i)),
+            else => 0,
+        },
+        .y = switch (ro.get("y") orelse .null) {
+            .float => |f| f,
+            .integer => |i| @as(f64, @floatFromInt(i)),
+            else => 0,
+        },
+        .z = switch (ro.get("z") orelse .null) {
+            .float => |f| f,
+            .integer => |i| @as(f64, @floatFromInt(i)),
+            else => 0,
+        },
+    };
+
+    // Parse segments
+    const segs_val = obj.get("segments") orelse return error.MissingSegments;
+    if (segs_val != .array) return error.InvalidInput;
+    const segs_arr = segs_val.array.items;
+    const segs = try a.alloc(olga_mod.RouteSegment, segs_arr.len);
+    for (segs_arr, segs) |item, *seg| {
+        if (item != .object) { seg.* = .{ .length_m = 0, .elevation_m = 0 }; continue; }
+        seg.length_m = switch (item.object.get("length_m") orelse .null) {
+            .float => |f| f,
+            .integer => |i| @as(f64, @floatFromInt(i)),
+            else => 0,
+        };
+        seg.elevation_m = switch (item.object.get("elevation_m") orelse .null) {
+            .float => |f| f,
+            .integer => |i| @as(f64, @floatFromInt(i)),
+            else => 0,
+        };
+    }
+
+    const shp_bytes = try olga_mod.createRouteShpBytes(wasm_alloc, segs, root);
+    defer wasm_alloc.free(shp_bytes);
+    const shx_bytes = try olga_mod.createRouteSHXBytes(wasm_alloc, segs);
+    defer wasm_alloc.free(shx_bytes);
+    const dbf_bytes = try shapefile.buildDBFBytes(wasm_alloc, &.{}, &.{});
+    defer wasm_alloc.free(dbf_bytes);
+
+    const enc = std.base64.standard.Encoder;
+
+    const shp_b64 = try wasm_alloc.alloc(u8, enc.calcSize(shp_bytes.len));
+    defer wasm_alloc.free(shp_b64);
+    _ = enc.encode(shp_b64, shp_bytes);
+
+    const shx_b64 = try wasm_alloc.alloc(u8, enc.calcSize(shx_bytes.len));
+    defer wasm_alloc.free(shx_b64);
+    _ = enc.encode(shx_b64, shx_bytes);
+
+    const dbf_b64 = try wasm_alloc.alloc(u8, enc.calcSize(dbf_bytes.len));
+    defer wasm_alloc.free(dbf_b64);
+    _ = enc.encode(dbf_b64, dbf_bytes);
+
+    var out_buf: Buf = .{};
+    errdefer out_buf.deinit(wasm_alloc);
+
+    try bufAppendSlice(&out_buf, wasm_alloc, "{\"shp_b64\":\"");
+    try bufAppendSlice(&out_buf, wasm_alloc, shp_b64);
+    try bufAppendSlice(&out_buf, wasm_alloc, "\",\"shx_b64\":\"");
+    try bufAppendSlice(&out_buf, wasm_alloc, shx_b64);
+    try bufAppendSlice(&out_buf, wasm_alloc, "\",\"dbf_b64\":\"");
+    try bufAppendSlice(&out_buf, wasm_alloc, dbf_b64);
+    try bufAppendSlice(&out_buf, wasm_alloc, "\"}");
 
     return out_buf.toOwnedSlice(wasm_alloc);
 }

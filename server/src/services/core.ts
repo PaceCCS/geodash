@@ -15,22 +15,23 @@ import { join } from "node:path";
 
 // ── WASM export types ─────────────────────────────────────────────────────────
 
+type WasmFn = (
+  inPtr: number,
+  inLen: number,
+  outPtrPtr: number,
+  outLenPtr: number
+) => number;
+
 type CoreExports = {
   memory: WebAssembly.Memory;
   geodash_alloc: (len: number) => number;
   geodash_free: (ptr: number, len: number) => void;
-  geodash_query: (
-    inPtr: number,
-    inLen: number,
-    outPtrPtr: number,
-    outLenPtr: number
-  ) => number;
-  geodash_load_network: (
-    inPtr: number,
-    inLen: number,
-    outPtrPtr: number,
-    outLenPtr: number
-  ) => number;
+  geodash_query: WasmFn;
+  geodash_load_network: WasmFn;
+  geodash_olga_import: WasmFn;
+  geodash_olga_export: WasmFn;
+  geodash_compute_route_kp: WasmFn;
+  geodash_create_route: WasmFn;
 };
 
 // ── Loader ────────────────────────────────────────────────────────────────────
@@ -74,6 +75,10 @@ async function init(): Promise<void> {
       "geodash_free",
       "geodash_query",
       "geodash_load_network",
+      "geodash_olga_import",
+      "geodash_olga_export",
+      "geodash_compute_route_kp",
+      "geodash_create_route",
     ];
     for (const name of required) {
       if (!(name in instance.exports)) {
@@ -188,5 +193,76 @@ export async function loadNetwork(networkDir: string): Promise<unknown> {
     (a, b, c, d) => rt.geodash_load_network(a, b, c, d),
     { files, config }
   );
+}
+
+export type OlgaImportResult = {
+  files: Record<string, string>;
+  shapefiles: Record<string, string>;
+  warnings: string[];
+};
+
+export type OlgaExportResult = {
+  key_content: string;
+  warnings: string[];
+};
+
+export type RouteSegment = { length_m: number; elevation_m: number };
+
+export type RouteKpResult = { segments: RouteSegment[] };
+
+export type CreateRouteResult = {
+  shp_b64: string;
+  shx_b64: string;
+  dbf_b64: string;
+};
+
+export async function importFromOlga(
+  keyContent: string,
+  rootLocation?: { x: number; y: number; z: number }
+): Promise<OlgaImportResult> {
+  await init();
+  const rt = runtime!;
+  return callWasm(
+    rt,
+    (a, b, c, d) => rt.geodash_olga_import(a, b, c, d),
+    { key_content: keyContent, root_location: rootLocation }
+  ) as OlgaImportResult;
+}
+
+export async function exportToOlga(
+  files: Record<string, string>,
+  config?: string | null,
+  routeSegments?: Record<string, RouteSegment[]>
+): Promise<OlgaExportResult> {
+  await init();
+  const rt = runtime!;
+  return callWasm(
+    rt,
+    (a, b, c, d) => rt.geodash_olga_export(a, b, c, d),
+    { files, config, route_segments: routeSegments }
+  ) as OlgaExportResult;
+}
+
+export async function computeRouteKp(shpB64: string): Promise<RouteKpResult> {
+  await init();
+  const rt = runtime!;
+  return callWasm(
+    rt,
+    (a, b, c, d) => rt.geodash_compute_route_kp(a, b, c, d),
+    { shp_b64: shpB64 }
+  ) as RouteKpResult;
+}
+
+export async function createRoute(
+  segments: RouteSegment[],
+  root: { x: number; y: number; z: number }
+): Promise<CreateRouteResult> {
+  await init();
+  const rt = runtime!;
+  return callWasm(
+    rt,
+    (a, b, c, d) => rt.geodash_create_route(a, b, c, d),
+    { segments, root }
+  ) as CreateRouteResult;
 }
 

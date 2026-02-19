@@ -13,8 +13,15 @@ test-network-engine:
 test-shapefile:
     cd core/shapefile && zig build test
 
+# Run CRS tool tests
+test-crs:
+    cd core/crs && zig build test
+
 # Run all Zig tests
-test-zig: test-network-engine test-shapefile
+test-zig: test-network-engine test-shapefile test-crs
+
+# Run all tests (Zig only — server uses Bun runtime with no separate test runner)
+test-all: test-zig
 
 # Start the Hono server in dev mode (hot reload)
 dev-server:

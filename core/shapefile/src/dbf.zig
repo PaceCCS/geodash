@@ -314,6 +314,73 @@ pub fn write(
     try out.writeAll(buf.items);
 }
 
+/// Build .dbf bytes in memory (no file I/O — for WASM). Caller must free.
+pub fn buildBytes(
+    allocator: std.mem.Allocator,
+    fields: []const DbfField,
+    rows: []const []const DbfValue,
+) ![]u8 {
+    var buf: std.ArrayListUnmanaged(u8) = .{};
+    errdefer buf.deinit(allocator);
+
+    var record_size: u16 = 1;
+    for (fields) |f| record_size += f.length;
+
+    const num_fields: u16 = @intCast(fields.len);
+    const header_size: u16 = DBF_HEADER_SIZE + num_fields * DBF_FIELD_DESCRIPTOR_SIZE + 1;
+
+    try appendU8(&buf, allocator, 0x03);
+    try buf.appendNTimes(allocator, 0, 3);
+    try appendU32Le(&buf, allocator, @intCast(rows.len));
+    try appendU16Le(&buf, allocator, header_size);
+    try appendU16Le(&buf, allocator, record_size);
+    try buf.appendNTimes(allocator, 0, 20);
+
+    for (fields) |f| {
+        try buf.appendSlice(allocator, &f.name);
+        try appendU8(&buf, allocator, f.field_type);
+        try buf.appendNTimes(allocator, 0, 4);
+        try appendU8(&buf, allocator, f.length);
+        try appendU8(&buf, allocator, f.decimal_count);
+        try buf.appendNTimes(allocator, 0, 14);
+    }
+    try appendU8(&buf, allocator, DBF_FIELD_TERMINATOR);
+
+    for (rows) |row| {
+        try appendU8(&buf, allocator, DBF_RECORD_ACTIVE);
+        for (row, fields) |val, field| {
+            const field_buf = try allocator.alloc(u8, field.length);
+            defer allocator.free(field_buf);
+            @memset(field_buf, ' ');
+
+            switch (val) {
+                .string => |s| {
+                    const n = @min(s.len, field.length);
+                    @memcpy(field_buf[0..n], s[0..n]);
+                },
+                .number => |n| {
+                    const s = try std.fmt.allocPrint(allocator, "{d}", .{n});
+                    defer allocator.free(s);
+                    const l = @min(s.len, field.length);
+                    @memcpy(field_buf[0..l], s[0..l]);
+                },
+                .boolean => |b| {
+                    field_buf[0] = if (b) 'T' else 'F';
+                },
+                .date => |d| {
+                    const l = @min(d.len, field.length);
+                    @memcpy(field_buf[0..l], d[0..l]);
+                },
+                .null => {},
+            }
+
+            try buf.appendSlice(allocator, field_buf);
+        }
+    }
+
+    return buf.toOwnedSlice(allocator);
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------

@@ -33,6 +33,12 @@ pub const writeShp = shp.write;
 pub const writeDbf = dbf.write;
 pub const writePrj = shp.writePrj;
 
+// In-memory I/O (for WASM — no file paths)
+pub const readShpFromBytes = shp.readFromBytes;
+pub const buildSHPBytes = shp.buildSHPBytes;
+pub const buildSHXBytes = shp.buildSHXBytes;
+pub const buildDBFBytes = dbf.buildBytes;
+
 /// Write a complete shapefile set from a path stem.
 ///
 /// Given stem="/path/to/output", writes:
