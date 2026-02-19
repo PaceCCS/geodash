@@ -154,4 +154,38 @@ pub fn build(b: *std.Build) void {
     //
     // Lastly, the Zig build system is relatively simple and self-contained,
     // and reading its source code will allow you to master it.
+
+    // ── WASM build for the Hono server ────────────────────────────────────────
+    // Produces zig-out/bin/geodash.wasm.
+    // Run `zig build wasm` and copy the output to server/wasm/geodash.wasm.
+
+    const wasm_target = b.resolveTargetQuery(.{
+        .cpu_arch = .wasm32,
+        .os_tag = .wasi,
+    });
+
+    const dim_dep_wasm = b.dependency("dim", .{
+        .target = wasm_target,
+        .optimize = .ReleaseSmall,
+    });
+    const dim_mod_wasm = dim_dep_wasm.module("dim");
+
+    const wasm_exe = b.addExecutable(.{
+        .name = "geodash",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/wasm.zig"),
+            .target = wasm_target,
+            .optimize = .ReleaseSmall,
+            .imports = &.{
+                .{ .name = "dim", .module = dim_mod_wasm },
+            },
+        }),
+    });
+    wasm_exe.rdynamic = true;
+    wasm_exe.entry = .disabled;
+
+    const install_wasm = b.addInstallArtifact(wasm_exe, .{});
+
+    const wasm_step = b.step("wasm", "Build WASM module for the Hono server (output: zig-out/bin/geodash.wasm)");
+    wasm_step.dependOn(&install_wasm.step);
 }

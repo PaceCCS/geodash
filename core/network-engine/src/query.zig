@@ -364,6 +364,13 @@ pub const QueryExecutor = struct {
             else => {},
         }
 
+        // Expose extra properties stored on the node base.
+        // This includes runtime-injected data such as fluid composition.
+        var node_extra_it = b.extra.iterator();
+        while (node_extra_it.next()) |entry| {
+            try table.put(self.allocator, try self.allocator.dupe(u8, entry.key_ptr.*), try entry.value_ptr.clone(self.allocator));
+        }
+
         return Value{ .table = table };
     }
 
