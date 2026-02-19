@@ -254,7 +254,7 @@ Done:
 Still to do:
 
 - GeoTIFF reader for sampling bathymetric surfaces (GEBCO) along pipe routes
-- Map PointZ routes to Branch elevation profiles and Point features to Block locations
+- Map Point shapefile features to Block geographic positions
 
 ### Phase 3: Hono Server + API — Substantially Complete
 
