@@ -133,6 +133,40 @@ fn blendInto(
 // Propagation
 // ---------------------------------------------------------------------------
 
+/// Propagate fluid and inject results into branch `extra` tables in one step.
+///
+/// After this call, each resolved branch has two additional properties accessible
+/// through the query engine:
+///   - `flow_rate`   — total mass flow rate (f64)
+///   - `composition` — subtable mapping component names to mol fractions
+///
+/// This is the primary entry point for callers; `propagate` is the lower-level
+/// primitive if you need the `FluidMap` itself.
+pub fn propagateAndInject(
+    allocator: Allocator,
+    net: *Network,
+    validation: *ValidationResult,
+) !void {
+    var fluid_map = try propagate(allocator, net, validation);
+    defer fluid_map.deinit(allocator);
+
+    for (net.nodes.items) |*node| {
+        switch (node.*) {
+            .branch => |*b| {
+                const bf = fluid_map.get(b.base.id) orelse continue;
+                try b.base.extra.put(allocator, try allocator.dupe(u8, "flow_rate"), Value{ .float = bf.flow_rate });
+                var comp_table = Value.Table{};
+                var comp_it = bf.composition.components.iterator();
+                while (comp_it.next()) |entry| {
+                    try comp_table.put(allocator, try allocator.dupe(u8, entry.key_ptr.*), Value{ .float = entry.value_ptr.* });
+                }
+                try b.base.extra.put(allocator, try allocator.dupe(u8, "composition"), Value{ .table = comp_table });
+            },
+            else => {},
+        }
+    }
+}
+
 /// Propagate fluid compositions forward through the network DAG from source blocks.
 ///
 /// Source blocks (type = "Source") define inlet conditions:
