@@ -11,7 +11,8 @@
       "Bash(zig version:*)",
       "Bash(zig --help:*)",
       "Bash(zig fmt:*)",
-      "Bash(gh run view:*)"
+      "Bash(gh run view:*)",
+      "Bash(gh run list:*)"
     ]
   }
 }

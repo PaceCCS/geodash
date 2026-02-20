@@ -29,14 +29,14 @@ describe("POST /api/operations/olga/validate", () => {
       body: "not json",
     });
     expect(res.status).toBe(400);
-    const body = await res.json();
+    const body = (await res.json()) as { error: string };
     expect(body.error).toContain("Invalid JSON");
   });
 
   test("missing network returns 400", async () => {
     const res = await postJson(app, "/api/operations/olga/validate", {});
     expect(res.status).toBe(400);
-    const body = await res.json();
+    const body = (await res.json()) as { error: string };
     expect(body.error).toContain("network");
   });
 
@@ -62,7 +62,7 @@ describe("POST /api/operations/olga/export", () => {
   test("missing network returns 400", async () => {
     const res = await postJson(app, "/api/operations/olga/export", {});
     expect(res.status).toBe(400);
-    const body = await res.json();
+    const body = (await res.json()) as { error: string };
     expect(body.error).toContain("network");
   });
 });
@@ -73,7 +73,7 @@ describe("POST /api/operations/olga/import", () => {
   test("missing key_content returns 400", async () => {
     const res = await postJson(app, "/api/operations/olga/import", {});
     expect(res.status).toBe(400);
-    const body = await res.json();
+    const body = (await res.json()) as { error: string };
     expect(body.error).toContain("key_content");
   });
 });

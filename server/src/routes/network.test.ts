@@ -17,7 +17,7 @@ describe("GET /api/network", () => {
   test("missing network param returns 400", async () => {
     const res = await app.request("/api/network");
     expect(res.status).toBe(400);
-    const body = await res.json();
+    const body = (await res.json()) as { error: string };
     expect(body.error).toContain("network");
   });
 
@@ -37,7 +37,7 @@ describe("GET /api/network", () => {
       `/api/network?network=/nonexistent/path`
     );
     expect(res.status).toBe(500);
-    const body = await res.json();
+    const body = (await res.json()) as { error: string };
     expect(body.error).toBe("Failed to load network");
   });
 });
