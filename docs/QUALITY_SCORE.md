@@ -14,6 +14,18 @@ Last updated: 2026-02-20
 
 ## Zig Core
 
+### shapefile
+
+| Module | Grade | Tests | Notes |
+|---|---|---|---|
+| **shp** | B | 2 unit + 6 integration | Read/write PointZ and PolyLineZ. Integration tests use Spirit pipeline (65k points). Missing: unit tests for edge cases (empty geometries, single-point polylines). |
+| **dbf** | C | 1 unit | Basic read/write works. Missing: tests for field types beyond Character/Numeric, long field values, encoding edge cases. |
+| **shx** | C | 1 unit | Index read/write works. Minimally tested — relies on integration tests via shp. |
+| **kp** | A | 4 unit | KP computation from point sequences. Tests verify 2D horizontal distance, cumulative behaviour, edge cases. |
+| **kml** | B | 6 unit | KML, KMZ, CSV import. Tests cover basic geometries and altitude. Missing: tests for deeply nested KML, namespace variations. |
+
+### network-engine
+
 | Module | Grade | Tests | Notes |
 |---|---|---|---|
 | **toml** | A | 18 unit | Covers tables, arrays, dotted keys, inline tables, escape sequences. Only implements the TOML subset dagger uses — intentional. |
@@ -22,13 +34,25 @@ Last updated: 2026-02-20
 | **scope** | B | 5 unit | Config loading, scope level inheritance, per-block-type resolution. Missing: tests for deep override chains, edge cases in multi-level resolution. |
 | **fluid** | B | 4 unit | Topological traversal, junction blending, composition propagation. Missing: tests for cycles (should error), disconnected subgraphs. |
 | **olga** | B | 5 unit | Parse and write OLGA `.key` format. Covers PIPE, SOURCE, SINK, COMPRESSOR keywords. Missing: tests for malformed `.key` files, unusual keyword orderings. |
-| **shp** | B | 2 unit + 6 integration | Read/write PointZ and PolyLineZ. Integration tests use Spirit pipeline (65k points). Missing: unit tests for edge cases (empty geometries, single-point polylines). |
-| **dbf** | C | 1 unit | Basic read/write works. Missing: tests for field types beyond Character/Numeric, long field values, encoding edge cases. |
-| **shx** | C | 1 unit | Index read/write works. Minimally tested — relies on integration tests via shp. |
-| **kp** | A | 4 unit | KP computation from point sequences. Tests verify 2D horizontal distance, cumulative behaviour, edge cases. |
-| **kml** | B | 6 unit | KML, KMZ, CSV import. Tests cover basic geometries and altitude. Missing: tests for deeply nested KML, namespace variations. |
-| **crs/transform** | B | 3 unit | PROJ integration with ARM64 workaround. Tests verify coordinate transforms. Requires PROJ installed to run. |
 | **wasm** | C | 0 | No direct unit tests. Exercised indirectly via server integration. Missing: tests for memory protocol edge cases (OOM, empty input, oversized input). |
+
+### crs
+
+| Module | Grade | Tests | Notes |
+|---|---|---|---|
+| **transform** | B | 3 unit | PROJ integration with ARM64 workaround. Tests verify coordinate transforms. Requires PROJ installed to run. |
+
+### geotiff
+
+| Module | Grade | Tests | Notes |
+|---|---|---|---|
+| — | F | 0 | Not started. Placeholder only. |
+
+### zarr
+
+| Module | Grade | Tests | Notes |
+|---|---|---|---|
+| — | F | 0 | Not started. Placeholder only. |
 
 **Total Zig tests: 80** (all passing)
 
@@ -49,14 +73,11 @@ Last updated: 2026-02-20
 
 | Concern | Grade | Notes |
 |---|---|---|
-| **CI/CD** | F | No GitHub Actions, no automated test runs on push/PR. |
-| **Linting** | D | TypeScript has `strict: true` in tsconfig. No ESLint, Biome, or Zig fmt enforcement. |
-| **Documentation** | B | Architecture and READMEs are thorough. Missing: ADRs (now added), product specs. |
-| **WASM contract sync** | D | TypeScript types in `core.ts` and Zig exports in `wasm.zig` must match. No mechanical check. |
+| **CI/CD** | A | GitHub Actions runs Zig tests, formatting, TypeScript typecheck, ESLint, and enforcement scripts on every push/PR. |
+| **Linting** | B | `zig fmt` enforced in CI. ESLint with `no-explicit-any` and route import restrictions. Missing: server tests. |
+| **Documentation** | B | Architecture and READMEs are thorough. Docs freshness check enforces QUALITY_SCORE covers all modules. |
+| **WASM contract sync** | A | `scripts/check-wasm-contract.sh` diffs Zig exports against TypeScript types in CI. |
 
 ## Priority Gaps
 
-1. **No CI** — Tests exist but nothing runs them automatically. A push can break the build silently.
-2. **Zero server tests** — The entire TypeScript layer is untested. At minimum, the WASM bridge and OLGA endpoints need integration tests.
-3. **WASM contract drift** — Adding a new Zig export requires updating TypeScript types by hand. Should be enforced.
-4. **No `zig fmt` enforcement** — Zig has a built-in formatter but we don't run it in CI or pre-commit.
+1. **Zero server tests** — The entire TypeScript layer is untested. At minimum, the WASM bridge and OLGA endpoints need integration tests.

@@ -20,8 +20,12 @@ test-crs:
 # Run all Zig tests
 test-zig: test-network-engine test-shapefile test-crs
 
-# Run all tests (Zig only — server uses Bun runtime with no separate test runner)
-test-all: test-zig
+# Run server tests
+test-server:
+    cd server && bun test
+
+# Run all tests
+test-all: test-zig test-server
 
 # Start the Hono server in dev mode (hot reload)
 dev-server:
@@ -58,9 +62,24 @@ check-deps:
 lint:
     cd server && bunx eslint src/
 
-# Run all checks (fmt + lint + contract + deps)
+# Check WASM binary size
+check-wasm-size:
+    bash scripts/check-wasm-size.sh
+
+# Check docs reference all modules
+check-docs:
+    bash scripts/check-docs-freshness.sh
+
+# Check all Zig source files have tests
+check-test-coverage:
+    bash scripts/check-test-coverage.sh
+
+# Run all checks
 check:
     zig fmt --check core/shapefile/src/ core/network-engine/src/
     cd server && bunx eslint src/
     bash scripts/check-wasm-contract.sh
     bash scripts/check-deps.sh
+    bash scripts/check-wasm-size.sh
+    bash scripts/check-docs-freshness.sh
+    bash scripts/check-test-coverage.sh

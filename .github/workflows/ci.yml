@@ -41,6 +41,21 @@ jobs:
       - name: Lint
         run: cd server && bunx eslint src/
 
+  bun-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.15.2
+      - uses: oven-sh/setup-bun@v2
+      - name: Build WASM
+        run: cd core/network-engine && zig build wasm && cp zig-out/bin/geodash.wasm ../../server/wasm/geodash.wasm
+      - name: Install dependencies
+        run: cd server && bun install
+      - name: Run tests
+        run: cd server && bun test
+
   checks:
     runs-on: ubuntu-latest
     steps:
@@ -49,3 +64,9 @@ jobs:
         run: bash scripts/check-wasm-contract.sh
       - name: Dependency direction check
         run: bash scripts/check-deps.sh
+      - name: WASM size check
+        run: bash scripts/check-wasm-size.sh
+      - name: Docs freshness check
+        run: bash scripts/check-docs-freshness.sh
+      - name: Test coverage check
+        run: bash scripts/check-test-coverage.sh
