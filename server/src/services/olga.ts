@@ -98,7 +98,7 @@ export async function validateNetworkForOlga(
 
       if (blockType in schemas) {
         const schema = schemas[blockType as OlgaBlockType];
-        const result = Schema.decodeUnknownEither(schema)(blockDef);
+        const result = Schema.decodeUnknownEither(schema as Schema.Schema<unknown>)(blockDef);
         if (result._tag === "Right") {
           status = "ready";
           readyBlocks++;

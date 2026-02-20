@@ -33,8 +33,8 @@
     // internet connectivity.
     .dependencies = .{
         .dim = .{
-            .url = "git+https://github.com/Jerell/dim?ref=main#d73989a87c89c3257663f64da1dcccce8f2e9b21",
-            .hash = "dim-0.0.0-5B9evAUyAgB7NpwOHrh8USk2CvWH9nqmq0Ewg2h0hDca",
+            .url = "git+https://github.com/Jerell/dim?ref=main#f09f95e57d06573307f49faf7195fc09514fdcc4",
+            .hash = "dim-0.0.0-5B9evAUyAgAHaaKjHI7RgIzriiZee8lKKA3sHyAp-_14",
         },
         .shapefile = .{ .path = "../shapefile" },
     },

@@ -38,6 +38,8 @@ jobs:
         run: cd server && bun install
       - name: Typecheck
         run: cd server && bunx tsc --noEmit
+      - name: Lint
+        run: cd server && bunx eslint src/
 
   checks:
     runs-on: ubuntu-latest
