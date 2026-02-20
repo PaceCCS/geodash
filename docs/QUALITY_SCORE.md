@@ -60,24 +60,27 @@ Last updated: 2026-02-20
 
 | Area | Grade | Tests | Notes |
 |---|---|---|---|
-| **WASM bridge** (`services/core.ts`) | C | 0 | Works in practice but no automated tests. Memory management and JSON protocol are manually verified. |
-| **OLGA routes** (`routes/olga.ts`) | C | 0 | No endpoint tests. Validated manually via curl. |
-| **OLGA service** (`services/olga.ts`) | C | 0 | Route segment computation, network validation. No tests. |
-| **Query route** (`routes/query.ts`) | C | 0 | Works but no tests. |
-| **Network route** (`routes/network.ts`) | C | 0 | Works but no tests. |
+| **WASM bridge** (`services/core.ts`) | B | 4 (integration) | Exercised via query and network route tests against real WASM + preset1. Missing: direct tests for OOM, empty input, oversized input. |
+| **OLGA routes** (`routes/olga.ts`) | B | 5 integration | Validate, export, import endpoints tested. Covers invalid JSON, missing fields, valid preset1. |
+| **OLGA service** (`services/olga.ts`) | B | 1 (via route) | Validation tested via route integration test against preset1. Missing: direct unit tests for resolveRouteSegments. |
+| **Query route** (`routes/query.ts`) | B | 4 integration | Missing params, valid query, invalid network dir. |
+| **Network route** (`routes/network.ts`) | B | 3 integration | Missing params, valid load, invalid dir. |
+| **Health / 404** (`index.ts`) | A | 2 | Health check and 404 handler. |
+| **Utils** (`utils/network.ts`) | A | 4 unit | resolveNetworkPath: null, empty, absolute, relative. |
 | **Effect schemas** (`schemas/olga/`) | C | 0 | Schema definitions exist but no tests verify them against sample data. |
 
-**Total TypeScript tests: 0**
+**Total TypeScript tests: 18**
 
 ## Cross-Cutting Concerns
 
 | Concern | Grade | Notes |
 |---|---|---|
 | **CI/CD** | A | GitHub Actions runs Zig tests, formatting, TypeScript typecheck, ESLint, and enforcement scripts on every push/PR. |
-| **Linting** | B | `zig fmt` enforced in CI. ESLint with `no-explicit-any` and route import restrictions. Missing: server tests. |
+| **Linting** | A | `zig fmt` enforced in CI. ESLint with `no-explicit-any` and route import restrictions. |
 | **Documentation** | B | Architecture and READMEs are thorough. Docs freshness check enforces QUALITY_SCORE covers all modules. |
 | **WASM contract sync** | A | `scripts/check-wasm-contract.sh` diffs Zig exports against TypeScript types in CI. |
 
 ## Priority Gaps
 
-1. **Zero server tests** — The entire TypeScript layer is untested. At minimum, the WASM bridge and OLGA endpoints need integration tests.
+1. **Effect schema tests** — Schema definitions (`schemas/olga/`) have no tests verifying them against sample data.
+2. **WASM edge cases** — No direct tests for OOM, empty input, or oversized input to the WASM bridge.

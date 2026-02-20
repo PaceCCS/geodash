@@ -55,6 +55,8 @@ jobs:
         run: cd server && bun install
       - name: Run tests
         run: cd server && bun test
+      - name: Test count check
+        run: bash scripts/check-test-counts.sh
 
   checks:
     runs-on: ubuntu-latest
