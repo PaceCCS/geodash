@@ -17,14 +17,14 @@ describe("GET /api/query", () => {
   test("missing q param returns 400", async () => {
     const res = await app.request(`/api/query?network=${PRESET1}`);
     expect(res.status).toBe(400);
-    const body = await res.json();
+    const body = (await res.json()) as { error: string };
     expect(body.error).toContain("q");
   });
 
   test("missing network param returns 400", async () => {
     const res = await app.request("/api/query?q=branch-4/blocks/0/pressure");
     expect(res.status).toBe(400);
-    const body = await res.json();
+    const body = (await res.json()) as { error: string };
     expect(body.error).toContain("network");
   });
 
@@ -42,7 +42,7 @@ describe("GET /api/query", () => {
       `/api/query?network=/nonexistent/path&q=branch-4/blocks/0/pressure`
     );
     expect(res.status).toBe(500);
-    const body = await res.json();
+    const body = (await res.json()) as { error: string };
     expect(body.error).toBe("Query failed");
   });
 });

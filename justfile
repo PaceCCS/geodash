@@ -74,6 +74,10 @@ check-docs:
 check-test-coverage:
     bash scripts/check-test-coverage.sh
 
+# Check committed WASM matches a fresh build
+check-wasm-freshness:
+    bash scripts/check-wasm-freshness.sh
+
 # Check QUALITY_SCORE.md test counts match reality
 check-test-counts:
     bash scripts/check-test-counts.sh
