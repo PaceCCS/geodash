@@ -54,8 +54,13 @@ check-contract:
 check-deps:
     bash scripts/check-deps.sh
 
-# Run all checks (fmt + contract + deps)
+# Lint server TypeScript
+lint:
+    cd server && bunx eslint src/
+
+# Run all checks (fmt + lint + contract + deps)
 check:
     zig fmt --check core/shapefile/src/ core/network-engine/src/
+    cd server && bunx eslint src/
     bash scripts/check-wasm-contract.sh
     bash scripts/check-deps.sh

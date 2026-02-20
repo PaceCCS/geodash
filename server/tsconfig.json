@@ -6,6 +6,7 @@
     "strict": true,
     "types": ["bun-types"],
     "lib": ["ESNext"],
+    "skipLibCheck": true,
     "outDir": "dist",
     "rootDir": "src"
   },
