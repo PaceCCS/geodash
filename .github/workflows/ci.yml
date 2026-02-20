@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  zig-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.15.2
+      - name: Test shapefile
+        run: cd core/shapefile && zig build test
+      - name: Test network-engine
+        run: cd core/network-engine && zig build test
+
+  zig-fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.15.2
+      - name: Check formatting
+        run: zig fmt --check core/shapefile/src/ core/network-engine/src/
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Install dependencies
+        run: cd server && bun install
+      - name: Typecheck
+        run: cd server && bunx tsc --noEmit
+
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: WASM contract check
+        run: bash scripts/check-wasm-contract.sh
+      - name: Dependency direction check
+        run: bash scripts/check-deps.sh

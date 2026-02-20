@@ -214,7 +214,10 @@ fn parseKeywordLine(allocator: Allocator, line: []const u8) !KeywordLine {
         const key_start = i;
         while (i < line.len and line[i] != '=' and line[i] != ',' and !std.ascii.isWhitespace(line[i])) i += 1;
         const key = line[key_start..i];
-        if (key.len == 0) { i += 1; continue; }
+        if (key.len == 0) {
+            i += 1;
+            continue;
+        }
 
         while (i < line.len and std.ascii.isWhitespace(line[i])) i += 1;
         if (i >= line.len or line[i] != '=') continue;
@@ -231,7 +234,10 @@ fn parseKeywordLine(allocator: Allocator, line: []const u8) !KeywordLine {
                 if (line[i] == '(') depth += 1;
                 if (line[i] == ')') {
                     depth -= 1;
-                    if (depth == 0) { i += 1; break; }
+                    if (depth == 0) {
+                        i += 1;
+                        break;
+                    }
                 }
                 i += 1;
             }
@@ -771,7 +777,10 @@ pub fn writeKey(
                             // Check not already in list
                             var found = false;
                             for (fluid_labels.items) |fl| {
-                                if (std.mem.eql(u8, fl, fid)) { found = true; break; }
+                                if (std.mem.eql(u8, fl, fid)) {
+                                    found = true;
+                                    break;
+                                }
                             }
                             if (!found) try fluid_labels.append(allocator, fid);
                         }
@@ -1003,7 +1012,10 @@ pub fn computeRouteSegmentsFromShp(
             .poly_line_z => |pl| {
                 for (pl.points, pl.z) |pt, z| {
                     try points.append(allocator, shapefile.PointZ{
-                        .x = pt[0], .y = pt[1], .z = z, .m = 0,
+                        .x = pt[0],
+                        .y = pt[1],
+                        .z = z,
+                        .m = 0,
                     });
                 }
             },
