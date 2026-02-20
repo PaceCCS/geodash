@@ -9,7 +9,8 @@
       "Bash(wc:*)",
       "Bash(grep:*)",
       "Bash(zig version:*)",
-      "Bash(zig --help:*)"
+      "Bash(zig --help:*)",
+      "Bash(zig fmt:*)"
     ]
   }
 }

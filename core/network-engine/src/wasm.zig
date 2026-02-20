@@ -456,7 +456,10 @@ fn runOlgaExport(input: []const u8) ![]u8 {
                 const arr = e.value_ptr.array.items;
                 const segs = try a.alloc(olga_mod.RouteSegment, arr.len);
                 for (arr, segs) |item, *seg| {
-                    if (item != .object) { seg.* = .{ .length_m = 0, .elevation_m = 0 }; continue; }
+                    if (item != .object) {
+                        seg.* = .{ .length_m = 0, .elevation_m = 0 };
+                        continue;
+                    }
                     seg.length_m = switch (item.object.get("length_m") orelse .null) {
                         .float => |f| f,
                         .integer => |i| @as(f64, @floatFromInt(i)),
@@ -608,7 +611,10 @@ fn runCreateRoute(input: []const u8) ![]u8 {
     const segs_arr = segs_val.array.items;
     const segs = try a.alloc(olga_mod.RouteSegment, segs_arr.len);
     for (segs_arr, segs) |item, *seg| {
-        if (item != .object) { seg.* = .{ .length_m = 0, .elevation_m = 0 }; continue; }
+        if (item != .object) {
+            seg.* = .{ .length_m = 0, .elevation_m = 0 };
+            continue;
+        }
         seg.length_m = switch (item.object.get("length_m") orelse .null) {
             .float => |f| f,
             .integer => |i| @as(f64, @floatFromInt(i)),
@@ -655,4 +661,3 @@ fn runCreateRoute(input: []const u8) ![]u8 {
 
     return out_buf.toOwnedSlice(wasm_alloc);
 }
-

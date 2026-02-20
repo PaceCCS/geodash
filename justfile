@@ -45,3 +45,17 @@ build-crs:
 # Reproject a shapefile (usage: just reproject input.shp output.shp EPSG:4326)
 reproject input output crs:
     core/crs/zig-out/bin/crs-tool --to {{crs}} {{input}} {{output}}
+
+# Check WASM contract (Zig exports match TS types)
+check-contract:
+    bash scripts/check-wasm-contract.sh
+
+# Check dependency direction rules
+check-deps:
+    bash scripts/check-deps.sh
+
+# Run all checks (fmt + contract + deps)
+check:
+    zig fmt --check core/shapefile/src/ core/network-engine/src/
+    bash scripts/check-wasm-contract.sh
+    bash scripts/check-deps.sh
