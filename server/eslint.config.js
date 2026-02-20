@@ -15,6 +15,38 @@ export default [
     },
     rules: {
       "@typescript-eslint/no-explicit-any": "error",
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["../routes/*"],
+              message: "Route files must not import from other route files.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ["src/routes/**/*.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["../routes/*"],
+              message: "Route files must not import from other route files.",
+            },
+            {
+              group: ["../../core/*"],
+              message:
+                "Route files must import from services/ or schemas/, not directly from core modules.",
+            },
+          ],
+        },
+      ],
     },
   },
 ];
