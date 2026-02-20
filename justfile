@@ -74,6 +74,10 @@ check-docs:
 check-test-coverage:
     bash scripts/check-test-coverage.sh
 
+# Check QUALITY_SCORE.md test counts match reality
+check-test-counts:
+    bash scripts/check-test-counts.sh
+
 # Run all checks
 check:
     zig fmt --check core/shapefile/src/ core/network-engine/src/
@@ -83,3 +87,4 @@ check:
     bash scripts/check-wasm-size.sh
     bash scripts/check-docs-freshness.sh
     bash scripts/check-test-coverage.sh
+    bash scripts/check-test-counts.sh
