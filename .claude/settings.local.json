@@ -10,7 +10,8 @@
       "Bash(grep:*)",
       "Bash(zig version:*)",
       "Bash(zig --help:*)",
-      "Bash(zig fmt:*)"
+      "Bash(zig fmt:*)",
+      "Bash(gh run view:*)"
     ]
   }
 }
