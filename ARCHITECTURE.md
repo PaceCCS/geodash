@@ -4,7 +4,7 @@
 
 ```
 ┌───────────────────────────────────────────────────┐
-│                  Tauri App (Rust)                  │
+│                  Tauri App (Rust)                 │
 │  ┌─────────────────────────────────────────────┐  │
 │  │         TanStack Start Frontend             │  │
 │  │  - React Flow network editor                │  │
