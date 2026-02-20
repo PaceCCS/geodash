@@ -4,85 +4,9 @@ A geospatial flow network platform for constructing, evaluating, and simulating 
 
 Website: [geoda.sh](https://geoda.sh)
 
-## Architecture
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the system diagram, module boundaries, dependency rules, and data flow.
 
-```
-┌───────────────────────────────────────────────────┐
-│                  Tauri App (Rust)                 │
-│  ┌─────────────────────────────────────────────┐  │
-│  │                WebGPU Frontend              │  │
-│  │  - Network editor                           │  │
-│  │  - Phase diagram plotter (ONNX textures)    │  │
-│  │  - Steady-state simulation (compute shaders)│  │
-│  │  - Hovmöller / profile / time-series plots  │  │
-│  └──────────────────────┬──────────────────────┘  │
-└─────────────────────────┼─────────────────────────┘
-                          │
-              ┌───────────▼───────────┐
-              │      Hono Server      │
-              │  - REST API           │
-              │  - Network queries    │
-              │  - SSE stream proxy   │
-              │  - Zarr file serving  │
-              └───────┬───────┬───────┘
-                      │       │
-         ┌────────────▼──┐  ┌─▼────────────────────────┐
-         │   Zig Core    │  │ Python Simulation Server │
-         │               │  │         (remote)         │
-         │  - Network    │  │ - Transient pipe flow    │
-         │    Engine     │  │ - Incremental Zarr write │
-         │  - Shapefile  │  │ - SSE timestep stream    │
-         │  - GeoTIFF    │  └──────────────────────────┘
-         │  - CRS        │
-         │  - Zarr       │
-         └───────────────┘
-```
-
-### Tauri App
-
-Rust shell hosting a WebGPU frontend. Handles windowing, file system access, and communication with the Hono server. The frontend uses WebGPU compute shaders for steady-state pipe simulation and `zarr.js` for loading transient simulation results.
-
-### Hono Server
-
-Middleware layer between the frontend and the Zig core. Exposes the network query language, handles schema validation, orchestrates calls to the Zig core, and acts as broker to the Python transient simulation server — proxying its SSE stream to connected clients and serving completed Zarr output files.
-
-### Zig Core
-
-The computational backbone, composed of:
-
-- **Network Engine** — The scope-based directed graph system (Global → Group → Branch → Block) with hierarchical property inheritance, TOML serialization, and versioned schema validation. Rebuilt from dagger's Rust/TypeScript implementation.
-- **[dim](https://github.com/Jerell/dim)** — Compile-time dimensional analysis library providing type-safe quantities across seven SI base dimensions. Enforces unit correctness throughout the network engine (all values stored in SI internally, converted per block type preferences). Also compiles to WASM for frontend use.
-- **Shapefile Parser** — Native Zig implementation for reading/writing `.shp`, `.shx`, and `.dbf` files. No C dependencies. Priority support for PointZ geometries (dense surveyed pipe routes) and PolyLineZ (pipeline paths). See [bathymetry-tool](https://github.com/Jerell/bathymetry-tool) for the Python prototype of this workflow.
-- **Route Importer** — Reads KML, KMZ, and Google My Maps CSV exports into PolyLineZ. KML altitude values are preserved as Z; reprojection and KP assignment follow via the CRS transform tool.
-- **GeoTIFF I/O** — Read georeferenced raster data. Used for global bathymetric surfaces (e.g. GEBCO) to sample seabed elevation along pipe routes. *(Planned)*
-- **CRS Transform** — Coordinate reference system conversions (e.g. ED50 UTM Zone 30N ↔ WGS84) needed to reconcile survey data with global datasets. Wraps PROJ via C interop. Standalone CLI tool; not included in the WASM module.
-- **OLGA I/O** — Read and write OLGA `.key`/`.genkey` files (the OLGA simulator's text-based input format). Import: parse network topology, pipe geometry, boundary conditions, and fluid definitions into the geodash network model, with optional PolyLineZ shapefile generation from PIPE segment geometry. Export: convert a geodash network and shapefile route into an OLGA input file, deriving `LENGTH` and `ELEVATION` per pipe segment from the surveyed KP geometry — replacing manual entry. Reading OLGA output (`.tpl`/`.ppl` binary trend and profile files) is also targeted, initially via Python preprocessing.
-- **Zarr Reader** — Reads Zarr v3 arrays for cases where the Zig core needs to consume simulation results directly.
-
-### Python Simulation Server
-
-External Python service (may run on a separate machine) that performs transient pipe flow simulation. Writes results incrementally as Zarr arrays and streams each completed timestep to Hono via SSE. See `simulation/` for the interface contract.
-
-## Geospatial Data Model
-
-TOML, shapefiles, GeoTIFF, Zarr, and OLGA files serve complementary roles:
-
-| Concern | TOML | Shapefile | GeoTIFF | Zarr | OLGA .key |
-|---|---|---|---|---|---|
-| Scope hierarchy & inheritance | Primary | — | — | — | — |
-| Block type, schema, config | Primary | — | — | — | — |
-| Route geometry & elevation | — | Primary (PointZ/PolyLineZ) | — | — | — |
-| Block locations | — | Primary (PointZ) | — | — | — |
-| Bathymetric surfaces | — | — | Primary (GEBCO) | — | — |
-| Block properties/attributes | Primary (full) | Secondary (`.dbf` subset) | — | — | — |
-| Pipe geometry (abstract segments) | — | — | — | — | Primary (LENGTH/ELEVATION) |
-| Network topology & boundary conditions | Secondary | — | — | — | Primary |
-| Fluid & PVT references | — | — | — | — | Primary |
-| Thermodynamic property surface (P×H) | — | — | — | Primary | — |
-| Steady-state results | — | — | — | Primary (KP-indexed) | — |
-| Transient simulation results | — | — | — | Primary (KP × time) | — |
-
-## Simulation Workflows
+## Workflows
 
 ### Route → Network
 
@@ -117,64 +41,30 @@ This follows the workflow in [bathymetry-tool](https://github.com/Jerell/bathyme
 ### Steady-State Simulation
 
 ```
-Geodash network (block types, properties, KP positions)
-    + thermodynamic property surface (ONNX → P×H Zarr texture)
+Geodash network + ONNX P×H property texture
     ↓ WebGPU compute shaders
 Fluid trajectories through P×H space, one per inlet condition
     ↓ store
 Zarr array (inlet_P × inlet_H × KP, one array per property)
 ```
 
-The thermodynamic property surface is a precomputed P×H raster with fluid properties (density, temperature, viscosity, phase fraction) encoded per cell — generated once by ONNX neural networks and cached. The compute shaders march each inlet condition along the pipe, stepping through the property surface to find successive (P, H) states. Results are stored as a family of trajectories so the effect of varying inlet conditions can be compared simultaneously.
-
 ### Transient Simulation
 
 ```
 Geodash network + steady-state initial conditions
-    ↓ HTTP request
-Python Simulation Server (remote)
+    ↓ HTTP request → Python Simulation Server (remote)
     ↓ SSE stream (one event per timestep)
-Hono Server → Frontend (live Hovmöller canvas)
-    ↓ on completion
-Zarr array (KP × time, one array per property)
-    ↓ served via Hono
-Frontend zarr.js (profile plots, time-series, full Hovmöller)
+    ↓ on completion → Zarr array (KP × time)
+Frontend: live Hovmöller canvas, profile plots, time-series
 ```
 
 ### OLGA Integration
 
-OLGA uses a text-based keyword format (`.key`/`.genkey`) to define simulation networks. Pipe geometry is expressed as abstract segments — `LENGTH` and `ELEVATION` per pipe, with no geographic coordinates. Geodash supports two directions of exchange:
+Bidirectional exchange with OLGA's `.key`/`.genkey` text format. OLGA expresses pipe geometry as abstract segments (LENGTH/ELEVATION) with no geographic coordinates.
 
-**Geodash → OLGA (export):** `POST /api/operations/olga/export`
-```
-Shapefile route (PointZ, surveyed coordinates)
-    ↓ KP computation
-Segment lengths and elevation changes
-    ↓ combined with block properties (diameter, roughness, wall, fluid)
-OLGA .key file (NETWORKCOMPONENT / PIPE / SOURCE / CONNECTION keywords)
-```
-
-If a Pipe block has a `route` property pointing to a `.shp` file, the exporter reads the KP geometry and emits one OLGA `PIPE` statement per segment. Without a route, it falls back to block-level `length`/`elevation` properties with a warning.
-
-**OLGA → Geodash (import):** `POST /api/operations/olga/import`
-```
-OLGA .key file
-    ↓ parse network topology, pipe segments, boundary conditions
-Geodash TOML files (config.toml + branch-N.toml per FlowPath)
-    ↓ optionally, if root_location provided:
-PolyLineZ shapefile (geometry laid out eastward from root, elevation from PIPE segments)
-```
-
-Geographic position is not recoverable from OLGA input alone; import gives topology and hydraulic properties. With `root_location`, a geometrically simple (eastward-laid) PolyLineZ shapefile is generated from the PIPE segment data so KP-indexed tools can operate immediately.
-
-**OLGA output visualisation:** *(Planned)*
-```
-OLGA .tpl / .ppl output (binary trend and profile files)
-    ↓ Python preprocessing (pyfas) → CSV / Zarr
-P-T profile along KP route
-    ↓ overlay on P-H diagram with ONNX phase envelope
-Operating trajectory visualisation
-```
+- **Export** (`POST /api/operations/olga/export`): geodash network + shapefile route → OLGA `.key` with per-segment LENGTH/ELEVATION derived from KP geometry
+- **Import** (`POST /api/operations/olga/import`): OLGA `.key` → geodash TOML files + optional PolyLineZ shapefile
+- **Output visualisation** (planned): `.tpl`/`.ppl` binary output → P-T profile overlaid on P-H phase envelope
 
 ## Target Use Cases
 
@@ -226,68 +116,11 @@ Global (config.toml)
 - **Branch** — A network segment (e.g. a pipeline section)
 - **Block** — Individual component within a branch (e.g. a pipe, valve, compressor)
 
-## Progress
+## Status
 
-### Phase 1: Zig Core Foundation — Complete
+Planned work is tracked in [GitHub Issues](https://github.com/Jerell/geodash/issues). Quality grades per module are in [docs/QUALITY_SCORE.md](docs/QUALITY_SCORE.md).
 
-The network engine (`core/network-engine/`) is implemented with passing tests:
+## Documentation
 
-- Custom TOML parser for the dagger file format (tables, arrays of tables, dotted keys, inline tables)
-- Network loader: reads a directory of `.toml` files, derives node IDs from filenames, builds edges from outgoing connections, validates references
-- Scope system: `Config` loaded from `config.toml`, `ScopeResolver` walks configurable inheritance chains (per-property, per-block-type rules)
-- Query engine: path-based queries (`branch-4/blocks/0/pressure`), array indexing, range slicing, filter expressions (`[type=Pipe]`), scope resolution via `?scope=` params
-- Fluid propagation: topological traversal of the DAG from source blocks; at each junction blends incoming compositions weighted by flow rate; assigns a derived composition to every downstream branch
-- Integration tests against actual dagger preset1 data (14 nodes across 5 types, 9 branches)
-
-### Phase 2: Shapefile Parser & Geospatial I/O — Substantially Complete
-
-Done:
-
-- `.shp` reader/writer — PointZ and PolyLineZ geometry types; in-memory build functions for WASM
-- `.shx` reader/writer — spatial index; in-memory build for WASM
-- `.dbf` reader/writer — attribute table; in-memory build for WASM
-- KP computation from consecutive survey points — cumulative 2D horizontal distance (metres → km)
-- CRS transform — wraps PROJ 9 via C interop; CLI tool (`crs-tool --to EPSG:4326 input.shp output.shp`); ARM64 ABI workaround for pass-by-value bug
-- Route importer — KML, KMZ, and Google My Maps CSV → PolyLineZ in WGS84; altitude preserved from KML where present
-- OLGA `.key` reader and writer — full parser, writer, WASM exports, Hono endpoints
-
-Still to do:
-
-- GeoTIFF reader for sampling bathymetric surfaces (GEBCO) along pipe routes
-- Map Point shapefile features to Block geographic positions
-
-### Phase 3: Hono Server + API — Substantially Complete
-
-Done:
-
-- Hono server with CORS, health check, error handling
-- Network query engine over REST (`GET /api/query`)
-- Network load/structure endpoint (`GET /api/network`)
-- Zig core bridged via WASM (wasm32-wasi, loaded in-process)
-- OLGA import/export/validate endpoints (`POST /api/operations/olga/*`)
-- Effect Schema validation for OLGA block types (Pipe, Source, Sink, Compressor)
-
-Still to do:
-
-- Interface with Python transient simulation server: start runs, proxy SSE stream to frontend
-- Serve Zarr files via static file serving with HTTP range request support
-
-### Phase 4: Tauri App
-
-- Scaffold Tauri app with webview frontend
-- Network editor UI (create/edit scopes, visualize the DAG)
-- Connect to Hono server for data operations
-- Integrate `dim` WASM build for client-side unit display and conversion
-- Hovmöller diagram: KP on Y axis, time on X axis, property value as colour
-- Profile plots: property vs KP at a fixed timestep
-- Time-series plots: property vs time at a fixed KP location
-- Live Hovmöller canvas fed by SSE stream during active simulation runs
-- Zarr-backed retrospective analysis via `zarr.js`
-
-### Phase 5: WebGPU Simulation Pipeline
-
-- Load thermodynamic property surface from Zarr into GPU texture (or generate live via ONNX)
-- Implement compute shader trajectory integration: march inlet conditions through P×H property texture along pipe
-- Store family-of-results as Zarr array (inlet_P × inlet_H × KP × property)
-- Single-run mode: one inlet condition, KP-indexed result array
-- Connect simulation results back to Block properties in the network engine
+- [ARCHITECTURE.md](ARCHITECTURE.md) — System diagram, module boundaries, dependency rules, WASM contract
+- [docs/](docs/index.md) — Design decisions, core beliefs, quality scores, dependency references, enforcement rules
