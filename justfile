@@ -1,5 +1,8 @@
 # geodash project commands
 
+default:
+    just --list
+
 # Build the WASM module and copy it to the server
 build-wasm:
     cd core/network-engine && zig build wasm
@@ -27,20 +30,13 @@ test-server:
 # Run all tests
 test-all: test-zig test-server
 
-# Start the Hono server in dev mode (hot reload)
-dev-server:
-    cd server && bun run dev
-
-# Start the Hono server
-start-server:
-    cd server && bun run start
-
 # Install server dependencies
 install-server:
     cd server && bun install
 
-# Build WASM then start the dev server
-dev: build-wasm dev-server
+# Start Tauri dev (spawns Hono server automatically)
+dev:
+    cd app && cargo tauri dev
 
 # Build the CRS tool
 build-crs:
@@ -81,6 +77,15 @@ check-wasm-freshness:
 # Check QUALITY_SCORE.md test counts match reality
 check-test-counts:
     bash scripts/check-test-counts.sh
+
+# Build dim WASM and copy to app
+build-dim-wasm:
+    cd ~/Repos/dim && zig build -Dtarget=wasm32-wasi
+    cp ~/Repos/dim/zig-out/bin/dim_wasm.wasm app/public/dim/dim_wasm.wasm
+
+# Install app dependencies
+install-app:
+    cd app && bun install
 
 # Run all checks
 check:
