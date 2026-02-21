@@ -30,20 +30,13 @@ test-server:
 # Run all tests
 test-all: test-zig test-server
 
-# Start the Hono server in dev mode (hot reload)
-dev-server:
-    cd server && bun run dev
-
-# Start the Hono server
-start-server:
-    cd server && bun run start
-
 # Install server dependencies
 install-server:
     cd server && bun install
 
-# Build WASM then start the dev server
-dev: build-wasm dev-server
+# Start Tauri dev (spawns Hono server automatically)
+dev:
+    cd app && cargo tauri dev
 
 # Build the CRS tool
 build-crs:
@@ -90,17 +83,9 @@ build-dim-wasm:
     cd ~/Repos/dim && zig build -Dtarget=wasm32-wasi
     cp ~/Repos/dim/zig-out/bin/dim_wasm.wasm app/public/dim/dim_wasm.wasm
 
-# Start the app frontend dev server
-dev-app:
-    cd app && bun run dev
-
 # Install app dependencies
 install-app:
     cd app && bun install
-
-# Start Tauri dev mode
-tauri-dev:
-    cd app && cargo tauri dev
 
 # Run all checks
 check:
