@@ -59,9 +59,10 @@ impl LocalServer {
 
         std::thread::sleep(std::time::Duration::from_millis(100));
 
+        let script = if cfg!(debug_assertions) { "dev" } else { "start" };
         let mut cmd = Command::new("bun");
         cmd.arg("run")
-            .arg("dev")
+            .arg(script)
             .current_dir(&server_path)
             .env("PORT", self.port.to_string())
             .stdout(std::process::Stdio::inherit())

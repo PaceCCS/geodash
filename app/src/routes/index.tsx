@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/")({ component: Home });
 
@@ -13,6 +13,16 @@ function Home() {
       </section>
 
       <section className="flex flex-col gap-4 p-4 max-w-2xl mx-auto w-full">
+        <Link
+          to="/network/watch"
+          className="border border-brand-grey-3 rounded-lg p-4 hover:border-brand-blue-1 transition-colors block"
+        >
+          <h2 className="text-xl font-bold">Network Editor</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Watch a directory of TOML network files. Visualise and edit the flow
+            graph — changes are automatically written back to the files.
+          </p>
+        </Link>
         <div className="border border-brand-grey-3 rounded-lg p-4">
           <h2 className="text-xl font-bold">Network Engine</h2>
           <p className="text-sm text-muted-foreground mt-1">

@@ -146,6 +146,23 @@ fn writeValueJson(value: *const Value, buf: *Buf, a: Allocator) error{OutOfMemor
     }
 }
 
+/// Write a JSON-quoted, escaped string to buf.
+fn writeJsonString(s: []const u8, buf: *Buf, a: Allocator) !void {
+    try bufAppend(buf, a, '"');
+    for (s) |c| {
+        switch (c) {
+            '"' => try bufAppendSlice(buf, a, "\\\""),
+            '\\' => try bufAppendSlice(buf, a, "\\\\"),
+            '\t' => try bufAppendSlice(buf, a, "\\t"),
+            '\n' => try bufAppendSlice(buf, a, "\\n"),
+            '\r' => try bufAppendSlice(buf, a, "\\r"),
+            0x00...0x08, 0x0b...0x0c, 0x0e...0x1f => try bufPrint(buf, a, "\\u{x:0>4}", .{c}),
+            else => try bufAppend(buf, a, c),
+        }
+    }
+    try bufAppend(buf, a, '"');
+}
+
 // ── Input parsing ─────────────────────────────────────────────────────────────
 
 const ParsedInput = struct {
@@ -244,7 +261,14 @@ fn runQuery(input: []const u8) ![]u8 {
 // ── geodash_load_network ──────────────────────────────────────────────────────
 //
 // Input:  { files: Record<string,string>, config?: string }
-// Output: { nodes: [{id, type, label?}], edges: [{id, source, target}], warnings: [string] }
+// Output: {
+//   nodes: [{
+//     id, type, position: {x, y}, parentId?, width?, height?,
+//     data: { id, label?, blocks?: [{type, kind, label, quantity, ...}], path? }
+//   }],
+//   edges: [{ id, source, target, data: { weight } }],
+//   warnings: [string]
+// }
 
 export fn geodash_load_network(in_ptr: u32, in_len: u32, out_ptr: u32, out_len: u32) i32 {
     const input = @as([*]const u8, @ptrFromInt(in_ptr))[0..in_len];
@@ -274,25 +298,120 @@ fn runLoadNetwork(input: []const u8) ![]u8 {
         if (i > 0) try bufAppend(&out_buf, wasm_alloc, ',');
         const base = node.base();
         try bufAppend(&out_buf, wasm_alloc, '{');
-        try bufPrint(&out_buf, wasm_alloc, "\"id\":\"{s}\",\"type\":\"{s}\"", .{ base.id, base.type_name });
-        if (base.label) |l| try bufPrint(&out_buf, wasm_alloc, ",\"label\":\"{s}\"", .{l});
-        try bufAppend(&out_buf, wasm_alloc, '}');
+
+        // id, type
+        try bufAppendSlice(&out_buf, wasm_alloc, "\"id\":");
+        try writeJsonString(base.id, &out_buf, wasm_alloc);
+        try bufAppendSlice(&out_buf, wasm_alloc, ",\"type\":");
+        try writeJsonString(base.type_name, &out_buf, wasm_alloc);
+
+        // parentId (optional, top-level)
+        if (base.parent_id) |pid| {
+            try bufAppendSlice(&out_buf, wasm_alloc, ",\"parentId\":");
+            try writeJsonString(pid, &out_buf, wasm_alloc);
+        }
+
+        // width, height (optional, top-level)
+        if (base.width) |w| try bufPrint(&out_buf, wasm_alloc, ",\"width\":{d}", .{w});
+        if (base.height) |h| try bufPrint(&out_buf, wasm_alloc, ",\"height\":{d}", .{h});
+
+        // position (always present)
+        try bufPrint(&out_buf, wasm_alloc, ",\"position\":{{\"x\":{d},\"y\":{d}}}", .{
+            base.position.x, base.position.y,
+        });
+
+        // data object
+        try bufAppendSlice(&out_buf, wasm_alloc, ",\"data\":{\"id\":");
+        try writeJsonString(base.id, &out_buf, wasm_alloc);
+
+        if (base.label) |l| {
+            try bufAppendSlice(&out_buf, wasm_alloc, ",\"label\":");
+            try writeJsonString(l, &out_buf, wasm_alloc);
+        }
+
+        // Type-specific data fields
+        switch (node.*) {
+            .branch => |*b| {
+                // Always emit blocks array for branch nodes (may be empty).
+                try bufAppendSlice(&out_buf, wasm_alloc, ",\"blocks\":[");
+                for (b.blocks.items, 0..) |*block, bi| {
+                    if (bi > 0) try bufAppend(&out_buf, wasm_alloc, ',');
+                    try bufAppend(&out_buf, wasm_alloc, '{');
+
+                    // type
+                    try bufAppendSlice(&out_buf, wasm_alloc, "\"type\":");
+                    try writeJsonString(block.type_name, &out_buf, wasm_alloc);
+
+                    // kind = lowercase type_name
+                    try bufAppendSlice(&out_buf, wasm_alloc, ",\"kind\":\"");
+                    for (block.type_name) |c| try bufAppend(&out_buf, wasm_alloc, std.ascii.toLower(c));
+                    try bufAppend(&out_buf, wasm_alloc, '"');
+
+                    // label = type_name (human-readable display name)
+                    try bufAppendSlice(&out_buf, wasm_alloc, ",\"label\":");
+                    try writeJsonString(block.type_name, &out_buf, wasm_alloc);
+
+                    // quantity (always emit, default 1)
+                    const qty: u32 = block.quantity orelse 1;
+                    try bufPrint(&out_buf, wasm_alloc, ",\"quantity\":{d}", .{qty});
+
+                    // extra properties (e.g. pressure, diameter)
+                    var block_extra = block.extra;
+                    var eit = block_extra.iterator();
+                    while (eit.next()) |entry| {
+                        try bufAppend(&out_buf, wasm_alloc, ',');
+                        try bufAppend(&out_buf, wasm_alloc, '"');
+                        try bufAppendSlice(&out_buf, wasm_alloc, entry.key_ptr.*);
+                        try bufAppendSlice(&out_buf, wasm_alloc, "\":");
+                        try writeValueJson(entry.value_ptr, &out_buf, wasm_alloc);
+                    }
+
+                    try bufAppend(&out_buf, wasm_alloc, '}');
+                }
+                try bufAppend(&out_buf, wasm_alloc, ']');
+            },
+            .image => |*img| {
+                if (img.path.len > 0) {
+                    try bufAppendSlice(&out_buf, wasm_alloc, ",\"path\":");
+                    try writeJsonString(img.path, &out_buf, wasm_alloc);
+                }
+            },
+            else => {
+                // Extra data properties for group/geographic nodes
+                var node_extra = base.extra;
+                var eit = node_extra.iterator();
+                while (eit.next()) |entry| {
+                    try bufAppend(&out_buf, wasm_alloc, ',');
+                    try bufAppend(&out_buf, wasm_alloc, '"');
+                    try bufAppendSlice(&out_buf, wasm_alloc, entry.key_ptr.*);
+                    try bufAppendSlice(&out_buf, wasm_alloc, "\":");
+                    try writeValueJson(entry.value_ptr, &out_buf, wasm_alloc);
+                }
+            },
+        }
+
+        try bufAppend(&out_buf, wasm_alloc, '}'); // close data
+        try bufAppend(&out_buf, wasm_alloc, '}'); // close node
     }
 
     try bufAppendSlice(&out_buf, wasm_alloc, "],\"edges\":[");
     for (network.edges.items, 0..) |*edge, i| {
         if (i > 0) try bufAppend(&out_buf, wasm_alloc, ',');
-        try bufPrint(&out_buf, wasm_alloc, "{{\"id\":\"{s}\",\"source\":\"{s}\",\"target\":\"{s}\"}}", .{
-            edge.id, edge.source, edge.target,
-        });
+        try bufAppend(&out_buf, wasm_alloc, '{');
+        try bufAppendSlice(&out_buf, wasm_alloc, "\"id\":");
+        try writeJsonString(edge.id, &out_buf, wasm_alloc);
+        try bufAppendSlice(&out_buf, wasm_alloc, ",\"source\":");
+        try writeJsonString(edge.source, &out_buf, wasm_alloc);
+        try bufAppendSlice(&out_buf, wasm_alloc, ",\"target\":");
+        try writeJsonString(edge.target, &out_buf, wasm_alloc);
+        try bufPrint(&out_buf, wasm_alloc, ",\"data\":{{\"weight\":{d}}}", .{edge.weight});
+        try bufAppend(&out_buf, wasm_alloc, '}');
     }
 
     try bufAppendSlice(&out_buf, wasm_alloc, "],\"warnings\":[");
     for (validation.warnings.items, 0..) |warn, i| {
         if (i > 0) try bufAppend(&out_buf, wasm_alloc, ',');
-        try bufAppend(&out_buf, wasm_alloc, '"');
-        try bufAppendSlice(&out_buf, wasm_alloc, warn.message);
-        try bufAppend(&out_buf, wasm_alloc, '"');
+        try writeJsonString(warn.message, &out_buf, wasm_alloc);
     }
     try bufAppendSlice(&out_buf, wasm_alloc, "]}");
 
