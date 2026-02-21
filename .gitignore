@@ -9,6 +9,9 @@ zig-cache/
 # Node / Bun
 node_modules/
 
+# Rust build artifacts
+target/
+
 # macOS
 .DS_Store
 
