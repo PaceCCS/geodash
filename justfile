@@ -1,5 +1,8 @@
 # geodash project commands
 
+default:
+    just --list
+
 # Build the WASM module and copy it to the server
 build-wasm:
     cd core/network-engine && zig build wasm
@@ -81,6 +84,23 @@ check-wasm-freshness:
 # Check QUALITY_SCORE.md test counts match reality
 check-test-counts:
     bash scripts/check-test-counts.sh
+
+# Build dim WASM and copy to app
+build-dim-wasm:
+    cd ~/Repos/dim && zig build -Dtarget=wasm32-wasi
+    cp ~/Repos/dim/zig-out/bin/dim_wasm.wasm app/public/dim/dim_wasm.wasm
+
+# Start the app frontend dev server
+dev-app:
+    cd app && bun run dev
+
+# Install app dependencies
+install-app:
+    cd app && bun install
+
+# Start Tauri dev mode
+tauri-dev:
+    cd app && cargo tauri dev
 
 # Run all checks
 check:
