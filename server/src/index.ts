@@ -29,9 +29,19 @@ app.onError((err, c) => {
 });
 
 const port = process.env.PORT ? parseInt(process.env.PORT) : 3001;
-console.log(`geodash API server starting on port ${port}`);
 
-export default {
-  port,
-  fetch: app.fetch,
-};
+// Manage the server reference in globalThis so that bun --hot can reload
+// the fetch handler without rebinding the port. Exporting
+// `{ port, fetch }` as default triggers Bun's magic server detection which
+// calls both server.reload() AND Bun.serve() in the same branch — the
+// second bind fails with EADDRINUSE. Calling Bun.serve() directly bypasses
+// that code path entirely.
+const g = globalThis as { __geodashServer?: ReturnType<typeof Bun.serve> };
+
+if (g.__geodashServer) {
+  g.__geodashServer.reload({ fetch: app.fetch });
+  console.log(`geodash API server hot-reloaded on port ${port}`);
+} else {
+  g.__geodashServer = Bun.serve({ port, fetch: app.fetch });
+  console.log(`geodash API server started on port ${port}`);
+}

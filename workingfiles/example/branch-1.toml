@@ -1,0 +1,28 @@
+type = "branch"
+label = "Branch 1"
+parentId = "group-1"
+
+[position]
+x = 20
+y = 30
+
+[[outgoing]]
+target = "branch-2"
+weight = 1
+
+[[block]]
+type = "Source"
+
+[[block]]
+quantity = 4
+type = "Capture Unit"
+
+[[block]]
+type = "Pipe"
+
+[[block]]
+type = "Compressor"
+pressure = "120 bar"
+
+[[block]]
+type = "Pipe"
