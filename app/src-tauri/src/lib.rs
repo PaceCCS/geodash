@@ -1,6 +1,10 @@
+mod commands;
+mod file_watcher;
 mod server;
 
+use file_watcher::{FileWatcher, FileWatcherState};
 use server::ServerState;
+use std::sync::{Arc, Mutex};
 use tauri::Manager;
 
 #[tauri::command]
@@ -32,9 +36,16 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            // ── Server state ──────────────────────────────────────────────────
             let server_state = ServerState::new(server::LocalServer::new(3001));
             app.handle().manage(server_state);
 
+            // ── File watcher state ────────────────────────────────────────────
+            let watcher_state: FileWatcherState =
+                Arc::new(Mutex::new(FileWatcher::new()));
+            app.handle().manage(watcher_state);
+
+            // ── Auto-start Hono server ────────────────────────────────────────
             let app_handle = app.handle().clone();
             std::thread::spawn(move || {
                 let server_path = std::env::current_dir()
@@ -78,10 +89,15 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             start_local_server,
             stop_local_server,
+            commands::read_network_directory,
+            commands::write_network_file,
+            commands::delete_network_file,
+            commands::start_watching_directory,
+            commands::stop_watching_directory,
         ])
         .on_window_event(|_window, event| {
             if let tauri::WindowEvent::CloseRequested { .. } = event {
-                // Server cleanup handled by Drop
+                // Server and watcher cleanup handled by Drop
             }
         })
         .run(tauri::generate_context!())

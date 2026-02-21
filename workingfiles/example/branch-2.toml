@@ -1,0 +1,49 @@
+type = "branch"
+label = "Branch 2"
+parentId = "group-1"
+
+[position]
+x = 400
+y = 100
+
+[[outgoing]]
+target = "branch-3"
+weight = 1
+
+[[outgoing]]
+target = "branch-5"
+weight = 3
+
+[[block]]
+type = "Pipe"
+
+[[block]]
+quantity = 2
+type = "Compressor"
+
+[[block]]
+type = "Pipe"
+
+[[block]]
+type = "Pipe"
+
+[[block]]
+type = "Pipe"
+
+[[block]]
+type = "Pipe"
+
+[[block]]
+type = "Pipe"
+
+[[block]]
+type = "Pipe"
+
+[[block]]
+type = "Pipe"
+
+[[block]]
+type = "Pipe"
+
+[[block]]
+type = "Pipe"
