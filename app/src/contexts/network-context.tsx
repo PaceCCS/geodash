@@ -1,12 +1,8 @@
 import { createContext, useContext, type ReactNode } from "react";
+import { getApiBaseUrl } from "@/lib/api-proxy";
 
 export type NetworkContextValue = {
-  /** The current network identifier (absolute directory path or preset name). */
   networkId: string;
-  /**
-   * Construct a URL to fetch a static asset from the current network directory.
-   * @param relativePath - Path relative to the network directory (e.g. "assets/map.svg")
-   */
   getAssetUrl: (relativePath: string) => string;
 };
 
@@ -21,7 +17,8 @@ export function NetworkProvider({
 }) {
   const getAssetUrl = (relativePath: string) => {
     const encodedNetwork = encodeURIComponent(networkId);
-    return `http://localhost:3001/api/network/assets/${relativePath}?network=${encodedNetwork}`;
+    const baseUrl = getApiBaseUrl();
+    return `${baseUrl}/api/network/assets/${relativePath}?network=${encodedNetwork}`;
   };
 
   return (
@@ -39,7 +36,6 @@ export function useNetwork(): NetworkContextValue {
   return context;
 }
 
-/** Returns null when not inside a NetworkProvider. */
 export function useNetworkOptional(): NetworkContextValue | null {
   return useContext(NetworkContext);
 }

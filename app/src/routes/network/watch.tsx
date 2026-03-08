@@ -10,7 +10,7 @@ import {
   sortNodesWithParentsFirst,
 } from "@/lib/collections/flow";
 import { useFileWatcher } from "@/lib/hooks/use-file-watcher";
-import { pickNetworkDirectory } from "@/lib/tauri";
+import { pickNetworkDirectory } from "@/lib/desktop";
 import { NetworkProvider } from "@/contexts/network-context";
 import { Button } from "@/components/ui/button";
 
