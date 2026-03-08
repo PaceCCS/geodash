@@ -2,8 +2,8 @@ type = "branch"
 label = "Branch 7"
 
 [position]
-x = 300
-y = 380
+x = 208.5110294117647
+y = 361.12132352941177
 
 [[block]]
 type = "Source"

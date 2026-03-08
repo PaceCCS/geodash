@@ -34,9 +34,17 @@ test-all: test-zig test-server
 install-server:
     cd server && bun install
 
-# Start Tauri dev (spawns Hono server automatically)
+# Start Electron dev (spawns Elysia server automatically)
 dev:
-    cd app && cargo tauri dev
+    cd app && bun run dev
+
+# Start the server standalone
+dev-server:
+    cd server && bun run dev
+
+# Start the renderer in browser-only mode
+dev-web:
+    cd app && bun run dev:web
 
 # Build the CRS tool
 build-crs:

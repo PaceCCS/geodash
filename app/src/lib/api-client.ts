@@ -1,4 +1,4 @@
-// ── Network data types ────────────────────────────────────────────────────────
+import { getApiBaseUrl } from "./api-proxy";
 
 export type Position = {
   x: number;
@@ -97,25 +97,38 @@ export type NetworkResponse = {
   edges: NetworkEdge[];
 };
 
-// ── API calls ─────────────────────────────────────────────────────────────────
+async function apiGet<T>(
+  path: string,
+  query?: Record<string, string | undefined>,
+): Promise<T> {
+  const baseUrl = getApiBaseUrl();
+  const url = new URL(path, baseUrl);
 
-const API_BASE = "http://localhost:3001";
+  if (query) {
+    for (const [key, value] of Object.entries(query)) {
+      if (value !== undefined) {
+        url.searchParams.set(key, value);
+      }
+    }
+  }
 
-/**
- * Load a network from an absolute directory path or preset name.
- * The server's resolveNetworkPath handles both absolute paths and relative preset names.
- */
-export async function getNetworkFromPath(
-  networkIdentifier: string
-): Promise<NetworkResponse> {
-  const url = `${API_BASE}/api/network?network=${encodeURIComponent(networkIdentifier)}`;
-  const response = await fetch(url);
+  const response = await fetch(url.toString());
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     throw new Error(
-      (body as { error?: string }).error ??
-        `Failed to load network (${response.status})`
+      (body as { message?: string; error?: string }).message
+        ?? (body as { error?: string }).error
+        ?? `Failed to load data (${response.status})`,
     );
   }
-  return response.json() as Promise<NetworkResponse>;
+
+  return response.json() as Promise<T>;
+}
+
+export async function getNetworkFromPath(
+  networkIdentifier: string,
+): Promise<NetworkResponse> {
+  return apiGet<NetworkResponse>("/api/network", {
+    network: networkIdentifier,
+  });
 }

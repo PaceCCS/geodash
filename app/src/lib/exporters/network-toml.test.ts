@@ -2,7 +2,7 @@
  * Unit tests for the TOML network serializer.
  *
  * These tests cover the pure serialization logic (buildTomlFiles /
- * serializeNodeToToml) independently of any Tauri or file-system I/O.
+ * serializeNodeToToml) independently of any desktop-bridge or file-system I/O.
  */
 import { describe, test, expect } from "bun:test";
 import * as TOML from "@iarna/toml";

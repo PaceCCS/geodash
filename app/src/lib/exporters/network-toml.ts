@@ -2,17 +2,11 @@ import * as TOML from "@iarna/toml";
 import type { FlowNode, FlowEdge } from "@/lib/collections/flow-nodes";
 import type { NetworkNode } from "@/lib/api-client";
 import { toNetworkNode } from "@/lib/utils/filter-reactflow-props";
-import { writeNetworkFile } from "@/lib/tauri";
+import { writeNetworkFile } from "@/lib/desktop";
 
-/**
- * Serialize a NetworkNode (and its outgoing edges for branch nodes) to TOML.
- *
- * Structure mirrors the hand-authored preset TOML files:
- *   type, label, parentId, width, height, [position], [[outgoing]], [[block]]
- */
 export function serializeNodeToToml(
   node: NetworkNode,
-  outgoing?: Array<{ target: string; weight: number }>
+  outgoing?: Array<{ target: string; weight: number }>,
 ): string {
   const obj: Record<string, unknown> = { type: node.type };
 
@@ -29,29 +23,25 @@ export function serializeNodeToToml(
     }
     if (node.data.blocks && node.data.blocks.length > 0) {
       obj.block = node.data.blocks.map((block) => {
-        const b: Record<string, unknown> = {};
-        // Omit quantity when it is the default (1) to match hand-authored style.
+        const blockObj: Record<string, unknown> = {};
         if (block.quantity !== undefined && block.quantity !== 1) {
-          b.quantity = block.quantity;
+          blockObj.quantity = block.quantity;
         }
-        b.type = block.type;
-        // Carry through any extra properties (e.g. pressure, diameter).
-        // Exclude backend-computed fields (kind, label) which aren't in TOML.
+        blockObj.type = block.type;
         Object.keys(block).forEach((key) => {
           if (!["type", "quantity", "kind", "label"].includes(key)) {
-            b[key] = (block as Record<string, unknown>)[key];
+            blockObj[key] = (block as Record<string, unknown>)[key];
           }
         });
-        return b;
+        return blockObj;
       });
     }
   }
 
-  // Group / geographic nodes may carry extra top-level properties.
   if (
-    node.type === "labeledGroup" ||
-    node.type === "geographicAnchor" ||
-    node.type === "geographicWindow"
+    node.type === "labeledGroup"
+    || node.type === "geographicAnchor"
+    || node.type === "geographicWindow"
   ) {
     Object.keys(node.data).forEach((key) => {
       if (key !== "id" && key !== "label" && node.data[key] != null) {
@@ -67,17 +57,10 @@ export function serializeNodeToToml(
   return TOML.stringify(obj as TOML.JsonMap);
 }
 
-/**
- * Pure function: compute the TOML content for every node without performing
- * any I/O.  Returns `{ path, content }` pairs, one per node.
- *
- * Path is `{directoryPath}/{node.id}.toml`.
- * Edges are embedded as `[[outgoing]]` in the source branch file.
- */
 export function buildTomlFiles(
   nodes: FlowNode[],
   edges: FlowEdge[],
-  directoryPath: string
+  directoryPath: string,
 ): Array<{ path: string; content: string }> {
   const edgesBySource = new Map<string, FlowEdge[]>();
   edges.forEach((edge) => {
@@ -87,17 +70,18 @@ export function buildTomlFiles(
 
   const base = directoryPath.endsWith("/")
     ? directoryPath
-    : directoryPath + "/";
+    : `${directoryPath}/`;
 
   return nodes.map((node) => {
     const networkNode = toNetworkNode(node);
     const outgoing =
       networkNode.type === "branch"
-        ? (edgesBySource.get(node.id) ?? []).map((e) => ({
-            target: e.target,
-            weight: e.data.weight,
+        ? (edgesBySource.get(node.id) ?? []).map((edge) => ({
+            target: edge.target,
+            weight: edge.data.weight,
           }))
         : undefined;
+
     return {
       path: `${base}${node.id}.toml`,
       content: serializeNodeToToml(networkNode, outgoing),
@@ -105,22 +89,13 @@ export function buildTomlFiles(
   });
 }
 
-/**
- * Persist all nodes to their corresponding TOML files.
- *
- * Each node maps to `{directoryPath}/{node.id}.toml`.
- * Edges are embedded as `[[outgoing]]` arrays inside the source branch file.
- *
- * The Tauri `write_network_file` command marks each path as a self-write so
- * the file watcher suppresses the resulting filesystem event.
- */
 export async function exportNetworkToToml(
   nodes: FlowNode[],
   edges: FlowEdge[],
-  directoryPath: string
+  directoryPath: string,
 ): Promise<void> {
   const files = buildTomlFiles(nodes, edges, directoryPath);
   await Promise.all(
-    files.map(({ path, content }) => writeNetworkFile(path, content))
+    files.map(({ path, content }) => writeNetworkFile(path, content)),
   );
 }
