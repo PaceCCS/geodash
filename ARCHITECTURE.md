@@ -12,11 +12,11 @@
 │  │  - Compute shader steady-state simulation   │  │
 │  │  - Hovmöller / profile / time-series plots  │  │
 │  └──────────────────────┬──────────────────────┘  │
-│       Electron auto-starts Hono as child process  │
+│     Electron auto-starts Elysia as child process  │
 └─────────────────────────┼─────────────────────────┘
                           │
               ┌───────────▼───────────┐
-              │      Hono Server      │
+              │    Elysia Server      │
               │  (Bun runtime)        │
               │  - REST API           │
               │  - WASM bridge        │
@@ -48,7 +48,7 @@ crs ──→ shapefile
 crs ──→ PROJ (system C library)
 
 server ──→ network-engine (via WASM)
-server ──→ effect, hono, smol-toml (npm)
+server ──→ effect, elysia, smol-toml (npm)
 
 electron ──→ server (HTTP, managed child process)
 electron ──→ dim (via WASM, client-side units)
@@ -60,7 +60,7 @@ electron ──→ dim (via WASM, client-side units)
 2. **CRS is isolated.** It links PROJ (a C library) and runs only as a standalone CLI tool. It is never compiled into WASM and never imported by the server.
 3. **network-engine is the WASM compilation unit.** It imports shapefile and dim. Its `wasm.zig` exports a JSON-in/JSON-out API. No other Zig module produces WASM.
 4. **The server never calls Zig natively.** All Zig core access goes through the WASM bridge (`server/src/services/core.ts`).
-5. **The Electron app starts Hono as a child process.** They are not independent services. Electron spawns `bun run src/index.ts`, manages its lifecycle, and kills it on shutdown.
+5. **The Electron app starts Elysia as a child process.** They are not independent services. Electron spawns `bun run src/index.ts`, manages its lifecycle, and kills it on shutdown.
 
 ## Zig Core Modules
 
@@ -76,25 +76,30 @@ electron ──→ dim (via WASM, client-side units)
 
 ```
 server/src/
-├── index.ts              ← App entry, middleware, route mounting
-├── routes/               ← HTTP handlers (thin: validate input, call service, return)
+├── index.ts              ← App entry, server composition
+├── config.ts             ← Server configuration
+├── core/                 ← Framework plumbing
+│   ├── server.ts         ← Elysia server factory
+│   ├── http.ts           ← HTTP helpers
+│   └── operations.ts     ← Operations app factory
+├── modules/              ← Feature modules (Elysia plugins)
 │   ├── query.ts
 │   ├── network.ts
-│   └── olga.ts
+│   └── operations/
+│       └── olga.ts
 ├── services/             ← Business logic
 │   ├── core.ts           ← WASM bridge (load, call, memory management)
 │   └── olga.ts           ← OLGA validation, route segment computation
 ├── schemas/              ← Effect Schema definitions (validation at boundary)
 │   └── olga/
 └── utils/                ← Shared helpers
-    └── network.ts
 ```
 
 ### Server rules
 
-1. **Routes are thin.** They parse/validate input, call a service, and return the result. No business logic in route handlers.
+1. **Modules are thin.** They parse/validate input, call a service, and return the result. No business logic in module handlers.
 2. **Validate at the boundary.** Incoming data is validated with Effect Schema before reaching services. Internal service-to-service calls trust typed interfaces.
-3. **WASM is a singleton.** `core.ts` loads the WASM module once at startup. All route handlers share the same instance.
+3. **WASM is a singleton.** `core.ts` loads the WASM module once at startup. All modules share the same instance.
 
 ## WASM Contract
 
@@ -121,13 +126,13 @@ Memory protocol: JS allocates via `geodash_alloc`, writes JSON, calls the functi
 | Pipe geometry (OLGA) | `.key` text format | Imported/exported via server |
 | Thermodynamic property surface | RGBA32Float GPU texture | ONNX inference → IndexedDB cache → Zarr |
 | Steady-state results | Zarr array (inlet_P × inlet_H × KP) | Client-side |
-| Transient simulation results | Zarr array (KP × time) | Python server → served by Hono |
+| Transient simulation results | Zarr array (KP × time) | Python server → served by Elysia |
 
 ## Build & Run
 
 | Command | What it does |
 |---|---|
 | `just build-wasm` | Compile network-engine to WASM, copy to `server/wasm/` |
-| `just dev` | Build WASM + start server with hot reload |
+| `just dev` | Start Electron dev (spawns Elysia server automatically) |
 | `just test-zig` | Run all Zig module tests in parallel |
 | `just build-crs` | Build the CRS CLI tool (requires PROJ installed) |
