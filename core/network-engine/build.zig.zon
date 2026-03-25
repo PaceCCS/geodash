@@ -33,7 +33,7 @@
     // internet connectivity.
     .dependencies = .{
         .dim = .{
-            .url = "git+https://github.com/PaceCCS/dim?ref=main#013b9e30c9e23dc9d5f580a1c552034af00f2a90",
+            .url = "git+https://github.com/PaceCCS/dim?ref=main#72ef45a1a0a9af93fadc5ec8bc517fc07458b9be",
             .hash = "dim-0.0.0-5B9evOApAgBCylhTR82z9b41CojHj5yclEPlqRieNCPj",
         },
         .shapefile = .{ .path = "../shapefile" },
