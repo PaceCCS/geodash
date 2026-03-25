@@ -4,7 +4,7 @@
 
 ```
 ┌───────────────────────────────────────────────────┐
-│               Electron App (Node)                │
+│                Electron App (Node)                │
 │  ┌─────────────────────────────────────────────┐  │
 │  │         TanStack Start Frontend             │  │
 │  │  - React Flow network editor                │  │
