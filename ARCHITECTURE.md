@@ -4,7 +4,7 @@
 
 ```
 ┌───────────────────────────────────────────────────┐
-│                  Tauri App (Rust)                 │
+│               Electron App (Node)                │
 │  ┌─────────────────────────────────────────────┐  │
 │  │         TanStack Start Frontend             │  │
 │  │  - React Flow network editor                │  │
@@ -12,7 +12,7 @@
 │  │  - Compute shader steady-state simulation   │  │
 │  │  - Hovmöller / profile / time-series plots  │  │
 │  └──────────────────────┬──────────────────────┘  │
-│         Tauri auto-starts Hono as child process   │
+│       Electron auto-starts Hono as child process  │
 └─────────────────────────┼─────────────────────────┘
                           │
               ┌───────────▼───────────┐
@@ -50,8 +50,8 @@ crs ──→ PROJ (system C library)
 server ──→ network-engine (via WASM)
 server ──→ effect, hono, smol-toml (npm)
 
-app ──→ server (HTTP, managed child process)
-app ──→ dim (via WASM, client-side units)
+electron ──→ server (HTTP, managed child process)
+electron ──→ dim (via WASM, client-side units)
 ```
 
 ### Rules
@@ -60,7 +60,7 @@ app ──→ dim (via WASM, client-side units)
 2. **CRS is isolated.** It links PROJ (a C library) and runs only as a standalone CLI tool. It is never compiled into WASM and never imported by the server.
 3. **network-engine is the WASM compilation unit.** It imports shapefile and dim. Its `wasm.zig` exports a JSON-in/JSON-out API. No other Zig module produces WASM.
 4. **The server never calls Zig natively.** All Zig core access goes through the WASM bridge (`server/src/services/core.ts`).
-5. **The Tauri app starts Hono as a child process.** They are not independent services. Tauri spawns `bun run src/index.ts`, manages its lifecycle, and kills it on shutdown.
+5. **The Electron app starts Hono as a child process.** They are not independent services. Electron spawns `bun run src/index.ts`, manages its lifecycle, and kills it on shutdown.
 
 ## Zig Core Modules
 
