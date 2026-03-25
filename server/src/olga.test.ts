@@ -12,7 +12,7 @@ function createApp() {
   return new Elysia().use(createOperationsApp().use(olgaOperationModule(config)));
 }
 
-function postJson(app: Elysia, path: string, body: unknown) {
+function postJson(app: { handle: (req: Request) => Promise<Response> | Response }, path: string, body: unknown) {
   return app.handle(new Request(`http://localhost${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
