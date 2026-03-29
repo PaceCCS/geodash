@@ -19,5 +19,6 @@ target/
 .vscode/
 .idea/
 *.swp
-# Electron build output
+# Build output
+app/dist/
 app/dist-electron/

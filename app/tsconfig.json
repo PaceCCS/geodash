@@ -14,6 +14,7 @@
     "resolveJsonModule": true,
     "esModuleInterop": true,
     "allowJs": true,
+    "ignoreDeprecations": "6.0",
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
     "strict": true,

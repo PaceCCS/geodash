@@ -88,7 +88,7 @@ check-test-counts:
 
 # Build dim WASM and copy to app
 build-dim-wasm:
-    cd ~/Repos/dim && zig build -Dtarget=wasm32-wasi
+    cd ~/Repos/dim && zig build wasm -Doptimize=ReleaseSmall
     cp ~/Repos/dim/zig-out/bin/dim_wasm.wasm app/public/dim/dim_wasm.wasm
 
 # Install app dependencies
