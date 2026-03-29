@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Home, Network, Wrench } from "lucide-react";
+import { Home, Network, Wrench, Sun, Moon } from "lucide-react";
 
 import {
   Sidebar,
@@ -13,11 +13,24 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
+import { useTheme } from "@/hooks/use-theme";
 
 const navItems = [
   { title: "Home", to: "/", icon: Home },
   { title: "Network Editor", to: "/network/watch", icon: Network },
 ] as const;
+
+function ThemeToggle() {
+  const { theme, toggle } = useTheme();
+  const label = theme === "light" ? "Dark mode" : "Light mode";
+
+  return (
+    <SidebarMenuButton onClick={toggle} tooltip={label}>
+      {theme === "light" ? <Moon /> : <Sun />}
+      <span>{label}</span>
+    </SidebarMenuButton>
+  );
+}
 
 export function AppSidebar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -62,7 +75,13 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter />
+      <SidebarFooter>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <ThemeToggle />
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
       <SidebarRail />
     </Sidebar>
   );
