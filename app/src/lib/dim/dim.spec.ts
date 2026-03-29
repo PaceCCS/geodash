@@ -82,6 +82,11 @@ describe("get base unit", () => {
     expect(getBaseUnit("1 yd")).toBe("m");
     expect(getBaseUnit("1 km")).toBe("m");
   });
+
+  test("compound and rational dimensions", () => {
+    expect(getBaseUnit("18 m / 3 s")).toBe("m/s");
+    expect(getBaseUnit("1 Pa^0.5")).toBe("kg^(1/2)*m^(-1/2)*s^(-1)");
+  });
 });
 
 describe("convert expression to unit", () => {

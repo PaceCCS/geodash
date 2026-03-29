@@ -835,9 +835,82 @@ export function checkDimensionalCompatibility(
   return sameDimension(expr, target);
 }
 
+const BASE_UNIT_COMPONENTS: Array<{
+  key: keyof DimDimension;
+  symbol: string;
+}> = [
+  { key: "M", symbol: "kg" },
+  { key: "L", symbol: "m" },
+  { key: "T", symbol: "s" },
+  { key: "I", symbol: "A" },
+  { key: "Th", symbol: "K" },
+  { key: "N", symbol: "mol" },
+  { key: "J", symbol: "cd" },
+];
+
+function hasFractionalDimension(dim: DimDimension): boolean {
+  return BASE_UNIT_COMPONENTS.some(({ key }) => dim[key].den !== 1);
+}
+
+function formatRationalExponent(value: DimRational): string {
+  if (value.num === 1 && value.den === 1) {
+    return "";
+  }
+
+  if (value.den === 1) {
+    return value.num < 0 ? `^(${value.num})` : `^${value.num}`;
+  }
+
+  return `^(${value.num}/${value.den})`;
+}
+
+function formatIntegerPart(dim: DimDimension, sign: 1 | -1): string | null {
+  const parts = BASE_UNIT_COMPONENTS.flatMap(({ key, symbol }) => {
+    const exponent = dim[key].num * sign;
+
+    if (exponent <= 0) {
+      return [];
+    }
+
+    return exponent === 1 ? [symbol] : [`${symbol}^${exponent}`];
+  });
+
+  return parts.length > 0 ? parts.join("*") : null;
+}
+
+function formatCanonicalBaseUnit(dim: DimDimension): string {
+  if (hasFractionalDimension(dim)) {
+    const parts = BASE_UNIT_COMPONENTS.flatMap(({ key, symbol }) => {
+      const exponent = dim[key];
+      return exponent.num === 0
+        ? []
+        : [`${symbol}${formatRationalExponent(exponent)}`];
+    });
+
+    return parts.length > 0 ? parts.join("*") : "1";
+  }
+
+  const numerator = formatIntegerPart(dim, 1);
+  const denominator = formatIntegerPart(dim, -1);
+
+  if (!numerator && !denominator) {
+    return "1";
+  }
+
+  if (!denominator) {
+    return numerator!;
+  }
+
+  if (!numerator) {
+    return `1/${denominator}`;
+  }
+
+  return `${numerator}/${denominator}`;
+}
+
 export function getBaseUnit(expr: string): string {
   const result = evalStructured(expr);
-  return result.kind === "quantity" ? result.unit : "";
+  return result.kind === "quantity" ? formatCanonicalBaseUnit(result.dim) : "";
 }
 
 const dim = {
