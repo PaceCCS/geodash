@@ -20,11 +20,9 @@ import { Button } from "@/components/ui/button";
 import { AppSidebar } from "@/components/app-sidebar";
 import { RightSidebarProvider } from "@/contexts/right-sidebar-context";
 import { RightSidebar, RightSidebarTrigger } from "@/components/right-sidebar";
-import {
-  HeaderSlotProvider,
-  HeaderSlotTarget,
-} from "@/components/header-slot";
+import { HeaderSlotProvider, HeaderSlotTarget } from "@/components/header-slot";
 import { cn } from "@/lib/utils";
+import { GlobalCommandDialog } from "@/components/command-dialog";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -72,6 +70,7 @@ function RootComponent() {
                   <HeaderSlotProvider>
                     <header className="flex h-10 shrink-0 items-center gap-2 border-b border-border bg-sidebar px-2">
                       <LeftSidebarTrigger />
+                      <GlobalCommandDialog />
                       <HeaderSlotTarget />
                       <RightSidebarTrigger />
                     </header>
