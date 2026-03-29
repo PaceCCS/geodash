@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, useMemo } from "react";
 import {
   Background,
   Controls,
@@ -20,6 +20,7 @@ import {
   writeEdgesToCollection,
 } from "@/lib/collections/flow";
 import { exportNetworkToToml } from "@/lib/exporters/network-toml";
+import { useTheme } from "@/hooks/use-theme";
 import { BranchNode } from "./nodes/branch";
 import { LabeledGroupNode } from "./nodes/labeled-group";
 import { GeographicAnchorNode } from "./nodes/geographic-anchor";
@@ -49,6 +50,11 @@ type FlowNetworkProps = {
 };
 
 export function FlowNetwork({ nodes, edges, syncDirectory }: FlowNetworkProps) {
+  const theme = useTheme((s) => s.theme);
+  const colorMode = useMemo(
+    () => (theme === "dark" ? "dark" : "light") as "dark" | "light",
+    [theme],
+  );
   const syncTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Schedule a write-back of the current nodes+edges to TOML files.
@@ -118,6 +124,7 @@ export function FlowNetwork({ nodes, edges, syncDirectory }: FlowNetworkProps) {
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         nodeTypes={nodeTypes}
+        colorMode={colorMode}
         fitView
       >
         <Background />

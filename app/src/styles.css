@@ -301,22 +301,14 @@ code {
   --primary-foreground: var(--rose-pine-base);
   --destructive: var(--rose-pine-love);
   --destructive-foreground: var(--rose-pine-base);
-  --sidebar:
-    hsl(240 5.9% 10%);
-  --sidebar-foreground:
-    hsl(240 4.8% 95.9%);
-  --sidebar-primary:
-    hsl(224.3 76.3% 48%);
-  --sidebar-primary-foreground:
-    hsl(0 0% 100%);
-  --sidebar-accent:
-    hsl(240 3.7% 15.9%);
-  --sidebar-accent-foreground:
-    hsl(240 4.8% 95.9%);
-  --sidebar-border:
-    hsl(240 3.7% 15.9%);
-  --sidebar-ring:
-    hsl(217.2 91.2% 59.8%);
+  --sidebar: var(--rose-pine-base);
+  --sidebar-foreground: var(--rose-pine-text);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--rose-pine-highlight-low);
+  --sidebar-accent-foreground: var(--rose-pine-text);
+  --sidebar-border: var(--rose-pine-highlight-med);
+  --sidebar-ring: var(--ring);
 }
 
 @layer base {
@@ -331,4 +323,25 @@ code {
 [data-slot="sidebar-container"] {
   top: var(--header-height, 2.5rem);
   height: calc(100svh - var(--header-height, 2.5rem));
+}
+
+.react-flow {
+  --xy-background-color: var(--background);
+  --xy-node-border-radius: var(--radius);
+  --xy-edge-stroke: var(--border);
+  --xy-edge-stroke-selected: var(--primary);
+  --xy-connectionline-stroke: var(--primary);
+  --xy-minimap-background-color: var(--card);
+  --xy-minimap-mask-background-color: color-mix(in oklch, var(--background) 60%, transparent);
+  --xy-minimap-node-background-color: var(--muted);
+  --xy-controls-button-background-color: var(--card);
+  --xy-controls-button-background-color-hover: var(--accent);
+  --xy-controls-button-color: var(--foreground);
+  --xy-controls-button-color-hover: var(--foreground);
+  --xy-controls-button-border-color: var(--border);
+}
+
+.dark .react-flow {
+  --xy-edge-stroke: var(--rose-pine-highlight-high);
+  --xy-minimap-node-background-color: var(--rose-pine-highlight-med);
 }

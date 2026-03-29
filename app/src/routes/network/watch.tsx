@@ -108,10 +108,10 @@ function WatchPage() {
       ) : (
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center space-y-4">
-            <FolderOpen className="h-16 w-16 mx-auto text-brand-grey-2" />
+            <FolderOpen className="h-16 w-16 mx-auto text-muted-foreground" />
             <div>
               <h2 className="text-xl font-semibold">No Directory Selected</h2>
-              <p className="text-sm text-brand-grey-2 mt-2">
+              <p className="text-sm text-muted-foreground mt-2">
                 Choose a directory containing TOML network files.
                 <br />
                 Canvas edits are automatically written back to the files.
