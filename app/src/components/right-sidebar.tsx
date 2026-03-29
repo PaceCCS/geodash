@@ -38,29 +38,32 @@ export function RightSidebarTrigger({
 function RightSidebarContent() {
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center px-4 py-2">
-        <span className="text-sm font-semibold">Details</span>
+      <div className="flex items-center border-b border-border">
+        <span className="text-sm font-semibold px-4 py-2">Status</span>
       </div>
+
+      <p className="text-xs text-muted-foreground">Nothing to report.</p>
+
       <Separator />
+
+      <div className="flex flex-col gap-1 border-b border-border">
+        <div className="flex items-center gap-2 text-sm font-medium px-4 py-2">
+          <Activity className="size-4 shrink-0" />
+          Activity Log
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground">No recent activity.</p>
+      <Separator />
+
       <div className="flex-1 overflow-auto">
-        <div className="flex flex-col gap-1 p-4">
-          <div className="flex items-center gap-2 text-sm font-medium">
+        <div className="flex flex-col gap-1 border-b border-border">
+          <div className="flex items-center gap-2 text-sm font-medium px-4 py-2">
             <Info className="size-4 shrink-0" />
             Properties
           </div>
           <p className="text-xs text-muted-foreground">
             Select an item to view its properties.
           </p>
-        </div>
-
-        <Separator />
-
-        <div className="flex flex-col gap-1 p-4">
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <Activity className="size-4 shrink-0" />
-            Activity Log
-          </div>
-          <p className="text-xs text-muted-foreground">No recent activity.</p>
         </div>
       </div>
     </div>
