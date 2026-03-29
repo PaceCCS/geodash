@@ -327,3 +327,8 @@ code {
     @apply bg-background text-foreground;
   }
 }
+
+[data-slot="sidebar-container"] {
+  top: var(--header-height, 2.5rem);
+  height: calc(100svh - var(--header-height, 2.5rem));
+}

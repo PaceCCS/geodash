@@ -10,6 +10,21 @@ import appCss from "../styles.css?url";
 import { DimProvider } from "@/contexts/dim-context";
 import DialogProvider from "@/contexts/dialog-provider";
 import KeybindProvider from "@/contexts/keybind-provider";
+import {
+  SidebarProvider,
+  SidebarInset,
+  useSidebar,
+} from "@/components/ui/sidebar";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { AppSidebar } from "@/components/app-sidebar";
+import { RightSidebarProvider } from "@/contexts/right-sidebar-context";
+import { RightSidebar, RightSidebarTrigger } from "@/components/right-sidebar";
+import {
+  HeaderSlotProvider,
+  HeaderSlotTarget,
+} from "@/components/header-slot";
+import { cn } from "@/lib/utils";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -52,12 +67,53 @@ function RootComponent() {
         <RootDocument>
           <DialogProvider>
             <KeybindProvider>
-              <Outlet />
+              <SidebarProvider className="flex-col min-h-0! h-screen">
+                <RightSidebarProvider>
+                  <HeaderSlotProvider>
+                    <header className="flex h-10 shrink-0 items-center gap-2 border-b border-sidebar-border px-2">
+                      <LeftSidebarTrigger />
+                      <HeaderSlotTarget />
+                      <RightSidebarTrigger />
+                    </header>
+                    <div className="flex flex-1 min-h-0">
+                      <AppSidebar />
+                      <SidebarInset>
+                        <div className="flex flex-1 min-h-0 w-full">
+                          <div className="flex flex-col flex-1 min-w-0">
+                            <Outlet />
+                          </div>
+                          <RightSidebar />
+                        </div>
+                      </SidebarInset>
+                    </div>
+                  </HeaderSlotProvider>
+                </RightSidebarProvider>
+              </SidebarProvider>
             </KeybindProvider>
           </DialogProvider>
         </RootDocument>
       </DimProvider>
     </QueryClientProvider>
+  );
+}
+
+function LeftSidebarTrigger({
+  className,
+  ...props
+}: React.ComponentProps<typeof Button>) {
+  const { open, toggleSidebar } = useSidebar();
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      className={cn("size-7", className)}
+      onClick={toggleSidebar}
+      {...props}
+    >
+      {open ? <PanelLeftClose /> : <PanelLeftOpen />}
+      <span className="sr-only">Toggle Left Sidebar</span>
+    </Button>
   );
 }
 
@@ -77,9 +133,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         />
       </head>
       <body className="h-full">
-        <div className="flex flex-col w-full h-screen border border-brand-grey-3 bg-brand-white p-px text-brand-blue-3">
-          {children}
-        </div>
+        <div className="w-full h-screen text-foreground">{children}</div>
         <Scripts />
       </body>
     </html>
