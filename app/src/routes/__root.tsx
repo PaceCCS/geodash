@@ -70,7 +70,7 @@ function RootComponent() {
               <SidebarProvider className="flex-col min-h-0! h-screen">
                 <RightSidebarProvider>
                   <HeaderSlotProvider>
-                    <header className="flex h-10 shrink-0 items-center gap-2 border-b border-sidebar-border px-2">
+                    <header className="flex h-10 shrink-0 items-center gap-2 border-b border-border bg-sidebar px-2">
                       <LeftSidebarTrigger />
                       <HeaderSlotTarget />
                       <RightSidebarTrigger />
