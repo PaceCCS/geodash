@@ -13,6 +13,7 @@ import { useFileWatcher } from "@/lib/hooks/use-file-watcher";
 import { pickNetworkDirectory } from "@/lib/desktop";
 import { NetworkProvider } from "@/contexts/network-context";
 import { Button } from "@/components/ui/button";
+import { HeaderSlot } from "@/components/header-slot";
 
 export const Route = createFileRoute("/network/watch")({
   component: WatchPage,
@@ -57,15 +58,14 @@ function WatchPage() {
 
   return (
     <div className="flex flex-col h-full w-full min-h-0">
-      {/* ── Toolbar ─────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-2 py-1 border-b border-brand-grey-3 shrink-0">
+      <HeaderSlot>
         {watchMode.enabled ? (
-          <>
-            <span className="text-sm truncate max-w-[60%] text-brand-grey-2">
+          <div className="flex items-center justify-between w-full px-2">
+            <span className="text-sm truncate max-w-[60%] text-muted-foreground">
               {watchMode.directoryPath}
             </span>
             <div className="flex items-center gap-1">
-              <span className="text-xs text-brand-grey-2 mr-2">
+              <span className="text-xs text-muted-foreground mr-2">
                 <Save className="inline w-3 h-3 mr-1" />
                 Auto-saving
               </span>
@@ -79,9 +79,9 @@ function WatchPage() {
                 Stop Watching
               </Button>
             </div>
-          </>
+          </div>
         ) : (
-          <>
+          <div className="flex items-center justify-between w-full px-2">
             <span className="text-sm font-medium">Watch Network Directory</span>
             <Button
               size="sm"
@@ -91,11 +91,10 @@ function WatchPage() {
               <FolderOpen className="mr-1 h-3 w-3" />
               Select Directory
             </Button>
-          </>
+          </div>
         )}
-      </div>
+      </HeaderSlot>
 
-      {/* ── Canvas or empty state ────────────────────────────────────────── */}
       {watchMode.enabled && watchMode.directoryPath ? (
         <div className="flex-1 min-h-0">
           <NetworkProvider networkId={watchMode.directoryPath}>

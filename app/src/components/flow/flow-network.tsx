@@ -58,11 +58,11 @@ export function FlowNetwork({ nodes, edges, syncDirectory }: FlowNetworkProps) {
       clearTimeout(syncTimer.current);
       syncTimer.current = setTimeout(() => {
         exportNetworkToToml(updatedNodes, updatedEdges, syncDirectory).catch(
-          (err) => console.error("[sync] Failed to write TOML:", err)
+          (err) => console.error("[sync] Failed to write TOML:", err),
         );
       }, SYNC_DEBOUNCE_MS);
     },
-    [syncDirectory]
+    [syncDirectory],
   );
 
   const onNodesChange = useCallback(
@@ -71,7 +71,7 @@ export function FlowNetwork({ nodes, edges, syncDirectory }: FlowNetworkProps) {
       writeNodesToCollection(updated);
       scheduleSyncToFiles(updated, edges);
     },
-    [nodes, edges, scheduleSyncToFiles]
+    [nodes, edges, scheduleSyncToFiles],
   );
 
   const onEdgesChange = useCallback(
@@ -80,7 +80,7 @@ export function FlowNetwork({ nodes, edges, syncDirectory }: FlowNetworkProps) {
       writeEdgesToCollection(updated);
       scheduleSyncToFiles(nodes, updated);
     },
-    [nodes, edges, scheduleSyncToFiles]
+    [nodes, edges, scheduleSyncToFiles],
   );
 
   const onConnect = useCallback(
@@ -100,13 +100,13 @@ export function FlowNetwork({ nodes, edges, syncDirectory }: FlowNetworkProps) {
 
       const updated = addEdge(
         { ...connection, data: { weight: 1 } },
-        edges as Edge[]
+        edges as Edge[],
       ) as FlowEdge[];
 
       writeEdgesToCollection(updated);
       scheduleSyncToFiles(nodes, updated);
     },
-    [nodes, edges, scheduleSyncToFiles]
+    [nodes, edges, scheduleSyncToFiles],
   );
 
   return (
@@ -121,8 +121,8 @@ export function FlowNetwork({ nodes, edges, syncDirectory }: FlowNetworkProps) {
         fitView
       >
         <Background />
-        <Controls />
-        <MiniMap />
+        <Controls position="top-right" />
+        <MiniMap position="bottom-left" />
       </ReactFlow>
     </div>
   );
