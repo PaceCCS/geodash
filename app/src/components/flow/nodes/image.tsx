@@ -15,14 +15,14 @@ export const ImageNode = forwardRef<HTMLDivElement, NodeProps>(
       <div
         ref={ref}
         className={cn(
-          "overflow-hidden bg-white border border-brand-blue-1",
-          selected && "ring-2 ring-brand-blue-1"
+          "overflow-hidden bg-card border border-primary",
+          selected && "ring-2 ring-primary"
         )}
         style={{ width: width ?? "auto", height: height ?? "auto" }}
       >
         {label && (
           <Panel className="m-0 p-0" position="top-left">
-            <div className="w-fit bg-brand-blue-1 px-1 text-xs text-brand-white">
+            <div className="w-fit bg-primary px-1 text-xs text-primary-foreground">
               {label}
             </div>
           </Panel>
@@ -38,14 +38,14 @@ export const ImageNode = forwardRef<HTMLDivElement, NodeProps>(
               target.style.display = "none";
               const placeholder = document.createElement("div");
               placeholder.className =
-                "flex items-center justify-center w-full h-full bg-brand-grey-4 text-brand-grey-2 text-sm p-4";
+                "flex items-center justify-center w-full h-full bg-muted text-muted-foreground text-sm p-4";
               placeholder.textContent = `Failed to load: ${path}`;
               target.parentElement?.appendChild(placeholder);
             }}
           />
         ) : (
           <div
-            className="flex items-center justify-center w-full h-full bg-brand-grey-4 text-brand-grey-2 text-sm p-4"
+            className="flex items-center justify-center w-full h-full bg-muted text-muted-foreground text-sm p-4"
             style={{ minWidth: width ?? 100, minHeight: height ?? 100 }}
           >
             <div className="text-center">
