@@ -14,6 +14,7 @@ import { pickNetworkDirectory } from "@/lib/desktop";
 import { NetworkProvider } from "@/contexts/network-context";
 import { Button } from "@/components/ui/button";
 import { HeaderSlot } from "@/components/header-slot";
+import { useCommands } from "@/contexts/keybind-provider";
 
 export const Route = createFileRoute("/network/watch")({
   component: WatchPage,
@@ -27,10 +28,7 @@ function WatchPage() {
   const { data: edges = [] } = useLiveQuery(edgesCollection);
 
   // ReactFlow requires parents before children.
-  const nodes = useMemo(
-    () => sortNodesWithParentsFirst(nodesRaw),
-    [nodesRaw]
-  );
+  const nodes = useMemo(() => sortNodesWithParentsFirst(nodesRaw), [nodesRaw]);
 
   const handleSelectDirectory = async () => {
     const path = await pickNetworkDirectory();
@@ -55,6 +53,46 @@ function WatchPage() {
       setIsBusy(false);
     }
   };
+
+  useCommands(
+    watchMode.enabled
+      ? [
+          {
+            id: "select-directory",
+            label: "Change Watch Directory",
+            run: (dialog) => {
+              dialog.close();
+              handleSelectDirectory();
+            },
+            group: "Network",
+            icon: <FolderOpen />,
+            shortcut: "Mod+O",
+          },
+          {
+            id: "stop-watching",
+            label: "Stop Watching Directory",
+            run: (dialog) => {
+              dialog.close();
+              handleStopWatching();
+            },
+            group: "Network",
+            icon: <EyeOff />,
+          },
+        ]
+      : [
+          {
+            id: "select-directory",
+            label: "Select Watch Directory",
+            run: (dialog) => {
+              dialog.close();
+              handleSelectDirectory();
+            },
+            group: "Network",
+            icon: <FolderOpen />,
+            shortcut: "Mod+O",
+          },
+        ],
+  );
 
   return (
     <div className="flex flex-col h-full w-full min-h-0">
@@ -83,11 +121,7 @@ function WatchPage() {
         ) : (
           <div className="flex items-center justify-between w-full px-2">
             <span className="text-sm font-medium">Watch Network Directory</span>
-            <Button
-              size="sm"
-              onClick={handleSelectDirectory}
-              disabled={isBusy}
-            >
+            <Button size="sm" onClick={handleSelectDirectory} disabled={isBusy}>
               <FolderOpen className="mr-1 h-3 w-3" />
               Select Directory
             </Button>
