@@ -173,27 +173,40 @@ export default function KeybindProvider({
     []
   );
 
+  const commandUnbindsRef = useRef<Map<string, () => void>>(new Map());
+
   const registerCommand = useCallback<KeybindContextValue["registerCommand"]>(
     (command) => {
       setCommands((prev) => {
-        if (prev.some((c) => c.id === command.id)) return prev;
+        const idx = prev.findIndex((c) => c.id === command.id);
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = command;
+          return next;
+        }
         return [...prev, command];
       });
 
-      let unbind: (() => void) | undefined;
+      const prevUnbind = commandUnbindsRef.current.get(command.id);
+      if (prevUnbind) prevUnbind();
+      commandUnbindsRef.current.delete(command.id);
+
       if (command.shortcut) {
-        unbind = bind(command.shortcut, () => {
+        const unbind = bind(command.shortcut, () => {
           command.run({
             open: () => setCommandPaletteOpen(true),
             close: () => setCommandPaletteOpen(false),
             toggle: toggleCommandPalette,
           });
         });
+        commandUnbindsRef.current.set(command.id, unbind);
       }
 
       return () => {
         setCommands((prev) => prev.filter((c) => c.id !== command.id));
+        const unbind = commandUnbindsRef.current.get(command.id);
         if (unbind) unbind();
+        commandUnbindsRef.current.delete(command.id);
       };
     },
     [bind, toggleCommandPalette]
@@ -281,15 +294,21 @@ export function useCommands(initial?: CommandItem[] | (() => CommandItem[])) {
     unregistersRef.current = [];
   }, []);
 
-  const initialRef = useRef<typeof initial>(initial);
+  const resolvedItems = initial
+    ? typeof initial === "function"
+      ? initial()
+      : initial
+    : [];
+
+  const commandsKey = resolvedItems
+    .map((c) => `${c.id}:${c.label}`)
+    .join("|");
 
   useEffect(() => {
-    const init = initialRef.current;
-    if (!init) return;
-    const items = typeof init === "function" ? init() : init;
-    register(items);
+    if (resolvedItems.length === 0) return;
+    register(resolvedItems);
     return () => clear();
-  }, [register, clear]);
+  }, [commandsKey, register, clear]);
 
   useEffect(() => clear, [clear]);
 

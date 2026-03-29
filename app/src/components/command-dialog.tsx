@@ -1,6 +1,13 @@
 "use client";
 
-import { FilePlus, Settings } from "lucide-react";
+import {
+  FilePlus,
+  Settings,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
+} from "lucide-react";
 
 import {
   CommandDialog,
@@ -19,8 +26,13 @@ import {
   useCommands,
 } from "@/contexts/keybind-provider";
 import type { DialogAPI } from "@/contexts/keybind-provider";
+import { useSidebar } from "@/components/ui/sidebar";
+import { useRightSidebar } from "@/contexts/right-sidebar-context";
 
 export function GlobalCommandDialog() {
+  const { open: leftOpen, toggleSidebar: toggleLeft } = useSidebar();
+  const { open: rightOpen, toggle: toggleRight } = useRightSidebar();
+
   const {
     isCommandPaletteOpen,
     openPalette,
@@ -48,6 +60,28 @@ export function GlobalCommandDialog() {
       shortcut: "Mod+S",
       group: "Settings",
       icon: <Settings />,
+    },
+    {
+      id: "toggle-left-sidebar",
+      label: leftOpen ? "Close Left Sidebar" : "Open Left Sidebar",
+      run: (dialog: DialogAPI) => {
+        toggleLeft();
+        dialog.close();
+      },
+      shortcut: "Mod+B",
+      group: "View",
+      icon: leftOpen ? <PanelLeftClose /> : <PanelLeftOpen />,
+    },
+    {
+      id: "toggle-right-sidebar",
+      label: rightOpen ? "Close Right Sidebar" : "Open Right Sidebar",
+      run: (dialog: DialogAPI) => {
+        toggleRight();
+        dialog.close();
+      },
+      shortcut: "Mod+.",
+      group: "View",
+      icon: rightOpen ? <PanelRightClose /> : <PanelRightOpen />,
     },
   ]);
 
