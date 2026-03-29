@@ -37,6 +37,10 @@ export default function QuantityInput({
     [inputValue, getExpression]
   );
 
+  // Keep the ref in sync via an effect so we never write to it during render.
+  // The expression effect below only depends on expression/inputValue, not
+  // on the callback identity — preventing stale input values from being
+  // written back to the store when external updates change the callback.
   const handleExpressionRef = useRef(handleExpression);
   useEffect(() => {
     handleExpressionRef.current = handleExpression;
@@ -83,8 +87,16 @@ function ResultCheck({ results, unit }: { results: string[]; unit: string }) {
   const result = results[0];
   const compatible = checkUnitCompatibility(result, unit);
   if (!compatible) {
+    console.log(
+      "[QuantityInput] result",
+      result,
+      "not compatible with unit",
+      unit
+    );
     return <XIcon />;
   }
+
+  console.log("[QuantityInput] result", result, "compatible", compatible);
 
   return <CheckIcon />;
 }
