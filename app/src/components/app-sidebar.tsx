@@ -14,6 +14,7 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 import { useTheme } from "@/hooks/use-theme";
+import { useCommands } from "@/contexts/keybind-provider";
 
 const navItems = [
   { title: "Home", to: "/", icon: Home },
@@ -23,6 +24,19 @@ const navItems = [
 function ThemeToggle() {
   const { theme, toggle } = useTheme();
   const label = theme === "light" ? "Dark mode" : "Light mode";
+
+  useCommands([
+    {
+      id: "toggle-theme",
+      label: theme === "light" ? "Switch to Dark Mode" : "Switch to Light Mode",
+      run: (dialog) => {
+        toggle();
+        dialog.close();
+      },
+      group: "View",
+      icon: theme === "light" ? <Moon /> : <Sun />,
+    },
+  ]);
 
   return (
     <SidebarMenuButton onClick={toggle} tooltip={label}>
