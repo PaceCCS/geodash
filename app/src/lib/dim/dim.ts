@@ -1,34 +1,227 @@
-// TypeScript wrapper for the Zig dim WASM module
 type DimExports = {
   memory: WebAssembly.Memory;
   dim_alloc: (n: number) => number;
   dim_free: (ptr: number, len: number) => void;
-  dim_eval: (
-    inPtr: number,
-    inLen: number,
-    outPtrPtr: number,
-    outLenPtr: number
-  ) => number;
-  dim_define: (
+  dim_ctx_new: () => number;
+  dim_ctx_free: (ctx: number) => void;
+  dim_ctx_define: (
+    ctx: number,
     namePtr: number,
     nameLen: number,
     exprPtr: number,
-    exprLen: number
+    exprLen: number,
   ) => number;
-  dim_clear: (ptr: number, len: number) => void;
-  dim_clear_all: () => void;
+  dim_ctx_clear: (ctx: number, namePtr: number, nameLen: number) => void;
+  dim_ctx_clear_all: (ctx: number) => void;
+  dim_ctx_eval: (
+    ctx: number,
+    inPtr: number,
+    inLen: number,
+    outResultPtr: number,
+  ) => number;
+  dim_ctx_convert_expr: (
+    ctx: number,
+    exprPtr: number,
+    exprLen: number,
+    unitPtr: number,
+    unitLen: number,
+    outResultPtr: number,
+  ) => number;
+  dim_ctx_convert_value: (
+    ctx: number,
+    value: number,
+    fromPtr: number,
+    fromLen: number,
+    toPtr: number,
+    toLen: number,
+    outValuePtr: number,
+  ) => number;
+  dim_ctx_is_compatible: (
+    ctx: number,
+    exprPtr: number,
+    exprLen: number,
+    unitPtr: number,
+    unitLen: number,
+    outBoolPtr: number,
+  ) => number;
+  dim_ctx_same_dimension: (
+    ctx: number,
+    lhsPtr: number,
+    lhsLen: number,
+    rhsPtr: number,
+    rhsLen: number,
+    outBoolPtr: number,
+  ) => number;
+  dim_ctx_batch_convert_exprs: (
+    ctx: number,
+    exprsPtr: number,
+    unitsPtr: number,
+    count: number,
+    outValuesPtr: number,
+    outStatusesPtr: number,
+  ) => number;
+  dim_ctx_batch_convert_values: (
+    ctx: number,
+    valuesPtr: number,
+    fromUnitsPtr: number,
+    toUnitsPtr: number,
+    count: number,
+    outValuesPtr: number,
+    outStatusesPtr: number,
+  ) => number;
 };
 
-type DimRuntime = DimExports & { enc: TextEncoder; dec: TextDecoder };
+type DimRational = {
+  num: number;
+  den: number;
+};
+
+type DimDimension = {
+  L: DimRational;
+  M: DimRational;
+  T: DimRational;
+  I: DimRational;
+  Th: DimRational;
+  N: DimRational;
+  J: DimRational;
+};
+
+export type DimFormatMode = "none" | "auto" | "scientific" | "engineering";
+
+export type DimQuantityResult = {
+  kind: "quantity";
+  value: number;
+  unit: string;
+  dim: DimDimension;
+  isDelta: boolean;
+  mode: DimFormatMode;
+};
+
+export type DimEvalResult =
+  | { kind: "number"; value: number }
+  | { kind: "boolean"; value: boolean }
+  | { kind: "string"; value: string }
+  | DimQuantityResult
+  | { kind: "nil" };
+
+type DimRuntime = DimExports & {
+  ctx: number;
+  enc: TextEncoder;
+  dec: TextDecoder;
+};
+
+const EVAL_RESULT_SIZE = 104;
+const QUANTITY_RESULT_SIZE = 80;
+const DIM_SLICE_SIZE = 8;
+const STATUS_OK = 0;
+const KIND_NUMBER = 0;
+const KIND_BOOLEAN = 1;
+const KIND_STRING = 2;
+const KIND_QUANTITY = 3;
+const KIND_NIL = 4;
+const MODES: DimFormatMode[] = ["none", "auto", "scientific", "engineering"];
 
 let initPromise: Promise<void> | null = null;
 let runtime: DimRuntime | null = null;
+const readyListeners = new Set<(ready: boolean) => void>();
+
+function toPtr(value: number): number {
+  return value >>> 0;
+}
+
+function alloc(rt: DimRuntime, size: number): number {
+  return toPtr(rt.dim_alloc(size));
+}
+
+function createWasiImports(
+  getMemory: () => WebAssembly.Memory | null,
+): WebAssembly.Imports {
+  return {
+    wasi_snapshot_preview1: {
+      fd_write: (
+        _fd: number,
+        iovPtr: number,
+        iovCnt: number,
+        nwrittenPtr: number,
+      ) => {
+        const memory = getMemory();
+        if (!memory) return 0;
+        const dv = new DataView(memory.buffer);
+        let total = 0;
+        for (let i = 0; i < iovCnt; i += 1) {
+          const base = iovPtr + i * 8;
+          total += dv.getUint32(base + 4, true);
+        }
+        dv.setUint32(nwrittenPtr, total, true);
+        return 0;
+      },
+      random_get: (bufPtr: number, bufLen: number) => {
+        const memory = getMemory();
+        if (!memory) return 0;
+        const out = new Uint8Array(memory.buffer, bufPtr, bufLen);
+        if (globalThis.crypto?.getRandomValues) {
+          globalThis.crypto.getRandomValues(out);
+        } else {
+          out.fill(0);
+        }
+        return 0;
+      },
+      fd_close: () => 0,
+      fd_seek: () => 0,
+      fd_read: () => 0,
+      fd_pread: () => 0,
+      fd_pwrite: () => 0,
+      fd_fdstat_get: () => 0,
+      fd_filestat_get: () => 0,
+      path_filestat_get: () => 0,
+      fd_prestat_get: () => 0,
+      fd_prestat_dir_name: () => 0,
+      path_open: () => 0,
+      environ_sizes_get: (countPtr: number, bufSizePtr: number) => {
+        const memory = getMemory();
+        if (!memory) return 0;
+        const dv = new DataView(memory.buffer);
+        dv.setUint32(countPtr, 0, true);
+        dv.setUint32(bufSizePtr, 0, true);
+        return 0;
+      },
+      environ_get: () => 0,
+      args_sizes_get: (argcPtr: number, argvBufSizePtr: number) => {
+        const memory = getMemory();
+        if (!memory) return 0;
+        const dv = new DataView(memory.buffer);
+        dv.setUint32(argcPtr, 0, true);
+        dv.setUint32(argvBufSizePtr, 0, true);
+        return 0;
+      },
+      args_get: () => 0,
+      clock_time_get: () => 0,
+      proc_exit: () => 0,
+    },
+  };
+}
+
+function emitReady(ready: boolean) {
+  for (const listener of readyListeners) {
+    listener(ready);
+  }
+}
+
+export function subscribeDimReady(
+  listener: (ready: boolean) => void,
+): () => void {
+  readyListeners.add(listener);
+  listener(runtime !== null);
+  return () => {
+    readyListeners.delete(listener);
+  };
+}
 
 export async function initDim(): Promise<void> {
   if (!initPromise) {
+    emitReady(false);
     initPromise = (async () => {
       let bytes: ArrayBuffer;
-
       const isNode =
         typeof process !== "undefined" &&
         process.versions != null &&
@@ -44,254 +237,630 @@ export async function initDim(): Promise<void> {
         const buf = await readFile(wasmPath);
         bytes = buf.buffer.slice(
           buf.byteOffset,
-          buf.byteOffset + buf.byteLength
+          buf.byteOffset + buf.byteLength,
         );
       } else {
-        const res = await fetch("/dim/dim_wasm.wasm");
+        const res = await fetch("/dim/dim_wasm.wasm", { cache: "no-cache" });
         bytes = await res.arrayBuffer();
       }
 
       let currentMemory: WebAssembly.Memory | null = null;
-      const wasiImports = {
-        wasi_snapshot_preview1: {
-          fd_write: (
-            _fd: number,
-            iovPtr: number,
-            iovCnt: number,
-            nwrittenPtr: number
-          ) => {
-            if (!currentMemory) return 0;
-            const dv = new DataView(currentMemory.buffer);
-            let total = 0;
-            for (let i = 0; i < iovCnt; i++) {
-              const base = iovPtr + i * 8;
-              const len = dv.getUint32(base + 4, true);
-              total += len;
-            }
-            dv.setUint32(nwrittenPtr, total, true);
-            return 0;
-          },
-          random_get: (bufPtr: number, bufLen: number) => {
-            if (!currentMemory) return 0;
-            const out = new Uint8Array(currentMemory.buffer, bufPtr, bufLen);
-            const globalWithCrypto = globalThis as unknown as {
-              crypto?: { getRandomValues?: (arr: Uint8Array) => void };
-            };
-            const cryptoObj = globalWithCrypto.crypto;
-            if (cryptoObj && typeof cryptoObj.getRandomValues === "function") {
-              cryptoObj.getRandomValues(out);
-            } else {
-              for (let i = 0; i < bufLen; i++) out[i] = 0;
-            }
-            return 0;
-          },
-          fd_close: () => 0,
-          fd_seek: () => 0,
-          fd_read: () => 0,
-          fd_pread: () => 0,
-          fd_pwrite: () => 0,
-          fd_fdstat_get: () => 0,
-          fd_filestat_get: () => 0,
-          path_filestat_get: () => 0,
-          fd_prestat_get: () => 0,
-          fd_prestat_dir_name: () => 0,
-          path_open: () => 0,
-          environ_sizes_get: (countPtr: number, bufSizePtr: number) => {
-            if (!currentMemory) return 0;
-            const dv = new DataView(currentMemory.buffer);
-            dv.setUint32(countPtr, 0, true);
-            dv.setUint32(bufSizePtr, 0, true);
-            return 0;
-          },
-          environ_get: () => 0,
-          args_sizes_get: (argcPtr: number, argvBufSizePtr: number) => {
-            if (!currentMemory) return 0;
-            const dv = new DataView(currentMemory.buffer);
-            dv.setUint32(argcPtr, 0, true);
-            dv.setUint32(argvBufSizePtr, 0, true);
-            return 0;
-          },
-          args_get: () => 0,
-          clock_time_get: () => 0,
-          proc_exit: (_code: number) => 0,
-        },
-      } as WebAssembly.Imports;
-
-      const result = await WebAssembly.instantiate(bytes, wasiImports);
-      const inst = (
-        "instance" in result ? result.instance : result
-      ) as WebAssembly.Instance & {
-        exports: DimExports;
-      };
-      currentMemory = inst.exports.memory;
-
-      const types = Object.fromEntries(
-        Object.entries(inst.exports as Record<string, unknown>).map(
-          ([k, v]) => [k, typeof v]
-        )
-      ) as Record<string, string>;
+      const { instance } = await WebAssembly.instantiate(
+        bytes,
+        createWasiImports(() => currentMemory),
+      );
+      const exports = instance.exports as unknown as DimExports;
+      currentMemory = exports.memory;
       const required: Array<keyof DimExports> = [
         "memory",
         "dim_alloc",
         "dim_free",
-        "dim_eval",
-        "dim_define",
+        "dim_ctx_new",
+        "dim_ctx_free",
+        "dim_ctx_define",
+        "dim_ctx_clear",
+        "dim_ctx_clear_all",
+        "dim_ctx_eval",
+        "dim_ctx_convert_expr",
+        "dim_ctx_convert_value",
+        "dim_ctx_is_compatible",
+        "dim_ctx_same_dimension",
+        "dim_ctx_batch_convert_exprs",
+        "dim_ctx_batch_convert_values",
       ];
+
       for (const name of required) {
-        const t = types[name as string];
-        const expected = name === "memory" ? "object" : "function";
-        if (t !== expected) {
-          throw new Error(
-            `dim wasm exports mismatch: expected ${name} to be ${expected}. Actual: ${JSON.stringify(types)}`
-          );
+        if (!(name in exports)) {
+          throw new Error(`dim wasm exports mismatch: missing ${String(name)}`);
         }
       }
 
-      const {
-        memory,
-        dim_alloc,
-        dim_free,
-        dim_eval,
-        dim_define,
-        dim_clear,
-        dim_clear_all,
-      } = inst.exports;
+      const ctx = toPtr(exports.dim_ctx_new());
+      if (!ctx) {
+        throw new Error("dim_ctx_new failed");
+      }
 
       runtime = {
-        memory,
-        dim_alloc,
-        dim_free,
-        dim_eval,
-        dim_define,
-        dim_clear,
-        dim_clear_all,
+        ...exports,
+        ctx,
         enc: new TextEncoder(),
         dec: new TextDecoder(),
       };
-    })();
+      emitReady(true);
+    })().catch((error) => {
+      if (runtime) {
+        runtime.dim_ctx_free(runtime.ctx);
+      }
+      runtime = null;
+      initPromise = null;
+      emitReady(false);
+      throw error;
+    });
   }
   return initPromise;
 }
 
+export async function recoverDim(): Promise<void> {
+  if (runtime) {
+    runtime.dim_ctx_free(runtime.ctx);
+  }
+  runtime = null;
+  initPromise = null;
+  emitReady(false);
+  await initDim();
+}
+
+function requireRuntime(): DimRuntime {
+  if (!runtime) {
+    throw new Error("dim not initialized. Call initDim() first.");
+  }
+  return runtime;
+}
+
+function normalizeDimSyntax(value: string): string {
+  return value
+    .replaceAll("·", "*")
+    .replaceAll("⋅", "*")
+    .replaceAll("²", "^2")
+    .replaceAll("³", "^3")
+    .replace(
+      /(^|[^\w.])([+-]?(?:\d+\.?\d*|\.\d+)[eE][+-]?\d+)(?=\s|$|[()*/+\-])/g,
+      (_match, prefix, numeric) =>
+        `${prefix}${expandScientificNotation(numeric)}`,
+    );
+}
+
+function expandScientificNotation(value: string): string {
+  const lower = value.toLowerCase();
+  if (!lower.includes("e")) {
+    return value;
+  }
+
+  const sign = lower.startsWith("-") ? "-" : "";
+  const unsigned =
+    lower.startsWith("-") || lower.startsWith("+") ? lower.slice(1) : lower;
+  const [coefficient, exponentString] = unsigned.split("e");
+  const exponent = Number.parseInt(exponentString, 10);
+  if (!Number.isFinite(exponent)) {
+    return value;
+  }
+
+  const [integerPart, fractionPart = ""] = coefficient.split(".");
+  const digits = `${integerPart}${fractionPart}`.replace(/^0+/, "") || "0";
+  const decimalIndex = integerPart.length + exponent;
+
+  if (digits === "0") {
+    return "0";
+  }
+
+  if (decimalIndex <= 0) {
+    return `${sign}0.${"0".repeat(Math.abs(decimalIndex))}${digits}`;
+  }
+
+  if (decimalIndex >= digits.length) {
+    return `${sign}${digits}${"0".repeat(decimalIndex - digits.length)}`;
+  }
+
+  return `${sign}${digits.slice(0, decimalIndex)}.${digits.slice(decimalIndex)}`;
+}
+
 function writeUtf8(rt: DimRuntime, str: string) {
-  const bytes = rt.enc.encode(str);
-  const ptr = rt.dim_alloc(bytes.length);
+  const bytes = rt.enc.encode(normalizeDimSyntax(str));
+  const ptr = alloc(rt, bytes.length);
   new Uint8Array(rt.memory.buffer, ptr, bytes.length).set(bytes);
   return { ptr, len: bytes.length };
 }
 
-function evalDimCore(rt: DimRuntime, expr: string): string {
-  const { ptr: inPtr, len: inLen } = writeUtf8(rt, expr);
-  const scratch = rt.dim_alloc(8);
-  const outPtrPtr = scratch;
-  const outLenPtr = scratch + 4;
-  const rc = rt.dim_eval(inPtr, inLen, outPtrPtr, outLenPtr);
-  rt.dim_free(inPtr, inLen);
-  if (rc !== 0) {
-    rt.dim_free(scratch, 8);
-    throw new Error("dim_eval failed");
-  }
-  const dv = new DataView(rt.memory.buffer);
-  const outPtr = dv.getUint32(outPtrPtr, true);
-  const outLen = dv.getUint32(outLenPtr, true);
-  rt.dim_free(scratch, 8);
-  const out = new Uint8Array(rt.memory.buffer, outPtr, outLen);
-  const text = rt.dec.decode(out);
-  rt.dim_free(outPtr, outLen);
-  return text;
+function writeRawUtf8(rt: DimRuntime, str: string) {
+  const bytes = rt.enc.encode(str);
+  const ptr = alloc(rt, bytes.length);
+  new Uint8Array(rt.memory.buffer, ptr, bytes.length).set(bytes);
+  return { ptr, len: bytes.length };
 }
 
-function defineConstCore(rt: DimRuntime, name: string, expr: string): void {
-  const n = writeUtf8(rt, name);
-  const v = writeUtf8(rt, expr);
-  const rc = rt.dim_define(n.ptr, n.len, v.ptr, v.len);
-  rt.dim_free(n.ptr, n.len);
-  rt.dim_free(v.ptr, v.len);
-  if (rc !== 0) throw new Error("dim_define failed");
+function readUtf8(rt: DimRuntime, ptr: number, len: number): string {
+  return rt.dec.decode(new Uint8Array(rt.memory.buffer, ptr, len));
 }
 
-export function evalDim(expr: string): string {
-  if (!runtime) {
-    throw new Error("dim not initialized. Call initDim() first.");
+function readRational(dv: DataView, offset: number): DimRational {
+  return {
+    num: dv.getInt32(offset, true),
+    den: dv.getUint32(offset + 4, true),
+  };
+}
+
+function readDimensions(dv: DataView, offset: number): DimDimension {
+  return {
+    L: readRational(dv, offset + 0),
+    M: readRational(dv, offset + 8),
+    T: readRational(dv, offset + 16),
+    I: readRational(dv, offset + 24),
+    Th: readRational(dv, offset + 32),
+    N: readRational(dv, offset + 40),
+    J: readRational(dv, offset + 48),
+  };
+}
+
+function expectStatus(rc: number, label: string) {
+  if (rc !== STATUS_OK) {
+    throw new Error(`${label} failed with status ${rc}`);
   }
-  return evalDimCore(runtime, expr);
+}
+
+function readEvalResult(rt: DimRuntime, ptr: number): DimEvalResult {
+  const dv = new DataView(rt.memory.buffer, ptr, EVAL_RESULT_SIZE);
+  const kind = dv.getUint32(0, true);
+  const boolValue = dv.getUint32(4, true) === 1;
+  const mode = MODES[dv.getUint32(8, true)] ?? "none";
+  const isDelta = dv.getUint32(12, true) === 1;
+  const numberValue = dv.getFloat64(16, true);
+  const quantityValue = dv.getFloat64(24, true);
+  const dim = readDimensions(dv, 32);
+  const stringPtr = dv.getUint32(88, true);
+  const stringLen = dv.getUint32(92, true);
+  const unitPtr = dv.getUint32(96, true);
+  const unitLen = dv.getUint32(100, true);
+
+  switch (kind) {
+    case KIND_NUMBER:
+      return { kind: "number", value: numberValue };
+    case KIND_BOOLEAN:
+      return { kind: "boolean", value: boolValue };
+    case KIND_STRING: {
+      const value = readUtf8(rt, stringPtr, stringLen);
+      rt.dim_free(stringPtr, stringLen);
+      return { kind: "string", value };
+    }
+    case KIND_QUANTITY: {
+      const unit = readUtf8(rt, unitPtr, unitLen);
+      rt.dim_free(unitPtr, unitLen);
+      return {
+        kind: "quantity",
+        value: quantityValue,
+        unit,
+        dim,
+        isDelta,
+        mode,
+      };
+    }
+    case KIND_NIL:
+    default:
+      return { kind: "nil" };
+  }
+}
+
+function readQuantityResult(rt: DimRuntime, ptr: number): DimQuantityResult {
+  const dv = new DataView(rt.memory.buffer, ptr, QUANTITY_RESULT_SIZE);
+  const mode = MODES[dv.getUint32(0, true)] ?? "none";
+  const isDelta = dv.getUint32(4, true) === 1;
+  const value = dv.getFloat64(8, true);
+  const dim = readDimensions(dv, 16);
+  const unitPtr = dv.getUint32(72, true);
+  const unitLen = dv.getUint32(76, true);
+  const unit = readUtf8(rt, unitPtr, unitLen);
+  rt.dim_free(unitPtr, unitLen);
+  return { kind: "quantity", value, unit, dim, isDelta, mode };
+}
+
+function readBool(rt: DimRuntime, ptr: number): boolean {
+  return new DataView(rt.memory.buffer, ptr, 4).getUint32(0, true) === 1;
+}
+
+function formatScientific(value: number): string {
+  return value.toExponential(3).replace("e+", "e");
+}
+
+function mod(value: number, divisor: number): number {
+  return ((value % divisor) + divisor) % divisor;
+}
+
+export function formatQuantity(result: DimQuantityResult): string {
+  const prefix = result.isDelta ? "Δ" : "";
+  switch (result.mode) {
+    case "auto":
+      return `${prefix}${result.value.toFixed(3)} ${result.unit}`;
+    case "scientific":
+      return `${prefix}${formatScientific(result.value)} ${result.unit}`;
+    case "engineering": {
+      if (result.value === 0) {
+        return `${prefix}0.000 ${result.unit}`;
+      }
+      const exponent = Math.floor(Math.log10(Math.abs(result.value)));
+      const engineeringExponent = exponent - mod(exponent, 3);
+      const scaled = result.value / 10 ** engineeringExponent;
+      return `${prefix}${scaled.toFixed(3)}e${engineeringExponent} ${result.unit}`;
+    }
+    case "none":
+    default:
+      return `${prefix}${result.value} ${result.unit}`;
+  }
+}
+
+export function formatEvalResult(result: DimEvalResult): string {
+  switch (result.kind) {
+    case "number":
+      return `${result.value}`;
+    case "boolean":
+      return `${result.value}`;
+    case "string":
+      return result.value;
+    case "quantity":
+      return formatQuantity(result);
+    case "nil":
+    default:
+      return "nil";
+  }
+}
+
+export function evalStructured(expr: string): DimEvalResult {
+  const rt = requireRuntime();
+  const input = writeUtf8(rt, expr);
+  const outPtr = alloc(rt, EVAL_RESULT_SIZE);
+  try {
+    const rc = rt.dim_ctx_eval(rt.ctx, input.ptr, input.len, outPtr);
+    expectStatus(rc, "dim_ctx_eval");
+    return readEvalResult(rt, outPtr);
+  } finally {
+    rt.dim_free(input.ptr, input.len);
+    rt.dim_free(outPtr, EVAL_RESULT_SIZE);
+  }
+}
+
+export function convertExpr(expr: string, unit: string): DimQuantityResult {
+  const rt = requireRuntime();
+  const exprSlice = writeUtf8(rt, expr);
+  const unitSlice = writeUtf8(rt, unit);
+  const outPtr = alloc(rt, QUANTITY_RESULT_SIZE);
+  try {
+    const rc = rt.dim_ctx_convert_expr(
+      rt.ctx,
+      exprSlice.ptr,
+      exprSlice.len,
+      unitSlice.ptr,
+      unitSlice.len,
+      outPtr,
+    );
+    expectStatus(rc, "dim_ctx_convert_expr");
+    return readQuantityResult(rt, outPtr);
+  } finally {
+    rt.dim_free(exprSlice.ptr, exprSlice.len);
+    rt.dim_free(unitSlice.ptr, unitSlice.len);
+    rt.dim_free(outPtr, QUANTITY_RESULT_SIZE);
+  }
+}
+
+export function convertValue(
+  value: number,
+  fromUnit: string,
+  toUnit: string,
+): number {
+  const rt = requireRuntime();
+  const fromSlice = writeUtf8(rt, fromUnit);
+  const toSlice = writeUtf8(rt, toUnit);
+  const outPtr = alloc(rt, 8);
+  try {
+    const rc = rt.dim_ctx_convert_value(
+      rt.ctx,
+      value,
+      fromSlice.ptr,
+      fromSlice.len,
+      toSlice.ptr,
+      toSlice.len,
+      outPtr,
+    );
+    expectStatus(rc, "dim_ctx_convert_value");
+    return new DataView(rt.memory.buffer, outPtr, 8).getFloat64(0, true);
+  } finally {
+    rt.dim_free(fromSlice.ptr, fromSlice.len);
+    rt.dim_free(toSlice.ptr, toSlice.len);
+    rt.dim_free(outPtr, 8);
+  }
+}
+
+export function isCompatible(expr: string, unit: string): boolean {
+  const rt = requireRuntime();
+  const exprSlice = writeUtf8(rt, expr);
+  const unitSlice = writeUtf8(rt, unit);
+  const outPtr = alloc(rt, 4);
+  try {
+    const rc = rt.dim_ctx_is_compatible(
+      rt.ctx,
+      exprSlice.ptr,
+      exprSlice.len,
+      unitSlice.ptr,
+      unitSlice.len,
+      outPtr,
+    );
+    if (rc !== STATUS_OK) {
+      return false;
+    }
+    return readBool(rt, outPtr);
+  } finally {
+    rt.dim_free(exprSlice.ptr, exprSlice.len);
+    rt.dim_free(unitSlice.ptr, unitSlice.len);
+    rt.dim_free(outPtr, 4);
+  }
+}
+
+export function sameDimension(exprA: string, exprB: string): boolean {
+  const rt = requireRuntime();
+  const lhs = writeUtf8(rt, exprA);
+  const rhs = writeUtf8(rt, exprB);
+  const outPtr = alloc(rt, 4);
+  try {
+    const rc = rt.dim_ctx_same_dimension(
+      rt.ctx,
+      lhs.ptr,
+      lhs.len,
+      rhs.ptr,
+      rhs.len,
+      outPtr,
+    );
+    if (rc !== STATUS_OK) {
+      return false;
+    }
+    return readBool(rt, outPtr);
+  } finally {
+    rt.dim_free(lhs.ptr, lhs.len);
+    rt.dim_free(rhs.ptr, rhs.len);
+    rt.dim_free(outPtr, 4);
+  }
+}
+
+function writeSlices(rt: DimRuntime, values: string[], normalize = true) {
+  const allocations = values.map((value) =>
+    normalize ? writeUtf8(rt, value) : writeRawUtf8(rt, value),
+  );
+  const slicesPtr = alloc(rt, values.length * DIM_SLICE_SIZE);
+  const dv = new DataView(
+    rt.memory.buffer,
+    slicesPtr,
+    values.length * DIM_SLICE_SIZE,
+  );
+  allocations.forEach((allocation, index) => {
+    const base = index * DIM_SLICE_SIZE;
+    dv.setUint32(base + 0, allocation.ptr, true);
+    dv.setUint32(base + 4, allocation.len, true);
+  });
+  return { allocations, slicesPtr };
+}
+
+export function batchConvertExprs(
+  items: Array<{ expr: string; unit: string }>,
+): number[] {
+  if (items.length === 0) {
+    return [];
+  }
+
+  const rt = requireRuntime();
+  const exprs = writeSlices(
+    rt,
+    items.map((item) => item.expr),
+  );
+  const units = writeSlices(
+    rt,
+    items.map((item) => item.unit),
+  );
+  const outValuesPtr = alloc(rt, items.length * 8);
+  const outStatusesPtr = alloc(rt, items.length * 4);
+
+  try {
+    const rc = rt.dim_ctx_batch_convert_exprs(
+      rt.ctx,
+      exprs.slicesPtr,
+      units.slicesPtr,
+      items.length,
+      outValuesPtr,
+      outStatusesPtr,
+    );
+    expectStatus(rc, "dim_ctx_batch_convert_exprs");
+
+    const valuesView = new DataView(
+      rt.memory.buffer,
+      outValuesPtr,
+      items.length * 8,
+    );
+    const statusView = new DataView(
+      rt.memory.buffer,
+      outStatusesPtr,
+      items.length * 4,
+    );
+    return items.map((_, index) => {
+      const status = statusView.getUint32(index * 4, true);
+      expectStatus(status, `dim_ctx_batch_convert_exprs[${index}]`);
+      return valuesView.getFloat64(index * 8, true);
+    });
+  } finally {
+    exprs.allocations.forEach((allocation) =>
+      rt.dim_free(allocation.ptr, allocation.len),
+    );
+    units.allocations.forEach((allocation) =>
+      rt.dim_free(allocation.ptr, allocation.len),
+    );
+    rt.dim_free(exprs.slicesPtr, items.length * DIM_SLICE_SIZE);
+    rt.dim_free(units.slicesPtr, items.length * DIM_SLICE_SIZE);
+    rt.dim_free(outValuesPtr, items.length * 8);
+    rt.dim_free(outStatusesPtr, items.length * 4);
+  }
+}
+
+export function batchConvertValues(
+  items: Array<{ value: number; fromUnit: string; toUnit: string }>,
+): number[] {
+  if (items.length === 0) {
+    return [];
+  }
+
+  const rt = requireRuntime();
+  const valuesPtr = alloc(rt, items.length * 8);
+  const valuesView = new DataView(
+    rt.memory.buffer,
+    valuesPtr,
+    items.length * 8,
+  );
+  items.forEach((item, index) => {
+    valuesView.setFloat64(index * 8, item.value, true);
+  });
+  const fromUnits = writeSlices(
+    rt,
+    items.map((item) => item.fromUnit),
+  );
+  const toUnits = writeSlices(
+    rt,
+    items.map((item) => item.toUnit),
+  );
+  const outValuesPtr = alloc(rt, items.length * 8);
+  const outStatusesPtr = alloc(rt, items.length * 4);
+
+  try {
+    const rc = rt.dim_ctx_batch_convert_values(
+      rt.ctx,
+      valuesPtr,
+      fromUnits.slicesPtr,
+      toUnits.slicesPtr,
+      items.length,
+      outValuesPtr,
+      outStatusesPtr,
+    );
+    expectStatus(rc, "dim_ctx_batch_convert_values");
+
+    const outValuesView = new DataView(
+      rt.memory.buffer,
+      outValuesPtr,
+      items.length * 8,
+    );
+    const statusView = new DataView(
+      rt.memory.buffer,
+      outStatusesPtr,
+      items.length * 4,
+    );
+    return items.map((_, index) => {
+      const status = statusView.getUint32(index * 4, true);
+      expectStatus(status, `dim_ctx_batch_convert_values[${index}]`);
+      return outValuesView.getFloat64(index * 8, true);
+    });
+  } finally {
+    rt.dim_free(valuesPtr, items.length * 8);
+    fromUnits.allocations.forEach((allocation) =>
+      rt.dim_free(allocation.ptr, allocation.len),
+    );
+    toUnits.allocations.forEach((allocation) =>
+      rt.dim_free(allocation.ptr, allocation.len),
+    );
+    rt.dim_free(fromUnits.slicesPtr, items.length * DIM_SLICE_SIZE);
+    rt.dim_free(toUnits.slicesPtr, items.length * DIM_SLICE_SIZE);
+    rt.dim_free(outValuesPtr, items.length * 8);
+    rt.dim_free(outStatusesPtr, items.length * 4);
+  }
 }
 
 export function defineConst(name: string, expr: string): void {
-  if (!runtime) {
-    throw new Error("dim not initialized. Call initDim() first.");
+  const rt = requireRuntime();
+  const nameSlice = writeRawUtf8(rt, name);
+  const exprSlice = writeUtf8(rt, expr);
+  try {
+    const rc = rt.dim_ctx_define(
+      rt.ctx,
+      nameSlice.ptr,
+      nameSlice.len,
+      exprSlice.ptr,
+      exprSlice.len,
+    );
+    expectStatus(rc, "dim_ctx_define");
+  } finally {
+    rt.dim_free(nameSlice.ptr, nameSlice.len);
+    rt.dim_free(exprSlice.ptr, exprSlice.len);
   }
-  defineConstCore(runtime, name, expr);
 }
 
 export function clearConst(name: string): void {
-  if (!runtime) {
-    throw new Error("dim not initialized. Call initDim() first.");
+  const rt = requireRuntime();
+  const slice = writeRawUtf8(rt, name);
+  try {
+    rt.dim_ctx_clear(rt.ctx, slice.ptr, slice.len);
+  } finally {
+    rt.dim_free(slice.ptr, slice.len);
   }
-  const { ptr, len } = writeUtf8(runtime, name);
-  runtime.dim_clear(ptr, len);
-  runtime.dim_free(ptr, len);
 }
 
 export function clearAllConsts(): void {
-  if (!runtime) {
-    throw new Error("dim not initialized. Call initDim() first.");
-  }
-  runtime.dim_clear_all();
+  const rt = requireRuntime();
+  rt.dim_ctx_clear_all(rt.ctx);
 }
 
-export function checkUnitCompatibility(expr: string, target: string): boolean {
-  try {
-    void evalDim(`${expr} + 1 ${target}`);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export function checkDimensionalCompatibility(
-  expr: string,
-  target: string
-): boolean {
-  try {
-    void evalDim(`${expr} + ${target}`);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export function getBaseUnit(expr: string): string {
-  const evaluated = evalDim(expr);
-  const parts = evaluated.split(" ");
-  return parts.length > 1 ? parts.slice(1).join(" ") : "";
+export function evalDim(expr: string): string {
+  return formatEvalResult(evalStructured(expr));
 }
 
 export function convertExprToUnit(expr: string, unit: string): string {
-  return evalDim(`${expr} as ${unit}`);
+  return formatQuantity(convertExpr(expr, unit));
 }
 
 export function convertValueToUnit(
   value: number,
   fromUnit: string,
-  toUnit: string
+  toUnit: string,
 ): number {
-  const result = evalDim(`${value} ${fromUnit} as ${toUnit}`);
-  const parts = result.split(" ");
-  return parts.length > 0 ? Number(parts[0]) : value;
+  return convertValue(value, fromUnit, toUnit);
+}
+
+export function checkUnitCompatibility(expr: string, target: string): boolean {
+  return isCompatible(expr, target);
+}
+
+export function checkDimensionalCompatibility(
+  expr: string,
+  target: string,
+): boolean {
+  return sameDimension(expr, target);
+}
+
+export function getBaseUnit(expr: string): string {
+  const result = evalStructured(expr);
+  return result.kind === "quantity" ? result.unit : "";
 }
 
 const dim = {
   init: initDim,
   eval: evalDim,
+  evalStructured,
+  formatEvalResult,
+  formatQuantity,
   defineConst,
   clearConst,
   clearAllConsts,
+  isCompatible,
+  sameDimension,
   checkUnitCompatibility,
   checkDimensionalCompatibility,
   getBaseUnit,
+  convertExpr,
   convert: convertExprToUnit,
-  convertValue: convertValueToUnit,
+  convertExprToUnit,
+  convertValue,
+  convertValueToUnit,
+  batchConvertExprs,
+  batchConvertValues,
 };
 
 export default dim;
