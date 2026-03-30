@@ -1,13 +1,29 @@
 import * as TOML from "@iarna/toml";
 import type { FlowNode, FlowEdge } from "@/lib/collections/flow-nodes";
-import type { NetworkNode } from "@/lib/api-client";
+import type { Block, NetworkNode } from "@/lib/api-client";
 import { toNetworkNode } from "@/lib/utils/filter-reactflow-props";
 import { writeNetworkFile } from "@/lib/desktop";
 
-export function serializeNodeToToml(
+export function buildTomlBlockObject(block: Block): Record<string, unknown> {
+  const blockObj: Record<string, unknown> = {};
+
+  if (block.quantity !== undefined && block.quantity !== 1) {
+    blockObj.quantity = block.quantity;
+  }
+  blockObj.type = block.type;
+  Object.keys(block).forEach((key) => {
+    if (!["type", "quantity", "kind", "label"].includes(key)) {
+      blockObj[key] = (block as Record<string, unknown>)[key];
+    }
+  });
+
+  return blockObj;
+}
+
+export function buildTomlNodeObject(
   node: NetworkNode,
   outgoing?: Array<{ target: string; weight: number }>,
-): string {
+): Record<string, unknown> {
   const obj: Record<string, unknown> = { type: node.type };
 
   if (node.data.label) obj.label = node.data.label;
@@ -22,19 +38,7 @@ export function serializeNodeToToml(
       obj.outgoing = outgoing;
     }
     if (node.data.blocks && node.data.blocks.length > 0) {
-      obj.block = node.data.blocks.map((block) => {
-        const blockObj: Record<string, unknown> = {};
-        if (block.quantity !== undefined && block.quantity !== 1) {
-          blockObj.quantity = block.quantity;
-        }
-        blockObj.type = block.type;
-        Object.keys(block).forEach((key) => {
-          if (!["type", "quantity", "kind", "label"].includes(key)) {
-            blockObj[key] = (block as Record<string, unknown>)[key];
-          }
-        });
-        return blockObj;
-      });
+      obj.block = node.data.blocks.map(buildTomlBlockObject);
     }
   }
 
@@ -54,7 +58,14 @@ export function serializeNodeToToml(
     obj.path = node.data.path;
   }
 
-  return TOML.stringify(obj as TOML.JsonMap);
+  return obj;
+}
+
+export function serializeNodeToToml(
+  node: NetworkNode,
+  outgoing?: Array<{ target: string; weight: number }>,
+): string {
+  return TOML.stringify(buildTomlNodeObject(node, outgoing) as TOML.JsonMap);
 }
 
 export function buildTomlFiles(
