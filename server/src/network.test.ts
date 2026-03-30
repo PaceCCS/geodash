@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { resolve } from "node:path";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { Elysia } from "elysia";
 import { createGeodashServerConfig } from "./config";
 import { networkModule } from "./modules/network";
@@ -206,6 +208,59 @@ describe("GET /api/network", () => {
     const compressor = branch1?.data.blocks?.find((block) => block.type === "Compressor");
     expect(compressor).toBeDefined();
     expect(compressor!.pressure).toBe("120 bar");
+  });
+
+  test("nested block tables are preserved without dropping the branch", async () => {
+    const networkDir = await mkdtemp(join(tmpdir(), "geodash-network-"));
+
+    try {
+      await writeFile(
+        join(networkDir, "config.toml"),
+        ['id = "nested-block-table"', 'label = "Nested Block Table"'].join("\n"),
+      );
+      await writeFile(
+        join(networkDir, "branch-1.toml"),
+        [
+          'type = "branch"',
+          'label = "Branch 1"',
+          "",
+          "[position]",
+          "x = 100",
+          "y = 200",
+          "",
+          "[[block]]",
+          'type = "Source"',
+          "pressure = 10",
+          "",
+          "[block.fluidComposition]",
+          "carbonDioxideFraction = 0.96",
+          "hydrogenFraction = 0.0075",
+          "nitrogenFraction = 0.0325",
+          "",
+          "[[block]]",
+          'type = "Pipe"',
+        ].join("\n"),
+      );
+
+      const res = await app.handle(
+        new Request(`http://localhost/api/network?network=${encodeURIComponent(networkDir)}`),
+      );
+      expect(res.status).toBe(200);
+
+      const body = await res.json() as NetworkResponse;
+      const branch1 = body.nodes.find((node) => node.id === "branch-1");
+      const source = branch1?.data.blocks?.[0];
+
+      expect(branch1).toBeDefined();
+      expect(source?.fluidComposition).toEqual({
+        carbonDioxideFraction: 0.96,
+        hydrogenFraction: 0.0075,
+        nitrogenFraction: 0.0325,
+      });
+      expect(body.warnings ?? []).not.toContain("Failed to parse branch-1.toml");
+    } finally {
+      await rm(networkDir, { recursive: true, force: true });
+    }
   });
 
   test("labeled group has width and height", async () => {

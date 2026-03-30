@@ -560,6 +560,51 @@ test "load simple branch node" {
     try std.testing.expectEqualStrings("Pipe", branch.blocks.items[1].type_name);
 }
 
+test "load branch node with nested block table" {
+    const allocator = std.testing.allocator;
+
+    var files = std.StringArrayHashMapUnmanaged([]const u8){};
+    defer files.deinit(allocator);
+
+    try files.put(allocator, "branch-1.toml",
+        \\type = "branch"
+        \\label = "Branch 1"
+        \\
+        \\[position]
+        \\x = 100
+        \\y = 200
+        \\
+        \\[[block]]
+        \\type = "Source"
+        \\pressure = 10
+        \\
+        \\[block.fluidComposition]
+        \\carbonDioxideFraction = 0.96
+        \\hydrogenFraction = 0.0075
+        \\nitrogenFraction = 0.0325
+        \\
+        \\[[block]]
+        \\type = "Pipe"
+    );
+
+    var validation = ValidationResult.init(allocator);
+    defer validation.deinit();
+
+    var network = try loadNetworkFromFiles(allocator, &files, &validation);
+    defer network.deinit(allocator);
+
+    try std.testing.expect(validation.isValid());
+    try std.testing.expectEqual(@as(usize, 1), network.nodes.items.len);
+
+    const branch = &network.nodes.items[0].branch;
+    const fluid = branch.blocks.items[0].extra.get("fluidComposition").?.getTable().?;
+
+    try std.testing.expectApproxEqAbs(@as(f64, 0.96), fluid.get("carbonDioxideFraction").?.getFloat().?, 0.001);
+    try std.testing.expectApproxEqAbs(@as(f64, 0.0075), fluid.get("hydrogenFraction").?.getFloat().?, 0.0001);
+    try std.testing.expectApproxEqAbs(@as(f64, 0.0325), fluid.get("nitrogenFraction").?.getFloat().?, 0.0001);
+    try std.testing.expectEqualStrings("Pipe", branch.blocks.items[1].type_name);
+}
+
 test "load network with edges" {
     const allocator = std.testing.allocator;
 

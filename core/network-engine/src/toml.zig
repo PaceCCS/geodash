@@ -249,17 +249,7 @@ pub const Parser = struct {
         // Navigate to the right nested table
         var current: *Value.Table = root;
         for (keys.items[0 .. keys.items.len - 1]) |part| {
-            if (current.getPtr(part)) |existing| {
-                current = switch (existing.*) {
-                    .table => |*t| t,
-                    else => return ParseError.DuplicateKey,
-                };
-            } else {
-                const owned_key = try self.allocator.dupe(u8, part);
-                errdefer self.allocator.free(owned_key);
-                try current.put(self.allocator, owned_key, Value{ .table = .{} });
-                current = &current.getPtr(owned_key).?.table;
-            }
+            current = try self.resolveHeaderTablePart(current, part);
         }
 
         // Create the final table
@@ -283,15 +273,17 @@ pub const Parser = struct {
         self.pos += 2; // skip '[['
         self.skipWhitespaceOnly();
 
-        const name = try self.parseKey();
-        errdefer self.allocator.free(name);
+        var keys = try self.parseDottedKey();
+        defer {
+            for (keys.items) |k| self.allocator.free(k);
+            keys.deinit(self.allocator);
+        }
 
         self.skipWhitespaceOnly();
         if (self.pos + 1 >= self.source.len or
             self.source[self.pos] != ']' or
             self.source[self.pos + 1] != ']')
         {
-            self.allocator.free(name);
             return ParseError.InvalidTableHeader;
         }
         self.pos += 2; // skip ']]'
@@ -305,9 +297,14 @@ pub const Parser = struct {
         }
         try self.parseKeyValues(&item_table);
 
+        var current: *Value.Table = root;
+        for (keys.items[0 .. keys.items.len - 1]) |part| {
+            current = try self.resolveHeaderTablePart(current, part);
+        }
+
         // Get or create array
-        if (root.getPtr(name)) |existing| {
-            self.allocator.free(name);
+        const final_key = keys.items[keys.items.len - 1];
+        if (current.getPtr(final_key)) |existing| {
             switch (existing.*) {
                 .array => |*arr| {
                     try arr.append(self.allocator, Value{ .table = item_table });
@@ -317,8 +314,36 @@ pub const Parser = struct {
         } else {
             var arr = Value.Array{};
             try arr.append(self.allocator, Value{ .table = item_table });
-            try root.put(self.allocator, name, Value{ .array = arr });
+            const owned_key = try self.allocator.dupe(u8, final_key);
+            errdefer self.allocator.free(owned_key);
+            try current.put(self.allocator, owned_key, Value{ .array = arr });
         }
+    }
+
+    fn resolveHeaderTablePart(
+        self: *Parser,
+        current: *Value.Table,
+        part: []const u8,
+    ) ParseError!*Value.Table {
+        if (current.getPtr(part)) |existing| {
+            return switch (existing.*) {
+                .table => |*t| t,
+                .array => |*arr| blk: {
+                    if (arr.items.len == 0) return ParseError.InvalidTableHeader;
+                    const last_item = &arr.items[arr.items.len - 1];
+                    break :blk switch (last_item.*) {
+                        .table => |*t| t,
+                        else => return ParseError.InvalidTableHeader,
+                    };
+                },
+                else => return ParseError.DuplicateKey,
+            };
+        }
+
+        const owned_key = try self.allocator.dupe(u8, part);
+        errdefer self.allocator.free(owned_key);
+        try current.put(self.allocator, owned_key, Value{ .table = .{} });
+        return &current.getPtr(owned_key).?.table;
     }
 
     fn parseDottedKey(self: *Parser) ParseError!std.ArrayListUnmanaged([]const u8) {
@@ -1064,6 +1089,41 @@ test "parse dotted table headers" {
     const rules = inheritance.get("rules").?.table;
     const pressure = rules.get("pressure").?.getArray().?;
     try std.testing.expectEqualStrings("block", pressure[0].getString().?);
+}
+
+test "parse nested table under array of tables" {
+    const allocator = std.testing.allocator;
+    const source =
+        \\[[block]]
+        \\type = "Source"
+        \\label = "Emitter"
+        \\pressure = 10
+        \\
+        \\[block.fluidComposition]
+        \\carbonDioxideFraction = 0.96
+        \\hydrogenFraction = 0.0075
+        \\nitrogenFraction = 0.0325
+        \\
+        \\[[block]]
+        \\type = "Pipe"
+    ;
+
+    var result = try Parser.parse(allocator, source);
+    defer result.deinit(allocator);
+
+    const blocks = result.table.get("block").?.getArray().?;
+    try std.testing.expectEqual(@as(usize, 2), blocks.len);
+
+    const first = blocks[0].table;
+    try std.testing.expectEqualStrings("Source", first.get("type").?.getString().?);
+
+    const fluid = first.get("fluidComposition").?.getTable().?;
+    try std.testing.expectApproxEqAbs(@as(f64, 0.96), fluid.get("carbonDioxideFraction").?.getFloat().?, 0.001);
+    try std.testing.expectApproxEqAbs(@as(f64, 0.0075), fluid.get("hydrogenFraction").?.getFloat().?, 0.0001);
+    try std.testing.expectApproxEqAbs(@as(f64, 0.0325), fluid.get("nitrogenFraction").?.getFloat().?, 0.0001);
+
+    const second = blocks[1].table;
+    try std.testing.expectEqualStrings("Pipe", second.get("type").?.getString().?);
 }
 
 // ─── evaluateQuantities tests ────────────────────────────────────────────
