@@ -36,6 +36,15 @@ export function useFileWatcher() {
   const [isApplyingExternalChange, setIsApplyingExternalChange] = useState(false);
   const reloadTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const reloadSequenceRef = useRef(0);
+  const watchModeRef = useRef<WatchModeState>({
+    enabled: false,
+    directoryPath: null,
+    isWatching: false,
+  });
+
+  useEffect(() => {
+    watchModeRef.current = watchMode;
+  }, [watchMode]);
 
   const reloadNetwork = useCallback(
     async (
@@ -131,6 +140,22 @@ export function useFileWatcher() {
     };
   }, [watchMode.enabled, watchMode.directoryPath, reloadNetwork]);
 
+  const teardownWatchMode = useCallback(
+    async ({ resetState }: { resetState: boolean }) => {
+      clearTimeout(reloadTimerRef.current);
+      reloadSequenceRef.current += 1;
+      clearActivityLog();
+      await stopWatchingDirectory();
+      await clearFlowCollections();
+
+      if (resetState) {
+        setIsApplyingExternalChange(false);
+        setWatchMode({ enabled: false, directoryPath: null, isWatching: false });
+      }
+    },
+    [],
+  );
+
   const enableWatchMode = useCallback(async (directoryPath: string) => {
     clearActivityLog();
     await startWatchingDirectory(directoryPath);
@@ -139,14 +164,18 @@ export function useFileWatcher() {
   }, [reloadNetwork]);
 
   const disableWatchMode = useCallback(async () => {
-    clearTimeout(reloadTimerRef.current);
-    reloadSequenceRef.current += 1;
-    setIsApplyingExternalChange(false);
-    clearActivityLog();
-    await stopWatchingDirectory();
-    await clearFlowCollections();
-    setWatchMode({ enabled: false, directoryPath: null, isWatching: false });
-  }, []);
+    await teardownWatchMode({ resetState: true });
+  }, [teardownWatchMode]);
+
+  useEffect(() => {
+    return () => {
+      if (watchModeRef.current.enabled) {
+        void teardownWatchMode({ resetState: false });
+      } else {
+        clearActivityLog();
+      }
+    };
+  }, [teardownWatchMode]);
 
   return {
     watchMode,
