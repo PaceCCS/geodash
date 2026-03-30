@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { promises as fs } from "node:fs";
+import { promises as fs, type Stats } from "node:fs";
 import net from "node:net";
 import { spawn, type ChildProcess } from "node:child_process";
 import chokidar, { type FSWatcher } from "chokidar";
@@ -15,10 +15,45 @@ const preloadPath = join(appRoot, "dist-electron", "preload.js");
 const rendererDevUrl = process.env.ELECTRON_RENDERER_URL ?? "http://127.0.0.1:3000";
 const rendererProdPath = join(appRoot, "dist", "client", "index.html");
 const backendPort = 3001;
+const OWN_WRITE_IGNORE_WINDOW_MS = 1500;
 
 let mainWindow: BrowserWindow | null = null;
 let backendProcess: ChildProcess | null = null;
 let watcher: FSWatcher | null = null;
+const recentOwnWrites = new Map<string, number>();
+
+function pruneOwnWrites(now = Date.now()): void {
+  for (const [path, timestamp] of recentOwnWrites.entries()) {
+    if (now - timestamp > OWN_WRITE_IGNORE_WINDOW_MS) {
+      recentOwnWrites.delete(path);
+    }
+  }
+}
+
+function recordOwnWrite(path: string): void {
+  pruneOwnWrites();
+  recentOwnWrites.set(resolve(path), Date.now());
+}
+
+function clearOwnWrite(path: string): void {
+  recentOwnWrites.delete(resolve(path));
+}
+
+function shouldIgnoreOwnWrite(path: string): boolean {
+  pruneOwnWrites();
+  const resolvedPath = resolve(path);
+  const timestamp = recentOwnWrites.get(resolvedPath);
+  if (timestamp === undefined) {
+    return false;
+  }
+
+  if (Date.now() - timestamp > OWN_WRITE_IGNORE_WINDOW_MS) {
+    recentOwnWrites.delete(resolvedPath);
+    return false;
+  }
+
+  return true;
+}
 
 function isPortOpen(port: number): Promise<boolean> {
   return new Promise((resolvePort) => {
@@ -143,29 +178,80 @@ function emitFileChanged(paths: string[]): void {
   }
 }
 
+function isTomlFilePath(filePath: string): boolean {
+  return filePath.toLowerCase().endsWith(".toml");
+}
+
+function shouldIgnoreWatchedPath(watchedPath: string, stats?: Stats): boolean {
+  if (stats?.isDirectory()) {
+    return false;
+  }
+
+  if (stats?.isFile()) {
+    return !isTomlFilePath(watchedPath);
+  }
+
+  return false;
+}
+
 async function startWatchingDirectory(directoryPath: string): Promise<void> {
   await stopWatchingDirectory();
 
-  watcher = chokidar.watch(join(directoryPath, "**/*.toml"), {
+  const nextWatcher = chokidar.watch(directoryPath, {
     ignoreInitial: true,
+    atomic: true,
+    awaitWriteFinish: {
+      stabilityThreshold: 250,
+      pollInterval: 50,
+    },
+    ignored: shouldIgnoreWatchedPath,
   });
 
   const handleChange = (changedPath: string) => {
-    emitFileChanged([changedPath]);
+    const resolvedPath = resolve(changedPath);
+    if (!isTomlFilePath(resolvedPath)) {
+      return;
+    }
+
+    if (shouldIgnoreOwnWrite(resolvedPath)) {
+      return;
+    }
+
+    emitFileChanged([resolvedPath]);
   };
 
-  watcher.on("add", handleChange);
-  watcher.on("change", handleChange);
-  watcher.on("unlink", handleChange);
+  nextWatcher.on("add", handleChange);
+  nextWatcher.on("change", handleChange);
+  nextWatcher.on("unlink", handleChange);
+  nextWatcher.on("error", (error) => {
+    console.error("[watch] File watcher error:", error);
+  });
+
+  try {
+    await new Promise<void>((resolveReady, rejectReady) => {
+      nextWatcher.once("ready", () => {
+        console.log("[watch] Watching directory:", directoryPath);
+        resolveReady();
+      });
+      nextWatcher.once("error", rejectReady);
+    });
+  } catch (error) {
+    await nextWatcher.close();
+    throw error;
+  }
+
+  watcher = nextWatcher;
 }
 
 async function stopWatchingDirectory(): Promise<void> {
   if (!watcher) {
+    recentOwnWrites.clear();
     return;
   }
 
   const currentWatcher = watcher;
   watcher = null;
+  recentOwnWrites.clear();
   await currentWatcher.close();
 }
 
@@ -212,11 +298,23 @@ function registerIpcHandlers(): void {
   });
 
   ipcMain.handle("desktop:write-network-file", async (_event, filePath: string, content: string) => {
-    await fs.writeFile(filePath, content, "utf8");
+    recordOwnWrite(filePath);
+    try {
+      await fs.writeFile(filePath, content, "utf8");
+    } catch (error) {
+      clearOwnWrite(filePath);
+      throw error;
+    }
   });
 
   ipcMain.handle("desktop:delete-network-file", async (_event, filePath: string) => {
-    await fs.rm(filePath);
+    recordOwnWrite(filePath);
+    try {
+      await fs.rm(filePath);
+    } catch (error) {
+      clearOwnWrite(filePath);
+      throw error;
+    }
   });
 
   ipcMain.handle("desktop:start-watching-directory", async (_event, directoryPath: string) => {

@@ -16,6 +16,8 @@ export const queryModule = createModule(
     new Elysia({ prefix: "/api/query" }).get("/", async ({ query, set }) =>
       runRequest(
         Effect.gen(function* () {
+          set.headers["cache-control"] = "no-store";
+
           if (typeof query.q !== "string" || query.q.length === 0) {
             return yield* Effect.fail(
               badRequest("Missing required query parameter: q"),

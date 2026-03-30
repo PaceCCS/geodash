@@ -112,7 +112,12 @@ async function apiGet<T>(
     }
   }
 
-  const response = await fetch(url.toString());
+  // File-backed endpoints should always reflect the latest on-disk state.
+  url.searchParams.set("_ts", Date.now().toString());
+
+  const response = await fetch(url.toString(), {
+    cache: "no-store",
+  });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     throw new Error(

@@ -20,6 +20,8 @@ export const networkModule = createModule(
       .get("/assets/*", async ({ params, query, set }) =>
         runRequest(
           Effect.gen(function* () {
+            set.headers["cache-control"] = "no-store";
+
             const networkDir = resolveNetworkPath(
               typeof query.network === "string" ? query.network : undefined,
             );
@@ -61,6 +63,8 @@ export const networkModule = createModule(
       .get("/", async ({ query, set }) =>
         runRequest(
           Effect.gen(function* () {
+            set.headers["cache-control"] = "no-store";
+
             const networkDir = resolveNetworkPath(
               typeof query.network === "string" ? query.network : undefined,
             );

@@ -1,6 +1,6 @@
 import {
   createCollection,
-  localStorageCollectionOptions,
+  localOnlyCollectionOptions,
 } from "@tanstack/react-db";
 import type { FlowNode, FlowEdge } from "./flow-nodes";
 import type { NetworkResponse } from "@/lib/api-client";
@@ -54,17 +54,15 @@ export function sortNodesWithParentsFirst(nodes: FlowNode[]): FlowNode[] {
 // ── Collections ───────────────────────────────────────────────────────────────
 
 export const nodesCollection = createCollection(
-  localStorageCollectionOptions<FlowNode>({
+  localOnlyCollectionOptions<FlowNode>({
     id: "flow:nodes",
-    storageKey: "flow:nodes",
     getKey: (node) => node.id,
   })
 );
 
 export const edgesCollection = createCollection(
-  localStorageCollectionOptions<FlowEdge>({
+  localOnlyCollectionOptions<FlowEdge>({
     id: "flow:edges",
-    storageKey: "flow:edges",
     getKey: (edge) => edge.id,
   })
 );
@@ -115,16 +113,10 @@ export function writeEdgesToCollection(updated: FlowEdge[]): void {
 
 // ── Network loader ────────────────────────────────────────────────────────────
 
-/**
- * Replace collection contents with a fresh network response from the API.
- * Handles null→undefined conversions and z-index assignment.
- */
-export async function resetFlowToNetwork(
-  network: NetworkResponse
-): Promise<void> {
+export async function clearFlowCollections(): Promise<void> {
   await Promise.all([nodesCollection.preload(), edgesCollection.preload()]);
 
-  // Clear edges first (referential integrity)
+  // Clear edges first to preserve referential integrity during updates.
   const edgeKeys = Array.from(edgesCollection.keys()) as string[];
   if (edgeKeys.length) {
     const tx = edgesCollection.delete(edgeKeys);
@@ -136,6 +128,16 @@ export async function resetFlowToNetwork(
     const tx = nodesCollection.delete(nodeKeys);
     await tx.isPersisted.promise;
   }
+}
+
+/**
+ * Replace collection contents with a fresh network response from the API.
+ * Handles null→undefined conversions and z-index assignment.
+ */
+export async function resetFlowToNetwork(
+  network: NetworkResponse
+): Promise<void> {
+  await clearFlowCollections();
 
   const flowNodes: FlowNode[] = network.nodes.map((node) => ({
     ...node,

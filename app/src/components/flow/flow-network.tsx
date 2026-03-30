@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Background,
   Controls,
@@ -46,6 +46,24 @@ const nodeTypes: NodeTypes = {
 /** Debounce delay before flushing canvas edits to TOML files (ms). */
 const SYNC_DEBOUNCE_MS = 300;
 
+function shouldPersistNodeChanges(changes: NodeChange[]): boolean {
+  return changes.some((change) => {
+    if (change.type === "select") {
+      return false;
+    }
+
+    if (change.type === "position") {
+      return change.dragging !== true;
+    }
+
+    if (change.type === "dimensions") {
+      return change.resizing !== true;
+    }
+
+    return true;
+  });
+}
+
 type FlowNetworkProps = {
   nodes: FlowNode[];
   edges: FlowEdge[];
@@ -56,6 +74,11 @@ type FlowNetworkProps = {
    * directory after a short debounce (bidirectional sync).
    */
   syncDirectory?: string;
+  /**
+   * External on-disk edits are being applied; hold local persistence so the
+   * reloaded network can win before we write anything back out.
+   */
+  suspendPersistence?: boolean;
 };
 
 export function FlowNetwork({
@@ -64,6 +87,7 @@ export function FlowNetwork({
   selectedQuery,
   onSelectedQueryChange,
   syncDirectory,
+  suspendPersistence = false,
 }: FlowNetworkProps) {
   const theme = useTheme((s) => s.theme);
   const colorMode = useMemo(
@@ -74,11 +98,37 @@ export function FlowNetwork({
   const reactFlowRef = useRef<ReactFlowInstance<Node, Edge> | null>(null);
   const pendingLocalNodeSelectionRef = useRef<string | undefined>(undefined);
   const lastViewportNodeSelectionRef = useRef<string | undefined>(undefined);
+  const [localNodes, setLocalNodes] = useState<FlowNode[]>(nodes);
+  const [localEdges, setLocalEdges] = useState<FlowEdge[]>(edges);
+  const localNodesRef = useRef<FlowNode[]>(nodes);
+  const localEdgesRef = useRef<FlowEdge[]>(edges);
+
+  useEffect(() => {
+    setLocalNodes(nodes);
+    localNodesRef.current = nodes;
+  }, [nodes]);
+
+  useEffect(() => {
+    setLocalEdges(edges);
+    localEdgesRef.current = edges;
+  }, [edges]);
+
+  useEffect(() => {
+    return () => {
+      clearTimeout(syncTimer.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (suspendPersistence) {
+      clearTimeout(syncTimer.current);
+    }
+  }, [suspendPersistence]);
 
   // Schedule a write-back of the current nodes+edges to TOML files.
   const scheduleSyncToFiles = useCallback(
     (updatedNodes: FlowNode[], updatedEdges: FlowEdge[]) => {
-      if (!syncDirectory) return;
+      if (!syncDirectory || suspendPersistence) return;
       clearTimeout(syncTimer.current);
       syncTimer.current = setTimeout(() => {
         exportNetworkToToml(updatedNodes, updatedEdges, syncDirectory).catch(
@@ -86,24 +136,33 @@ export function FlowNetwork({
         );
       }, SYNC_DEBOUNCE_MS);
     },
-    [syncDirectory],
+    [syncDirectory, suspendPersistence],
   );
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
-      const persistedChanges = changes.filter((change) => change.type !== "select");
-      if (persistedChanges.length === 0) {
+      const relevantChanges = changes.filter((change) => change.type !== "select");
+      if (relevantChanges.length === 0) {
         return;
       }
 
-      const updated = applyNodeChanges(
-        persistedChanges,
-        nodes as Node[],
-      ) as FlowNode[];
-      writeNodesToCollection(updated);
-      scheduleSyncToFiles(updated, edges);
+      setLocalNodes((currentNodes) => {
+        const updated = applyNodeChanges(
+          relevantChanges,
+          currentNodes as Node[],
+        ) as FlowNode[];
+
+        localNodesRef.current = updated;
+
+        if (shouldPersistNodeChanges(relevantChanges) && !suspendPersistence) {
+          writeNodesToCollection(updated);
+          scheduleSyncToFiles(updated, localEdgesRef.current);
+        }
+
+        return updated;
+      });
     },
-    [nodes, edges, scheduleSyncToFiles],
+    [scheduleSyncToFiles, suspendPersistence],
   );
 
   const onEdgesChange = useCallback(
@@ -113,21 +172,28 @@ export function FlowNetwork({
         return;
       }
 
-      const updated = applyEdgeChanges(
-        persistedChanges,
-        edges as Edge[],
-      ) as FlowEdge[];
-      writeEdgesToCollection(updated);
-      scheduleSyncToFiles(nodes, updated);
+      setLocalEdges((currentEdges) => {
+        const updated = applyEdgeChanges(
+          persistedChanges,
+          currentEdges as Edge[],
+        ) as FlowEdge[];
+
+        localEdgesRef.current = updated;
+        if (!suspendPersistence) {
+          writeEdgesToCollection(updated);
+          scheduleSyncToFiles(localNodesRef.current, updated);
+        }
+        return updated;
+      });
     },
-    [nodes, edges, scheduleSyncToFiles],
+    [scheduleSyncToFiles, suspendPersistence],
   );
 
   const onConnect = useCallback(
     (connection: Connection) => {
       // Only allow branch→branch connections.
-      const src = nodes.find((n) => n.id === connection.source);
-      const tgt = nodes.find((n) => n.id === connection.target);
+      const src = localNodesRef.current.find((n) => n.id === connection.source);
+      const tgt = localNodesRef.current.find((n) => n.id === connection.target);
       if (
         !src ||
         !tgt ||
@@ -140,13 +206,17 @@ export function FlowNetwork({
 
       const updated = addEdge(
         { ...connection, data: { weight: 1 } },
-        edges as Edge[],
+        localEdgesRef.current as Edge[],
       ) as FlowEdge[];
 
-      writeEdgesToCollection(updated);
-      scheduleSyncToFiles(nodes, updated);
+      setLocalEdges(updated);
+      localEdgesRef.current = updated;
+      if (!suspendPersistence) {
+        writeEdgesToCollection(updated);
+        scheduleSyncToFiles(localNodesRef.current, updated);
+      }
     },
-    [nodes, edges, scheduleSyncToFiles],
+    [scheduleSyncToFiles, suspendPersistence],
   );
 
   const onInit = useCallback((instance: ReactFlowInstance<Node, Edge>) => {
@@ -174,18 +244,6 @@ export function FlowNetwork({
     handleSelectedQueryChange(null);
   }, [handleSelectedQueryChange]);
 
-  const onMoveStart = useCallback(() => {
-    const selectedNodeId = getSelectedNodeIdFromQuery(selectedQuery);
-    if (!selectedNodeId) {
-      return;
-    }
-
-    // If the user manually pans/zooms after a selection, allow future
-    // query changes to recenter again instead of treating the viewport as
-    // already synchronized forever.
-    lastViewportNodeSelectionRef.current = undefined;
-  }, [selectedQuery]);
-
   useEffect(() => {
     const selectedNodeId = getSelectedNodeIdFromQuery(selectedQuery);
     if (selectedNodeId) {
@@ -194,7 +252,7 @@ export function FlowNetwork({
   }, [selectedQuery]);
 
   useEffect(() => {
-    if (nodes.length === 0) {
+    if (localNodes.length === 0) {
       return;
     }
 
@@ -205,11 +263,11 @@ export function FlowNetwork({
       return;
     }
 
-    const selectedNode = nodes.find((node) => node.id === selectedNodeId);
+    const selectedNode = localNodes.find((node) => node.id === selectedNodeId);
     if (!selectedNode) {
       handleSelectedQueryChange(null);
     }
-  }, [nodes, selectedQuery, handleSelectedQueryChange]);
+  }, [localNodes, selectedQuery, handleSelectedQueryChange]);
 
   useEffect(() => {
     const selectedNodeId = getSelectedNodeIdFromQuery(selectedQuery);
@@ -231,7 +289,7 @@ export function FlowNetwork({
       return;
     }
 
-    const selectedNode = nodes.find((node) => node.id === selectedNodeId);
+    const selectedNode = localNodes.find((node) => node.id === selectedNodeId);
     if (!selectedNode) {
       return;
     }
@@ -247,7 +305,7 @@ export function FlowNetwork({
       maxZoom: 1.25,
       padding: 0.25,
     });
-  }, [nodes, selectedQuery]);
+  }, [localNodes, selectedQuery]);
 
   return (
     <div className="h-full w-full">
@@ -258,15 +316,14 @@ export function FlowNetwork({
         }}
       >
         <ReactFlow
-          nodes={nodes as Node[]}
-          edges={edges as Edge[]}
+          nodes={localNodes as Node[]}
+          edges={localEdges as Edge[]}
           onInit={onInit}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onNodeClick={onNodeClick}
           onPaneClick={onPaneClick}
-          onMoveStart={onMoveStart}
           nodeTypes={nodeTypes}
           colorMode={colorMode}
           fitView
