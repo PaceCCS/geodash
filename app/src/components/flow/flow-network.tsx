@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Background,
   Controls,
-  MiniMap,
   ReactFlow,
   type ReactFlowInstance,
   applyNodeChanges,
@@ -133,7 +132,9 @@ export function FlowNetwork({
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
-      const relevantChanges = changes.filter((change) => change.type !== "select");
+      const relevantChanges = changes.filter(
+        (change) => change.type !== "select",
+      );
       if (relevantChanges.length === 0) {
         return;
       }
@@ -169,7 +170,9 @@ export function FlowNetwork({
 
   const onEdgesChange = useCallback(
     (changes: EdgeChange[]) => {
-      const persistedChanges = changes.filter((change) => change.type !== "select");
+      const persistedChanges = changes.filter(
+        (change) => change.type !== "select",
+      );
       if (persistedChanges.length === 0) {
         return;
       }
@@ -353,10 +356,11 @@ export function FlowNetwork({
           nodeTypes={nodeTypes}
           colorMode={colorMode}
           fitView
+          onlyRenderVisibleElements
         >
           <Background />
           <Controls position="top-right" />
-          <MiniMap position="bottom-left" />
+          {/* <MiniMap position="bottom-left" /> */}
         </ReactFlow>
       </FlowSelectionProvider>
     </div>
