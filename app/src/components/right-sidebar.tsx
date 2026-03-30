@@ -40,7 +40,6 @@ export function RightSidebarTrigger({
 
 function RightSidebarContent() {
   const activityEntries = useActivityLog((state) => state.entries);
-  const latestEntry = activityEntries[0];
 
   return (
     <div className="flex h-full flex-col relative">
@@ -120,14 +119,6 @@ function formatActivityTime(timestamp: number): string {
     minute: "2-digit",
     second: "2-digit",
   }).format(timestamp);
-}
-
-function formatActivityMeta(entry: {
-  source: string;
-  kind: string;
-  timestamp: number;
-}): string {
-  return `${entry.source} • ${entry.kind} • ${formatActivityTime(entry.timestamp)}`;
 }
 
 export function RightSidebar() {
