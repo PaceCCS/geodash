@@ -51,7 +51,7 @@ test("launches the Electron app and enters watch mode", async () => {
     ).toBeVisible();
     await expect(page.getByText("Auto-saving")).toBeVisible();
     await expect(
-      page.getByText("Network changes will appear here while watch mode is active."),
+      page.getByText("No recent activity."),
     ).toBeVisible();
   } finally {
     await electronApp.close();
@@ -76,25 +76,9 @@ test("repositioning a branch logs the move event", async () => {
     const page = await electronApp.firstWindow();
 
     await openWatchMode(page);
-
-    const branchNodeContent = page.getByTestId("branch-node-branch-4");
-    await expect(branchNodeContent).toBeVisible();
-
-    const branchNode = page.locator('.react-flow__node[data-id="branch-4"]');
-    await expect(branchNode).toBeVisible();
-
     const initialToml = await readFile(join(watchDirectory, "branch-4.toml"), "utf8");
-    const box = await branchNode.boundingBox();
-    if (!box) {
-      throw new Error("Unable to determine branch-4 position in the canvas");
-    }
 
-    const startX = box.x + box.width / 2;
-    const startY = box.y + box.height / 2;
-    await page.mouse.move(startX, startY);
-    await page.mouse.down();
-    await page.mouse.move(startX + 120, startY + 80, { steps: 16 });
-    await page.mouse.up();
+    await dragBranch(page, "branch-4");
 
     await expect(
       page.getByText(/Branch Branch 4 \(branch-4\) moved:/).first(),
@@ -104,6 +88,44 @@ test("repositioning a branch logs the move event", async () => {
       async () => readFile(join(watchDirectory, "branch-4.toml"), "utf8"),
     )
       .not.toBe(initialToml);
+  } finally {
+    await electronApp.close();
+    await rm(watchDirectory, { recursive: true, force: true });
+  }
+});
+
+test("leaving watch mode via navigation clears the activity log", async () => {
+  const watchDirectory = await createWatchFixture();
+  const electronApp = await electron.launch({
+    executablePath: electronBinary,
+    args: [mainScriptPath],
+    env: {
+      ...process.env,
+      ELECTRON_RENDERER_URL: rendererEntryPath,
+      GEODASH_DISABLE_DEVTOOLS: "1",
+      GEODASH_TEST_PICK_DIRECTORY: watchDirectory,
+    },
+  });
+
+  try {
+    const page = await electronApp.firstWindow();
+
+    await openWatchMode(page);
+    await dragBranch(page, "branch-4");
+
+    await expect(
+      page.getByText(/Branch Branch 4 \(branch-4\) moved:/).first(),
+    ).toBeVisible();
+
+    await page.getByRole("link", { name: "Home", exact: true }).click();
+
+    await expect(
+      page.getByRole("heading", { name: "geodash" }).first(),
+    ).toBeVisible();
+    await expect(page.getByText("No recent activity.")).toBeVisible();
+    await expect(
+      page.getByText(/Branch Branch 4 \(branch-4\) moved:/),
+    ).toHaveCount(0);
   } finally {
     await electronApp.close();
     await rm(watchDirectory, { recursive: true, force: true });
@@ -122,6 +144,26 @@ async function openWatchMode(page: Page) {
     page.getByRole("button", { name: "Stop Watching" }),
   ).toBeVisible();
   await expect(page.getByText("Auto-saving")).toBeVisible();
+}
+
+async function dragBranch(page: Page, branchId: string) {
+  const branchNodeContent = page.getByTestId(`branch-node-${branchId}`);
+  await expect(branchNodeContent).toBeVisible();
+
+  const branchNode = page.locator(`.react-flow__node[data-id="${branchId}"]`);
+  await expect(branchNode).toBeVisible();
+
+  const box = await branchNode.boundingBox();
+  if (!box) {
+    throw new Error(`Unable to determine ${branchId} position in the canvas`);
+  }
+
+  const startX = box.x + box.width / 2;
+  const startY = box.y + box.height / 2;
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(startX + 120, startY + 80, { steps: 16 });
+  await page.mouse.up();
 }
 
 async function createWatchFixture(): Promise<string> {
