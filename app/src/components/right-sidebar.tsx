@@ -4,6 +4,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useRightSidebar } from "@/contexts/right-sidebar-context";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { DetailsPanel } from "@/components/flow/details-panel";
+import { SearchDetailsPanel } from "@/components/flow/search-details-panel";
 import {
   Sheet,
   SheetContent,
@@ -61,10 +63,9 @@ function RightSidebarContent() {
             <Info className="size-4 shrink-0" />
             Properties
           </div>
-          <p className="text-xs text-muted-foreground">
-            Select an item to view its properties.
-          </p>
         </div>
+        <SearchDetailsPanel />
+        <DetailsPanel />
       </div>
     </div>
   );

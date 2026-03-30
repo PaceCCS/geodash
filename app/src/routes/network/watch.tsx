@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useCallback, useMemo, useState } from "react";
 import { useLiveQuery } from "@tanstack/react-db";
-import { useMemo, useState } from "react";
 import { FolderOpen, EyeOff, Save } from "lucide-react";
 
 import { FlowNetwork } from "@/components/flow/flow-network";
@@ -15,20 +15,52 @@ import { NetworkProvider } from "@/contexts/network-context";
 import { Button } from "@/components/ui/button";
 import { HeaderSlot } from "@/components/header-slot";
 import { useCommands } from "@/contexts/keybind-provider";
+import { useHydrated } from "@/hooks/use-hydrated";
+import {
+  FLOW_SELECTION_QUERY_PARAM,
+  getSelectedNodeIdFromQuery,
+  normalizeFlowSelectionQuery,
+} from "@/lib/flow-selection";
+
+type WatchSearch = {
+  selected?: string;
+};
 
 export const Route = createFileRoute("/network/watch")({
+  validateSearch: (search): WatchSearch => ({
+    [FLOW_SELECTION_QUERY_PARAM]: normalizeFlowSelectionQuery(
+      search[FLOW_SELECTION_QUERY_PARAM],
+    ),
+  }),
   component: WatchPage,
 });
 
 function WatchPage() {
   const { watchMode, enableWatchMode, disableWatchMode } = useFileWatcher();
+  const hydrated = useHydrated();
   const [isBusy, setIsBusy] = useState(false);
+  const search = Route.useSearch();
+  const navigate = Route.useNavigate();
+  const selectedQuery = search.selected;
 
-  const { data: nodesRaw = [] } = useLiveQuery(nodesCollection);
-  const { data: edges = [] } = useLiveQuery(edgesCollection);
+  const handleSelectedQueryChange = useCallback(
+    (nextQuery: string | null) => {
+      const nextSelected = normalizeFlowSelectionQuery(nextQuery);
 
-  // ReactFlow requires parents before children.
-  const nodes = useMemo(() => sortNodesWithParentsFirst(nodesRaw), [nodesRaw]);
+      if (search.selected === nextSelected) {
+        return;
+      }
+
+      navigate({
+        replace: true,
+        search: (prev) => ({
+          ...prev,
+          selected: nextSelected,
+        }),
+      });
+    },
+    [navigate, search.selected],
+  );
 
   const handleSelectDirectory = async () => {
     const path = await pickNetworkDirectory();
@@ -132,11 +164,17 @@ function WatchPage() {
       {watchMode.enabled && watchMode.directoryPath ? (
         <div className="flex-1 min-h-0">
           <NetworkProvider networkId={watchMode.directoryPath}>
-            <FlowNetwork
-              nodes={nodes}
-              edges={edges}
-              syncDirectory={watchMode.directoryPath}
-            />
+            {hydrated ? (
+              <HydratedWatchNetwork
+                selectedQuery={selectedQuery}
+                syncDirectory={watchMode.directoryPath}
+                onSelectedQueryChange={handleSelectedQueryChange}
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                Loading network...
+              </div>
+            )}
           </NetworkProvider>
         </div>
       ) : (
@@ -159,5 +197,46 @@ function WatchPage() {
         </div>
       )}
     </div>
+  );
+}
+
+function HydratedWatchNetwork({
+  selectedQuery,
+  syncDirectory,
+  onSelectedQueryChange,
+}: {
+  selectedQuery?: string;
+  syncDirectory: string;
+  onSelectedQueryChange: (query: string | null) => void;
+}) {
+  const { data: nodesRaw = [] } = useLiveQuery(nodesCollection);
+  const { data: edgesRaw = [] } = useLiveQuery(edgesCollection);
+
+  const nodes = useMemo(() => {
+    const selectedNodeId = getSelectedNodeIdFromQuery(selectedQuery);
+
+    return sortNodesWithParentsFirst(nodesRaw).map((node) => ({
+      ...node,
+      selected: node.id === selectedNodeId,
+    }));
+  }, [nodesRaw, selectedQuery]);
+
+  const edges = useMemo(
+    () =>
+      edgesRaw.map((edge) => ({
+        ...edge,
+        selected: false,
+      })),
+    [edgesRaw],
+  );
+
+  return (
+    <FlowNetwork
+      nodes={nodes}
+      edges={edges}
+      syncDirectory={syncDirectory}
+      selectedQuery={selectedQuery}
+      onSelectedQueryChange={onSelectedQueryChange}
+    />
   );
 }

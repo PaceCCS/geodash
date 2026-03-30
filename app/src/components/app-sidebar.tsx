@@ -63,10 +63,17 @@ export function AppSidebar() {
                     isActive={pathname === item.to}
                     tooltip={item.title}
                   >
-                    <Link to={item.to}>
-                      <item.icon />
-                      <span>{item.title}</span>
-                    </Link>
+                    {item.to === "/network/watch" ? (
+                      <Link to={item.to} search={{}}>
+                        <item.icon />
+                        <span>{item.title}</span>
+                      </Link>
+                    ) : (
+                      <Link to={item.to}>
+                        <item.icon />
+                        <span>{item.title}</span>
+                      </Link>
+                    )}
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}

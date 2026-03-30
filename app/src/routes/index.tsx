@@ -15,6 +15,7 @@ function Home() {
       <section className="flex flex-col gap-4 p-4 max-w-2xl mx-auto w-full">
         <Link
           to="/network/watch"
+          search={{}}
           className="border border-border rounded-lg p-4 hover:border-primary transition-colors block"
         >
           <h2 className="text-xl font-bold">Network Editor</h2>
