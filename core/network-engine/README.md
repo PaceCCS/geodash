@@ -103,13 +103,13 @@ var result = try executor.execute(&q);
 
 ## Node types
 
-| Type | TOML `type` value | Description |
-|---|---|---|
-| Branch | `"branch"` | Network segment with blocks and outgoing connections |
-| Group | `"labeledGroup"` | Organizational container for branches |
-| GeographicAnchor | `"geographicAnchor"` | Spatial reference point |
-| GeographicWindow | `"geographicWindow"` | Spatial viewport |
-| Image | `"image"` | Visual attachment with a file path |
+| Type             | TOML `type` value    | Description                                          |
+| ---------------- | -------------------- | ---------------------------------------------------- |
+| Branch           | `"branch"`           | Network segment with blocks and outgoing connections |
+| Group            | `"labeledGroup"`     | Organizational container for branches                |
+| GeographicAnchor | `"geographicAnchor"` | Spatial reference point                              |
+| GeographicWindow | `"geographicWindow"` | Spatial viewport                                     |
+| Image            | `"image"`            | Visual attachment with a file path                   |
 
 ## Dynamic properties
 
@@ -130,6 +130,7 @@ just test-network-engine
 ```
 
 Tests include:
+
 - **TOML parser**: key-value pairs, tables, arrays of tables, dotted keys, escapes, comments
 - **Network loader**: branch/group/image nodes, edge construction, validation warnings
 - **Scope resolver**: block-level lookup, global fallback, per-property rule enforcement
@@ -137,4 +138,3 @@ Tests include:
 - **Fluid propagation**: composition blending at junctions, injection into branch blocks
 - **OLGA parser/writer**: keyword line parsing, comment stripping, backslash continuation, round-trip
 - **Integration tests**: full pipeline against dagger preset1 data (14 nodes, 9 branches)
-
