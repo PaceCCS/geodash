@@ -1,4 +1,4 @@
-import { useSearch } from "@tanstack/react-router";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useLiveQuery } from "@tanstack/react-db";
 import { useMemo } from "react";
 
@@ -9,6 +9,8 @@ import {
   buildTomlNodeObject,
 } from "@/lib/exporters/network-toml";
 import {
+  EDIT_SELECTION_SHORTCUT,
+  FLOW_EDITOR_QUERY_PARAM,
   normalizeFlowSelectionQuery,
   resolveFlowSelection,
 } from "@/lib/flow-selection";
@@ -24,6 +26,7 @@ export function DetailsPanel() {
   });
   const hydrated = useHydrated();
   const selectedQuery = normalizeFlowSelectionQuery(watchSearch?.selected);
+  const isEditorOpen = watchSearch?.edit === "1";
 
   if (!watchSearch) {
     return (
@@ -41,7 +44,12 @@ export function DetailsPanel() {
     );
   }
 
-  return <HydratedDetailsPanelContent selectedQuery={selectedQuery} />;
+  return (
+    <HydratedDetailsPanelContent
+      selectedQuery={selectedQuery}
+      isEditorOpen={isEditorOpen}
+    />
+  );
 }
 
 function buildBranchDetailsValue(
@@ -64,15 +72,28 @@ function buildBranchDetailsValue(
 
 function HydratedDetailsPanelContent({
   selectedQuery,
+  isEditorOpen,
 }: {
   selectedQuery?: string;
+  isEditorOpen: boolean;
 }) {
+  const navigate = useNavigate({ from: "/network/watch" });
   const { data: nodes = [] } = useLiveQuery(nodesCollection);
   const { data: edges = [] } = useLiveQuery(edgesCollection);
   const selection = useMemo(
     () => resolveFlowSelection(selectedQuery, nodes),
     [nodes, selectedQuery],
   );
+  const toggleEditor = () => {
+    navigate({
+      replace: true,
+      search: (prev) => ({
+        ...prev,
+        [FLOW_EDITOR_QUERY_PARAM]: isEditorOpen ? undefined : "1",
+      }),
+    });
+  };
+  const editLabel = isEditorOpen ? "Close Editor" : "Edit";
 
   if (nodes.length === 0) {
     return (
@@ -111,6 +132,9 @@ function HydratedDetailsPanelContent({
         <BranchDetailsPanel
           selection={selection}
           value={buildBranchDetailsValue(selection, outgoing)}
+          onEdit={toggleEditor}
+          editLabel={editLabel}
+          editShortcut={EDIT_SELECTION_SHORTCUT}
         />
       );
     }
@@ -119,6 +143,9 @@ function HydratedDetailsPanelContent({
         <GroupDetailsPanel
           selection={selection}
           value={buildTomlNodeObject(selection.node)}
+          onEdit={toggleEditor}
+          editLabel={editLabel}
+          editShortcut={EDIT_SELECTION_SHORTCUT}
         />
       );
     case "block":
@@ -126,6 +153,9 @@ function HydratedDetailsPanelContent({
         <BlockDetailsPanel
           selection={selection}
           value={selection.block ? buildTomlBlockObject(selection.block) : null}
+          onEdit={selection.block ? toggleEditor : undefined}
+          editLabel={selection.block ? editLabel : undefined}
+          editShortcut={selection.block ? EDIT_SELECTION_SHORTCUT : undefined}
         />
       );
     case "unsupported":

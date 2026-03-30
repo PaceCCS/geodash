@@ -31,13 +31,17 @@ pub const PropertyInheritanceRule = union(enum) {
     };
 };
 
+const default_inheritance_general: []const ScopeLevel = &.{ .block, .branch, .group, .global };
+
 pub const InheritanceConfig = struct {
-    general: []const ScopeLevel = &.{ .block, .branch, .group, .global },
+    general: []const ScopeLevel = default_inheritance_general,
     rules: std.StringArrayHashMapUnmanaged(PropertyInheritanceRule) = .{},
 };
 
 pub const Config = struct {
     properties: Value.Table = .{},
+    property_dimensions: Value.Table = .{},
+    unit_preferences: Value.Table = .{},
     inheritance: InheritanceConfig = .{},
     allocator: Allocator,
 
@@ -46,16 +50,12 @@ pub const Config = struct {
     }
 
     pub fn deinit(self: *Config) void {
-        // Free properties table
-        var prop_it = self.properties.iterator();
-        while (prop_it.next()) |entry| {
-            self.allocator.free(entry.key_ptr.*);
-            entry.value_ptr.deinit(self.allocator);
-        }
-        self.properties.deinit(self.allocator);
+        deinitValueTable(self.allocator, &self.properties);
+        deinitValueTable(self.allocator, &self.property_dimensions);
+        deinitValueTable(self.allocator, &self.unit_preferences);
 
         // Free general scope chain
-        if (self.inheritance.general.len > 0) {
+        if (self.inheritance.general.len > 0 and self.inheritance.general.ptr != default_inheritance_general.ptr) {
             self.allocator.free(self.inheritance.general);
         }
 
@@ -86,13 +86,19 @@ pub const Config = struct {
 
         // Load [properties]
         if (root.get("properties")) |props_val| {
-            var it = props_val.table.iterator();
-            while (it.next()) |entry| {
-                const key = try allocator.dupe(u8, entry.key_ptr.*);
-                errdefer allocator.free(key);
-                const val = try entry.value_ptr.clone(allocator);
-                try config.properties.put(allocator, key, val);
-            }
+            config.properties = try cloneValueTable(allocator, props_val.table);
+        }
+
+        // Load property -> dimension fallback metadata.
+        if (root.get("propertyDimensions")) |property_dimensions_val| {
+            config.property_dimensions = try cloneValueTable(allocator, property_dimensions_val.table);
+        } else if (root.get("dimensions")) |dimensions_val| {
+            config.property_dimensions = try cloneValueTable(allocator, dimensions_val.table);
+        }
+
+        // Load block-level and dimension-level unit preferences.
+        if (root.get("unitPreferences")) |unit_preferences_val| {
+            config.unit_preferences = try cloneValueTable(allocator, unit_preferences_val.table);
         }
 
         // Load [inheritance]
@@ -145,6 +151,30 @@ pub const Config = struct {
         return config;
     }
 };
+
+fn cloneValueTable(allocator: Allocator, source: Value.Table) !Value.Table {
+    var result: Value.Table = .{};
+    errdefer deinitValueTable(allocator, &result);
+
+    var it = source.iterator();
+    while (it.next()) |entry| {
+        const key = try allocator.dupe(u8, entry.key_ptr.*);
+        errdefer allocator.free(key);
+        const value = try entry.value_ptr.clone(allocator);
+        try result.put(allocator, key, value);
+    }
+
+    return result;
+}
+
+fn deinitValueTable(allocator: Allocator, table: *Value.Table) void {
+    var it = table.iterator();
+    while (it.next()) |entry| {
+        allocator.free(entry.key_ptr.*);
+        entry.value_ptr.deinit(allocator);
+    }
+    table.deinit(allocator);
+}
 
 // ─── Resolver ───────────────────────────────────────────────────────────
 
@@ -278,6 +308,49 @@ test "load config from TOML" {
     const pressure_rule = config.inheritance.rules.get("pressure").?;
     try std.testing.expectEqual(@as(usize, 1), pressure_rule.simple.len);
     try std.testing.expectEqual(ScopeLevel.block, pressure_rule.simple[0]);
+}
+
+test "load config unit metadata from TOML" {
+    const allocator = std.testing.allocator;
+
+    const source =
+        \\[propertyDimensions]
+        \\length = "length"
+        \\pressure = "pressure"
+        \\
+        \\[unitPreferences.dimensions]
+        \\length = "km"
+        \\
+        \\[unitPreferences.Source]
+        \\length = "m"
+    ;
+
+    var parsed = try toml.Parser.parse(allocator, source);
+    defer parsed.deinit(allocator);
+
+    var config = try Config.loadFromToml(allocator, parsed.table);
+    defer config.deinit();
+
+    try std.testing.expectEqualStrings(
+        "length",
+        config.property_dimensions.get("length").?.getString().?,
+    );
+    try std.testing.expectEqualStrings(
+        "pressure",
+        config.property_dimensions.get("pressure").?.getString().?,
+    );
+
+    const dimension_units = config.unit_preferences.get("dimensions").?.table;
+    try std.testing.expectEqualStrings(
+        "km",
+        dimension_units.get("length").?.getString().?,
+    );
+
+    const source_units = config.unit_preferences.get("Source").?.table;
+    try std.testing.expectEqualStrings(
+        "m",
+        source_units.get("length").?.getString().?,
+    );
 }
 
 test "scope resolver: block-level property" {

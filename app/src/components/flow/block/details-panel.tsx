@@ -1,30 +1,36 @@
 import type { FlowResolvedSelection } from "@/lib/flow-selection";
 import { PropertyList } from "@/components/flow/shared/property-list";
+import { SelectionHeader } from "@/components/flow/shared/selection-header";
 
 type BlockDetailsPanelProps = {
   selection: Extract<FlowResolvedSelection, { kind: "block" }>;
   value: Record<string, unknown> | null;
+  onEdit?: () => void;
+  editLabel?: string;
+  editShortcut?: string;
 };
 
 export function BlockDetailsPanel({
   selection,
   value,
+  onEdit,
+  editLabel,
+  editShortcut,
 }: BlockDetailsPanelProps) {
   return (
     <div className="flex flex-col">
-      <div className="px-4 py-3 border-b border-border sticky top-0 bg-background">
-        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-          Block
-        </p>
-        <p className="text-sm font-medium">
-          {selection.block?.label ||
-            selection.block?.type ||
-            `${selection.node.id} block ${selection.blockIndex}`}
-        </p>
-        <p className="mt-1 font-mono text-xs text-muted-foreground break-all">
-          {selection.query}
-        </p>
-      </div>
+      <SelectionHeader
+        kindLabel="Block"
+        title={
+          selection.block?.label ||
+          selection.block?.type ||
+          `${selection.node.id} block ${selection.blockIndex}`
+        }
+        query={selection.query}
+        onEdit={onEdit}
+        editLabel={editLabel}
+        editShortcut={editShortcut}
+      />
       {value ? (
         <PropertyList value={value} />
       ) : (

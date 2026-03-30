@@ -7,6 +7,8 @@ import type {
 import { isBranchNode, isLabeledGroupNode } from "@/lib/collections/flow-nodes";
 
 export const FLOW_SELECTION_QUERY_PARAM = "selected";
+export const FLOW_EDITOR_QUERY_PARAM = "edit";
+export const EDIT_SELECTION_SHORTCUT = "Mod+E";
 
 export type FlowResolvedSelection =
   | {
@@ -75,6 +77,16 @@ export function normalizeFlowSelectionQuery(
   }
 
   return trimmedValue;
+}
+
+export function normalizeFlowEditorQuery(
+  value: unknown,
+): "1" | undefined {
+  if (value === true || value === "true" || value === "1") {
+    return "1";
+  }
+
+  return undefined;
 }
 
 export function getSelectedNodeIdFromQuery(

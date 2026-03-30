@@ -14,6 +14,12 @@ export type NetworkValue =
   | NetworkValue[]
   | { [key: string]: NetworkValue };
 
+export type NetworkConfigMetadata = {
+  propertyDimensions: Record<string, string>;
+  dimensionUnits: Record<string, string>;
+  blockTypeUnits: Record<string, Record<string, string>>;
+};
+
 export type Block = {
   quantity: number;
   type: string;
@@ -103,6 +109,7 @@ export type NetworkEdge = {
 export type NetworkResponse = {
   id: string;
   label: string;
+  config?: NetworkConfigMetadata;
   nodes: NetworkNode[];
   edges: NetworkEdge[];
   warnings?: string[];

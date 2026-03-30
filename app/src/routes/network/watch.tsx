@@ -1,35 +1,51 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLiveQuery } from "@tanstack/react-db";
 import { FolderOpen, EyeOff, Save } from "lucide-react";
 
+import { SelectionEditorOverlay } from "@/components/flow/editor/selection-editor-overlay";
 import { FlowNetwork } from "@/components/flow/flow-network";
 import {
   nodesCollection,
   edgesCollection,
   sortNodesWithParentsFirst,
+  writeNodesToCollection,
 } from "@/lib/collections/flow";
 import { useFileWatcher } from "@/lib/hooks/use-file-watcher";
 import { pickNetworkDirectory } from "@/lib/desktop";
 import { NetworkProvider } from "@/contexts/network-context";
 import { Button } from "@/components/ui/button";
+import { appendActivityLogEntries } from "@/contexts/activity-log-context";
 import { HeaderSlot } from "@/components/header-slot";
 import { useCommands } from "@/contexts/keybind-provider";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { exportNetworkToToml } from "@/lib/exporters/network-toml";
 import {
+  EDIT_SELECTION_SHORTCUT,
+  FLOW_EDITOR_QUERY_PARAM,
   FLOW_SELECTION_QUERY_PARAM,
   getSelectedNodeIdFromQuery,
+  normalizeFlowEditorQuery,
   normalizeFlowSelectionQuery,
+  resolveFlowSelection,
 } from "@/lib/flow-selection";
+import type { FlowNode } from "@/lib/collections/flow-nodes";
+import { createNetworkSnapshotFromFlow, diffNetworkSnapshots } from "@/lib/network-activity";
+import type { NetworkConfigMetadata } from "@/lib/api-client";
+import { isEditableFlowSelection } from "@/lib/selection-editor";
 
 type WatchSearch = {
   selected?: string;
+  edit?: "1";
 };
 
 export const Route = createFileRoute("/network/watch")({
   validateSearch: (search): WatchSearch => ({
     [FLOW_SELECTION_QUERY_PARAM]: normalizeFlowSelectionQuery(
       search[FLOW_SELECTION_QUERY_PARAM],
+    ),
+    [FLOW_EDITOR_QUERY_PARAM]: normalizeFlowEditorQuery(
+      search[FLOW_EDITOR_QUERY_PARAM],
     ),
   }),
   component: WatchPage,
@@ -39,6 +55,7 @@ function WatchPage() {
   const {
     watchMode,
     networkLabel,
+    networkConfig,
     isApplyingExternalChange,
     enableWatchMode,
     disableWatchMode,
@@ -48,6 +65,7 @@ function WatchPage() {
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
   const selectedQuery = search.selected;
+  const isEditorOpen = search.edit === "1";
   const displayDirectoryPath = watchMode.directoryPath?.replace(/^\/+/, "") ?? null;
 
   const handleSelectedQueryChange = useCallback(
@@ -63,10 +81,25 @@ function WatchPage() {
         search: (prev) => ({
           ...prev,
           selected: nextSelected,
+          [FLOW_EDITOR_QUERY_PARAM]: nextSelected ? prev[FLOW_EDITOR_QUERY_PARAM] : undefined,
         }),
       });
     },
     [navigate, search.selected],
+  );
+
+  const handleEditorOpenChange = useCallback(
+    (open: boolean) => {
+      navigate({
+        replace: true,
+        search: (prev) => ({
+          ...prev,
+          [FLOW_EDITOR_QUERY_PARAM]:
+            open && prev[FLOW_SELECTION_QUERY_PARAM] ? "1" : undefined,
+        }),
+      });
+    },
+    [navigate],
   );
 
   const handleSelectDirectory = async () => {
@@ -91,6 +124,7 @@ function WatchPage() {
         search: (prev) => ({
           ...prev,
           selected: undefined,
+          [FLOW_EDITOR_QUERY_PARAM]: undefined,
         }),
       });
     } catch (err) {
@@ -190,9 +224,12 @@ function WatchPage() {
           <NetworkProvider networkId={watchMode.directoryPath}>
             {hydrated ? (
               <HydratedWatchNetwork
+                configMetadata={networkConfig}
+                isEditorOpen={isEditorOpen}
                 selectedQuery={selectedQuery}
                 syncDirectory={watchMode.directoryPath}
                 suspendPersistence={isApplyingExternalChange}
+                onEditorOpenChange={handleEditorOpenChange}
                 onSelectedQueryChange={handleSelectedQueryChange}
               />
             ) : (
@@ -226,18 +263,29 @@ function WatchPage() {
 }
 
 function HydratedWatchNetwork({
+  configMetadata,
+  isEditorOpen,
   selectedQuery,
   syncDirectory,
   suspendPersistence,
+  onEditorOpenChange,
   onSelectedQueryChange,
 }: {
+  configMetadata: NetworkConfigMetadata | null;
+  isEditorOpen: boolean;
   selectedQuery?: string;
   syncDirectory: string;
   suspendPersistence: boolean;
+  onEditorOpenChange: (open: boolean) => void;
   onSelectedQueryChange: (query: string | null) => void;
 }) {
   const { data: nodesRaw = [] } = useLiveQuery(nodesCollection);
   const { data: edgesRaw = [] } = useLiveQuery(edgesCollection);
+  const selection = useMemo(
+    () => resolveFlowSelection(selectedQuery, nodesRaw),
+    [nodesRaw, selectedQuery],
+  );
+  const editableSelection = isEditableFlowSelection(selection) ? selection : undefined;
 
   const nodes = useMemo(() => {
     const selectedNodeId = getSelectedNodeIdFromQuery(selectedQuery);
@@ -257,14 +305,67 @@ function HydratedWatchNetwork({
     [edgesRaw],
   );
 
+  useEffect(() => {
+    if (isEditorOpen && !editableSelection) {
+      onEditorOpenChange(false);
+    }
+  }, [editableSelection, isEditorOpen, onEditorOpenChange]);
+
+  useCommands(
+    editableSelection
+      ? [
+          {
+            id: "edit-selection",
+            label: isEditorOpen ? "Close Selection Editor" : "Edit Selection",
+            run: (dialog) => {
+              dialog.close();
+              onEditorOpenChange(!isEditorOpen);
+            },
+            group: "Selection",
+            shortcut: EDIT_SELECTION_SHORTCUT,
+          },
+        ]
+      : [],
+  );
+
+  const handleSaveSelection = useCallback(
+    async (nextNode: FlowNode) => {
+      const previousNodes = sortNodesWithParentsFirst(nodesRaw);
+      const nextNodes = previousNodes.map((node) =>
+        node.id === nextNode.id ? nextNode : node,
+      );
+      const activityEntries = diffNetworkSnapshots(
+        createNetworkSnapshotFromFlow(previousNodes, edgesRaw),
+        createNetworkSnapshotFromFlow(nextNodes, edgesRaw),
+        {
+          source: "details",
+        },
+      );
+
+      writeNodesToCollection(nextNodes);
+      await exportNetworkToToml(nextNodes, edgesRaw, syncDirectory);
+      appendActivityLogEntries(activityEntries);
+    },
+    [edgesRaw, nodesRaw, syncDirectory],
+  );
+
   return (
-    <FlowNetwork
-      nodes={nodes}
-      edges={edges}
-      syncDirectory={syncDirectory}
-      suspendPersistence={suspendPersistence}
-      selectedQuery={selectedQuery}
-      onSelectedQueryChange={onSelectedQueryChange}
-    />
+    <div className="relative h-full w-full">
+      <FlowNetwork
+        nodes={nodes}
+        edges={edges}
+        syncDirectory={syncDirectory}
+        suspendPersistence={suspendPersistence}
+        selectedQuery={selectedQuery}
+        onSelectedQueryChange={onSelectedQueryChange}
+      />
+      <SelectionEditorOverlay
+        open={isEditorOpen}
+        selection={editableSelection}
+        configMetadata={configMetadata}
+        onClose={() => onEditorOpenChange(false)}
+        onSave={handleSaveSelection}
+      />
+    </div>
   );
 }

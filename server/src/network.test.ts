@@ -38,9 +38,15 @@ type Node = {
 };
 type EdgeData = { weight: number };
 type Edge = { id: string; source: string; target: string; data: EdgeData };
+type NetworkConfigMetadata = {
+  propertyDimensions: Record<string, string>;
+  dimensionUnits: Record<string, string>;
+  blockTypeUnits: Record<string, Record<string, string>>;
+};
 type NetworkResponse = {
   id: string;
   label: string;
+  config?: NetworkConfigMetadata;
   nodes: Node[];
   edges: Edge[];
   warnings?: string[];
@@ -208,6 +214,63 @@ describe("GET /api/network", () => {
     const compressor = branch1?.data.blocks?.find((block) => block.type === "Compressor");
     expect(compressor).toBeDefined();
     expect(compressor!.pressure).toBe("120 bar");
+  });
+
+  test("config unit metadata is exposed in the network response", async () => {
+    const networkDir = await mkdtemp(join(tmpdir(), "geodash-network-"));
+
+    try {
+      await writeFile(
+        join(networkDir, "config.toml"),
+        [
+          '[propertyDimensions]',
+          'length = "length"',
+          'pressure = "pressure"',
+          "",
+          '[unitPreferences.dimensions]',
+          'length = "km"',
+          "",
+          '[unitPreferences.Source]',
+          'length = "m"',
+        ].join("\n"),
+      );
+      await writeFile(
+        join(networkDir, "branch-1.toml"),
+        [
+          'type = "branch"',
+          "",
+          "[position]",
+          "x = 0",
+          "y = 0",
+          "",
+          "[[block]]",
+          'type = "Source"',
+        ].join("\n"),
+      );
+
+      const res = await app.handle(
+        new Request(`http://localhost/api/network?network=${encodeURIComponent(networkDir)}`),
+      );
+      expect(res.status).toBe(200);
+
+      const body = await res.json() as NetworkResponse;
+      expect(body.config).toEqual({
+        propertyDimensions: {
+          length: "length",
+          pressure: "pressure",
+        },
+        dimensionUnits: {
+          length: "km",
+        },
+        blockTypeUnits: {
+          Source: {
+            length: "m",
+          },
+        },
+      });
+    } finally {
+      await rm(networkDir, { recursive: true, force: true });
+    }
   });
 
   test("nested block tables are preserved without dropping the branch", async () => {
