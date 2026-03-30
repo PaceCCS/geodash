@@ -232,7 +232,7 @@ describe("GET /api/network", () => {
           'type = "Source"',
           "pressure = 10",
           "",
-          "[block.fluidComposition]",
+          "[block.composition]",
           "carbonDioxideFraction = 0.96",
           "hydrogenFraction = 0.0075",
           "nitrogenFraction = 0.0325",
@@ -252,12 +252,68 @@ describe("GET /api/network", () => {
       const source = branch1?.data.blocks?.[0];
 
       expect(branch1).toBeDefined();
-      expect(source?.fluidComposition).toEqual({
+      expect(source?.composition).toEqual({
         carbonDioxideFraction: 0.96,
         hydrogenFraction: 0.0075,
         nitrogenFraction: 0.0325,
       });
       expect(body.warnings ?? []).not.toContain("Failed to parse branch-1.toml");
+    } finally {
+      await rm(networkDir, { recursive: true, force: true });
+    }
+  });
+
+  test("propagated branch fluid data is included in branch node data", async () => {
+    const networkDir = await mkdtemp(join(tmpdir(), "geodash-network-"));
+
+    try {
+      await writeFile(
+        join(networkDir, "branch-1.toml"),
+        [
+          'type = "branch"',
+          'label = "Feed"',
+          "",
+          "[position]",
+          "x = 0",
+          "y = 0",
+          "",
+          "[[outgoing]]",
+          'target = "branch-2"',
+          "",
+          "[[block]]",
+          'type = "Source"',
+          "flow_rate = 10.0",
+          "composition = {CO2 = 1.0}",
+        ].join("\n"),
+      );
+      await writeFile(
+        join(networkDir, "branch-2.toml"),
+        [
+          'type = "branch"',
+          'label = "Downstream"',
+          "",
+          "[position]",
+          "x = 100",
+          "y = 0",
+          "",
+          "[[block]]",
+          'type = "Pipe"',
+        ].join("\n"),
+      );
+
+      const res = await app.handle(
+        new Request(`http://localhost/api/network?network=${encodeURIComponent(networkDir)}`),
+      );
+      expect(res.status).toBe(200);
+
+      const body = await res.json() as NetworkResponse;
+      const feed = body.nodes.find((node) => node.id === "branch-1");
+      const downstream = body.nodes.find((node) => node.id === "branch-2");
+
+      expect(feed?.data.flow_rate).toBe(10);
+      expect(feed?.data.composition).toEqual({ CO2: 1 });
+      expect(downstream?.data.flow_rate).toBe(10);
+      expect(downstream?.data.composition).toEqual({ CO2: 1 });
     } finally {
       await rm(networkDir, { recursive: true, force: true });
     }

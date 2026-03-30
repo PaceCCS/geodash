@@ -578,7 +578,7 @@ test "load branch node with nested block table" {
         \\type = "Source"
         \\pressure = 10
         \\
-        \\[block.fluidComposition]
+        \\[block.composition]
         \\carbonDioxideFraction = 0.96
         \\hydrogenFraction = 0.0075
         \\nitrogenFraction = 0.0325
@@ -597,7 +597,7 @@ test "load branch node with nested block table" {
     try std.testing.expectEqual(@as(usize, 1), network.nodes.items.len);
 
     const branch = &network.nodes.items[0].branch;
-    const fluid = branch.blocks.items[0].extra.get("fluidComposition").?.getTable().?;
+    const fluid = branch.blocks.items[0].extra.get("composition").?.getTable().?;
 
     try std.testing.expectApproxEqAbs(@as(f64, 0.96), fluid.get("carbonDioxideFraction").?.getFloat().?, 0.001);
     try std.testing.expectApproxEqAbs(@as(f64, 0.0075), fluid.get("hydrogenFraction").?.getFloat().?, 0.0001);

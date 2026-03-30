@@ -387,6 +387,18 @@ fn runLoadNetwork(input: []const u8) ![]u8 {
                     try bufAppend(&out_buf, wasm_alloc, '}');
                 }
                 try bufAppend(&out_buf, wasm_alloc, ']');
+
+                // Surface propagated branch-level fluid state without exposing
+                // arbitrary branch extras to the editor export path.
+                if (base.extra.get("flow_rate")) |flow_rate| {
+                    try bufAppendSlice(&out_buf, wasm_alloc, ",\"flow_rate\":");
+                    try writeValueJson(&flow_rate, &out_buf, wasm_alloc);
+                }
+
+                if (base.extra.get("composition")) |composition| {
+                    try bufAppendSlice(&out_buf, wasm_alloc, ",\"composition\":");
+                    try writeValueJson(&composition, &out_buf, wasm_alloc);
+                }
             },
             .image => |*img| {
                 if (img.path.len > 0) {

@@ -14,8 +14,9 @@ weight = 1
 type = "Source"
 label = "Emitter"
 pressure = 10
+flow_rate = 1
 
-[block.fluidComposition]
+[block.composition]
 carbonDioxideFraction = 0.96
 hydrogenFraction = 0.0075
 nitrogenFraction = 0.0325
