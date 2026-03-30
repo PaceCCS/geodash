@@ -148,6 +148,23 @@ describe("serializeNodeToToml", () => {
     expect(blocks[0].label).toBeUndefined();
   });
 
+  test("branch: authored extras are preserved while derived fluid values are omitted", () => {
+    const node = makeBranchNode("branch-1", {
+      data: {
+        ...makeBranchNode("branch-1").data,
+        roughness: "0.05 mm",
+        flow_rate: "10 kg/s",
+        composition: { CO2: 1 },
+      },
+    });
+    const toml = serializeNodeToToml(node as unknown as NetworkNode);
+    const parsed = TOML.parse(toml) as Record<string, unknown>;
+
+    expect(parsed.roughness).toBe("0.05 mm");
+    expect(parsed.flow_rate).toBeUndefined();
+    expect(parsed.composition).toBeUndefined();
+  });
+
   test("branch: outgoing edges serialize as [[outgoing]] array-of-tables", () => {
     const node = makeBranchNode();
     const outgoing = [

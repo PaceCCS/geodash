@@ -163,6 +163,61 @@ fn writeJsonString(s: []const u8, buf: *Buf, a: Allocator) !void {
     try bufAppend(buf, a, '"');
 }
 
+fn writeStringTableJson(table: Value.Table, buf: *Buf, a: Allocator) !void {
+    try bufAppend(buf, a, '{');
+    var first = true;
+    var it = table.iterator();
+    while (it.next()) |entry| {
+        const string_value = switch (entry.value_ptr.*) {
+            .string => |s| s,
+            else => continue,
+        };
+
+        if (!first) try bufAppend(buf, a, ',');
+        first = false;
+        try writeJsonString(entry.key_ptr.*, buf, a);
+        try bufAppendSlice(buf, a, ":");
+        try writeJsonString(string_value, buf, a);
+    }
+    try bufAppend(buf, a, '}');
+}
+
+fn writeUnitMetadataJson(config: *const scope_mod.Config, buf: *Buf, a: Allocator) !void {
+    try bufAppendSlice(buf, a, "{\"propertyDimensions\":");
+    try writeStringTableJson(config.property_dimensions, buf, a);
+
+    try bufAppendSlice(buf, a, ",\"dimensionUnits\":");
+    if (config.unit_preferences.get("dimensions")) |dimension_units| {
+        switch (dimension_units) {
+            .table => |table| try writeStringTableJson(table, buf, a),
+            else => try bufAppendSlice(buf, a, "{}"),
+        }
+    } else {
+        try bufAppendSlice(buf, a, "{}");
+    }
+
+    try bufAppendSlice(buf, a, ",\"blockTypeUnits\":{");
+    var first = true;
+    var it = config.unit_preferences.iterator();
+    while (it.next()) |entry| {
+        if (std.mem.eql(u8, entry.key_ptr.*, "dimensions")) {
+            continue;
+        }
+
+        const table = switch (entry.value_ptr.*) {
+            .table => |t| t,
+            else => continue,
+        };
+
+        if (!first) try bufAppend(buf, a, ',');
+        first = false;
+        try writeJsonString(entry.key_ptr.*, buf, a);
+        try bufAppendSlice(buf, a, ":");
+        try writeStringTableJson(table, buf, a);
+    }
+    try bufAppendSlice(buf, a, "}}");
+}
+
 // ── Input parsing ─────────────────────────────────────────────────────────────
 
 const ParsedInput = struct {
@@ -275,6 +330,11 @@ fn runQuery(input: []const u8) ![]u8 {
 // Output: {
 //   id: string,
 //   label: string,
+//   config?: {
+//     propertyDimensions: Record<string, string>,
+//     dimensionUnits: Record<string, string>,
+//     blockTypeUnits: Record<string, Record<string, string>>
+//   },
 //   nodes: [{
 //     id, type, position: {x, y}, parentId?, width?, height?,
 //     data: { id, label?, blocks?: [{type, kind, label, quantity, ...}], path? }
@@ -304,6 +364,12 @@ fn runLoadNetwork(input: []const u8) ![]u8 {
     var network = try net_mod.loadNetworkFromFiles(a, &pi.files, &validation);
     try fluid_mod.propagateAndInject(a, &network, &validation);
 
+    var config_storage: ?scope_mod.Config = null;
+    if (pi.config) |cs| {
+        const config_value = try toml_mod.Parser.parse(a, cs);
+        config_storage = try scope_mod.Config.loadFromToml(a, config_value.table);
+    }
+
     var out_buf: Buf = .{};
     errdefer out_buf.deinit(wasm_alloc);
 
@@ -311,6 +377,10 @@ fn runLoadNetwork(input: []const u8) ![]u8 {
     try writeJsonString(network.id, &out_buf, wasm_alloc);
     try bufAppendSlice(&out_buf, wasm_alloc, ",\"label\":");
     try writeJsonString(network.label, &out_buf, wasm_alloc);
+    if (config_storage) |*config| {
+        try bufAppendSlice(&out_buf, wasm_alloc, ",\"config\":");
+        try writeUnitMetadataJson(config, &out_buf, wasm_alloc);
+    }
     try bufAppendSlice(&out_buf, wasm_alloc, ",\"nodes\":[");
     for (network.nodes.items, 0..) |*node, i| {
         if (i > 0) try bufAppend(&out_buf, wasm_alloc, ',');
@@ -388,8 +458,23 @@ fn runLoadNetwork(input: []const u8) ![]u8 {
                 }
                 try bufAppend(&out_buf, wasm_alloc, ']');
 
-                // Surface propagated branch-level fluid state without exposing
-                // arbitrary branch extras to the editor export path.
+                // Emit authored branch extra properties.
+                var branch_extra = base.extra;
+                var bit = branch_extra.iterator();
+                while (bit.next()) |entry| {
+                    if (std.mem.eql(u8, entry.key_ptr.*, "flow_rate") or std.mem.eql(u8, entry.key_ptr.*, "composition")) {
+                        continue;
+                    }
+
+                    try bufAppend(&out_buf, wasm_alloc, ',');
+                    try bufAppend(&out_buf, wasm_alloc, '"');
+                    try bufAppendSlice(&out_buf, wasm_alloc, entry.key_ptr.*);
+                    try bufAppendSlice(&out_buf, wasm_alloc, "\":");
+                    try writeValueJson(entry.value_ptr, &out_buf, wasm_alloc);
+                }
+
+                // Surface propagated branch-level fluid state separately so the
+                // editor can keep it read-only and avoid writing it back to TOML.
                 if (base.extra.get("flow_rate")) |flow_rate| {
                     try bufAppendSlice(&out_buf, wasm_alloc, ",\"flow_rate\":");
                     try writeValueJson(&flow_rate, &out_buf, wasm_alloc);

@@ -44,6 +44,21 @@ export function buildTomlNodeObject(
     if (node.data.blocks && node.data.blocks.length > 0) {
       obj.block = node.data.blocks.map(buildTomlBlockObject);
     }
+
+    Object.keys(node.data).forEach((key) => {
+      if (
+        ![
+          "id",
+          "label",
+          "blocks",
+          "flow_rate",
+          "composition",
+        ].includes(key) &&
+        node.data[key] != null
+      ) {
+        obj[key] = node.data[key];
+      }
+    });
   }
 
   if (

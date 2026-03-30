@@ -18,6 +18,7 @@ import {
   createNetworkSnapshotFromResponse,
   diffNetworkSnapshots,
 } from "@/lib/network-activity";
+import type { NetworkConfigMetadata } from "@/lib/api-client";
 
 export type WatchModeState = {
   enabled: boolean;
@@ -39,6 +40,7 @@ export function useFileWatcher() {
     isWatching: false,
   });
   const [networkLabel, setNetworkLabel] = useState<string | null>(null);
+  const [networkConfig, setNetworkConfig] = useState<NetworkConfigMetadata | null>(null);
   const [isApplyingExternalChange, setIsApplyingExternalChange] = useState(false);
   const reloadTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const reloadSequenceRef = useRef(0);
@@ -78,6 +80,7 @@ export function useFileWatcher() {
         await resetFlowToNetwork(network);
         const networkLabel = getWatchNetworkLabel(network.label);
         setNetworkLabel(networkLabel);
+        setNetworkConfig(network.config ?? null);
         console.log("[watch] Network reloaded from disk");
 
         if (source === "external") {
@@ -167,6 +170,7 @@ export function useFileWatcher() {
           isWatching: false,
         });
         setNetworkLabel(null);
+        setNetworkConfig(null);
       }
     },
     [],
@@ -197,6 +201,7 @@ export function useFileWatcher() {
   return {
     watchMode,
     networkLabel,
+    networkConfig,
     isApplyingExternalChange,
     enableWatchMode,
     disableWatchMode,

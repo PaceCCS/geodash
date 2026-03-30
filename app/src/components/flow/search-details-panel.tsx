@@ -6,7 +6,10 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useHydrated } from "@/hooks/use-hydrated";
-import { normalizeFlowSelectionQuery } from "@/lib/flow-selection";
+import {
+  FLOW_EDITOR_QUERY_PARAM,
+  normalizeFlowSelectionQuery,
+} from "@/lib/flow-selection";
 import { nodesCollection } from "@/lib/collections/flow";
 
 export function SearchDetailsPanel() {
@@ -118,6 +121,7 @@ function HydratedSearchDetailsPanelContent({
               search: (prev) => ({
                 ...prev,
                 selected: undefined,
+                [FLOW_EDITOR_QUERY_PARAM]: undefined,
               }),
             });
           }}
