@@ -130,26 +130,26 @@ code {
   /* Base (primary background)
      Application frames, sidebars, tabs, and extensions to the focal context. */
   --rose-pine-main-base: oklch(0.213 0.025 291.131);
-  --rose-pine-moon-base: oklch(0.260 0.039 287.730);
-  --rose-pine-dawn-base: oklch(0.970 0.011 71.900);
+  --rose-pine-moon-base: oklch(0.26 0.039 287.73);
+  --rose-pine-dawn-base: oklch(0.97 0.011 71.9);
 
   /* Surface (secondary background atop base)
      Cards, inputs, and status lines. */
   --rose-pine-main-surface: oklch(0.241 0.032 289.136);
   --rose-pine-moon-surface: oklch(0.288 0.043 289.089);
-  --rose-pine-dawn-surface: oklch(0.987 0.011 76.600);
+  --rose-pine-dawn-surface: oklch(0.987 0.011 76.6);
 
   /* Overlay (tertiary background atop surface)
      Popovers, notifications, and dialogs. */
   --rose-pine-main-overlay: oklch(0.271 0.042 289.233);
-  --rose-pine-moon-overlay: oklch(0.346 0.050 289.834);
+  --rose-pine-moon-overlay: oklch(0.346 0.05 289.834);
   --rose-pine-dawn-overlay: oklch(0.939 0.015 64.338);
 
   /* Muted (low-contrast foreground)
      Disabled elements and unfocused text. Syntax: comments. */
   --rose-pine-main-muted: oklch(0.538 0.044 291.412);
   --rose-pine-moon-muted: oklch(0.538 0.044 291.412);
-  --rose-pine-dawn-muted: oklch(0.673 0.027 298.370);
+  --rose-pine-dawn-muted: oklch(0.673 0.027 298.37);
 
   /* Subtle (medium-contrast foreground)
      Comments, punctuation, and tab names. Syntax: operators, punctuation. */
@@ -159,9 +159,9 @@ code {
 
   /* Text (high-contrast foreground)
      Normal text, variables, and active content. */
-  --rose-pine-main-text: oklch(0.909 0.030 289.969);
-  --rose-pine-moon-text: oklch(0.909 0.030 289.969);
-  --rose-pine-dawn-text: oklch(0.460 0.063 289.556);
+  --rose-pine-main-text: oklch(0.909 0.03 289.969);
+  --rose-pine-moon-text: oklch(0.909 0.03 289.969);
+  --rose-pine-dawn-text: oklch(0.46 0.063 289.556);
 
   /* Love — diagnostic errors, deleted git files, terminal red.
      Syntax: builtins. */
@@ -171,8 +171,8 @@ code {
 
   /* Gold — diagnostic warnings, terminal yellow.
      Syntax: strings. */
-  --rose-pine-main-gold: oklch(0.843 0.110 74.602);
-  --rose-pine-moon-gold: oklch(0.843 0.110 74.602);
+  --rose-pine-main-gold: oklch(0.843 0.11 74.602);
+  --rose-pine-moon-gold: oklch(0.843 0.11 74.602);
   --rose-pine-dawn-gold: oklch(0.755 0.146 69.743);
 
   /* Rose — matching search background (paired with base foreground),
@@ -204,8 +204,8 @@ code {
   /* Highlight Low (low-contrast highlight)
      Cursorline background. */
   --rose-pine-main-highlight-low: oklch(0.251 0.026 287.616);
-  --rose-pine-moon-highlight-low: oklch(0.289 0.040 287.801);
-  --rose-pine-dawn-highlight-low: oklch(0.950 0.010 58.214);
+  --rose-pine-moon-highlight-low: oklch(0.289 0.04 287.801);
+  --rose-pine-dawn-highlight-low: oklch(0.95 0.01 58.214);
 
   /* Highlight Med (medium-contrast highlight)
      Selection background (paired with text foreground). */
@@ -215,7 +215,7 @@ code {
 
   /* Highlight High (high-contrast highlight)
      Borders, visual dividers. Cursor background (paired with text foreground). */
-  --rose-pine-main-highlight-high: oklch(0.440 0.039 290.417);
+  --rose-pine-main-highlight-high: oklch(0.44 0.039 290.417);
   --rose-pine-moon-highlight-high: oklch(0.454 0.045 291.018);
   --rose-pine-dawn-highlight-high: oklch(0.843 0.006 333.997);
 
@@ -282,7 +282,11 @@ code {
   --muted-foreground: var(--rose-pine-muted);
   --accent: var(--rose-pine-highlight-low);
   --accent-foreground: var(--rose-pine-text);
-  --destructive: color-mix(in oklch, var(--rose-pine-love) 70%, var(--rose-pine-text));
+  --destructive: color-mix(
+    in oklch,
+    var(--rose-pine-love) 70%,
+    var(--rose-pine-text)
+  );
   --destructive-foreground: var(--rose-pine-surface);
   --border: var(--rose-pine-highlight-high);
   --input: var(--rose-pine-highlight-med);
@@ -346,7 +350,11 @@ code {
   --xy-edge-stroke-selected: var(--primary);
   --xy-connectionline-stroke: var(--primary);
   --xy-minimap-background-color: var(--card);
-  --xy-minimap-mask-background-color: color-mix(in oklch, var(--background) 60%, transparent);
+  --xy-minimap-mask-background-color: color-mix(
+    in oklch,
+    var(--background) 60%,
+    transparent
+  );
   --xy-minimap-node-background-color: var(--muted);
   --xy-controls-button-background-color: var(--card);
   --xy-controls-button-background-color-hover: var(--accent);
