@@ -15,7 +15,6 @@ import {
 } from "./fields";
 import { FluidCompositionInput } from "./fields/fluid-composition-input";
 import { ExclusiveEnabledField } from "./fields/exclusive-enabled-field";
-import { UValueInput } from "@/components/u-values/u-value-input";
 
 export type FieldRendererProps = {
   /** Property metadata (can be regular or aggregated) */
@@ -32,12 +31,6 @@ export type FieldRendererProps = {
   inheritedValue?: ResolvedValue;
   /** Callback to clear value and inherit from outer scope */
   onClear?: () => void;
-  /**
-   * Inner pipe diameter expression (e.g. "150 mm") passed to UValueInput
-   * so it can warn when the selected catalogue entry has a different Di.
-   * Only used when the field has `dimension === "uValue"`.
-   */
-  pipeDi?: string;
   /** Optional exclusivity key for boolean enabled fields */
   exclusiveKey?: string;
 };
@@ -46,12 +39,11 @@ export type FieldRendererProps = {
  * FieldRenderer maps PropertyMetadata to the appropriate field component.
  *
  * Resolution order:
- * 1. `dimension === "uValue"` -> UValueInput (catalogue search + direct entry)
- * 2. Has any other `dimension`  -> DimensionField
- * 3. `type === "enum"`          -> EnumField
- * 4. `type === "number"`        -> NumberField
- * 5. `type === "boolean"`       -> BooleanField
- * 6. Default                    -> StringField
+ * 1. Has any `dimension`        -> DimensionField
+ * 2. `type === "enum"`          -> EnumField
+ * 3. `type === "number"`        -> NumberField
+ * 4. `type === "boolean"`       -> BooleanField
+ * 5. Default                    -> StringField
  */
 export function FieldRenderer({
   metadata,
@@ -61,7 +53,6 @@ export function FieldRenderer({
   showAffectedBlocks = false,
   inheritedValue,
   onClear,
-  pipeDi,
   exclusiveKey,
 }: FieldRendererProps) {
   // Common props for all field components
@@ -75,11 +66,6 @@ export function FieldRenderer({
     onClear,
   };
 
-  // Priority 1: U-Value fields get the catalogue + direct-entry widget
-  if (metadata.dimension === "uValue") {
-    return <UValueInput {...fieldProps} pipeDi={pipeDi} />;
-  }
-
   if (metadata.type === "object" && metadata.property === "fluidComposition") {
     return <FluidCompositionInput {...fieldProps} />;
   }
@@ -92,7 +78,7 @@ export function FieldRenderer({
     return <ExclusiveEnabledField {...fieldProps} exclusiveKey={exclusiveKey} />;
   }
 
-  // Priority 2: Other dimension fields
+  // Priority 1: Dimension fields
   if (metadata.dimension) {
     return <DimensionField {...fieldProps} />;
   }

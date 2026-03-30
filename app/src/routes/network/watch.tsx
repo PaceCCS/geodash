@@ -38,6 +38,7 @@ export const Route = createFileRoute("/network/watch")({
 function WatchPage() {
   const {
     watchMode,
+    networkLabel,
     isApplyingExternalChange,
     enableWatchMode,
     disableWatchMode,
@@ -47,6 +48,7 @@ function WatchPage() {
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
   const selectedQuery = search.selected;
+  const displayDirectoryPath = watchMode.directoryPath?.replace(/^\/+/, "") ?? null;
 
   const handleSelectedQueryChange = useCallback(
     (nextQuery: string | null) => {
@@ -142,10 +144,20 @@ function WatchPage() {
     <div className="flex flex-col h-full w-full min-h-0">
       <HeaderSlot>
         {watchMode.enabled ? (
-          <div className="flex items-center justify-between w-full px-2">
-            <span className="text-sm truncate max-w-[60%] text-muted-foreground">
-              {watchMode.directoryPath}
-            </span>
+          <div className="flex items-center justify-between w-full px-2 gap-3">
+            <div className="flex min-w-0 items-center gap-2">
+              {networkLabel ? (
+                <>
+                  <span className="max-w-64 shrink-0 truncate text-sm font-medium">
+                    {networkLabel}
+                  </span>
+                  <span className="text-xs text-muted-foreground">/</span>
+                </>
+              ) : null}
+              <span className="text-sm truncate text-muted-foreground">
+                {displayDirectoryPath}
+              </span>
+            </div>
             <div className="flex items-center gap-1">
               <span className="text-xs text-muted-foreground mr-2">
                 <Save className="inline w-3 h-3 mr-1" />

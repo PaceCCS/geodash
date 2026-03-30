@@ -195,7 +195,8 @@ export function useBlockForm(
     // Update the branch node in the collection
     nodesCollection.update(branchId, (draft) => {
       if (draft.type !== "branch") return;
-      const blocks = [...(draft.data.blocks ?? [])];
+      const branchDraft = draft as FlowBranchNode;
+      const blocks = [...(branchDraft.data.blocks ?? [])];
       if (blocks[blockIndex]) {
         // Merge form values into the block
         const updatedBlock = {
@@ -205,7 +206,7 @@ export function useBlockForm(
           (updatedBlock as Record<string, unknown>)[key] = value;
         }
         blocks[blockIndex] = updatedBlock;
-        draft.data.blocks = blocks;
+        branchDraft.data.blocks = blocks;
       }
     });
 

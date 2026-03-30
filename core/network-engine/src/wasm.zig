@@ -171,6 +171,16 @@ const ParsedInput = struct {
     query: ?[]const u8,
 };
 
+fn injectConfigFile(
+    a: Allocator,
+    files: *std.StringArrayHashMapUnmanaged([]const u8),
+    config: ?[]const u8,
+) !void {
+    if (config) |content| {
+        try files.put(a, "config.toml", content);
+    }
+}
+
 /// Parse `{ files: Record<string,string>, config?: string, query?: string }`.
 /// All returned slices are borrowed from `parsed_json` — valid until that is freed.
 fn parseInput(a: Allocator, parsed_json: std.json.Value) !ParsedInput {
@@ -227,7 +237,8 @@ fn runQuery(input: []const u8) ![]u8 {
     defer arena.deinit();
     const a = arena.allocator();
 
-    const pi = try parseInput(a, json_parsed.value);
+    var pi = try parseInput(a, json_parsed.value);
+    try injectConfigFile(a, &pi.files, pi.config);
     const query_str = pi.query orelse return error.MissingQuery;
 
     var validation = net_mod.ValidationResult.init(a);
@@ -262,6 +273,8 @@ fn runQuery(input: []const u8) ![]u8 {
 //
 // Input:  { files: Record<string,string>, config?: string }
 // Output: {
+//   id: string,
+//   label: string,
 //   nodes: [{
 //     id, type, position: {x, y}, parentId?, width?, height?,
 //     data: { id, label?, blocks?: [{type, kind, label, quantity, ...}], path? }
@@ -284,7 +297,8 @@ fn runLoadNetwork(input: []const u8) ![]u8 {
     defer arena.deinit();
     const a = arena.allocator();
 
-    const pi = try parseInput(a, json_parsed.value);
+    var pi = try parseInput(a, json_parsed.value);
+    try injectConfigFile(a, &pi.files, pi.config);
 
     var validation = net_mod.ValidationResult.init(a);
     var network = try net_mod.loadNetworkFromFiles(a, &pi.files, &validation);
@@ -293,7 +307,11 @@ fn runLoadNetwork(input: []const u8) ![]u8 {
     var out_buf: Buf = .{};
     errdefer out_buf.deinit(wasm_alloc);
 
-    try bufAppendSlice(&out_buf, wasm_alloc, "{\"nodes\":[");
+    try bufAppendSlice(&out_buf, wasm_alloc, "{\"id\":");
+    try writeJsonString(network.id, &out_buf, wasm_alloc);
+    try bufAppendSlice(&out_buf, wasm_alloc, ",\"label\":");
+    try writeJsonString(network.label, &out_buf, wasm_alloc);
+    try bufAppendSlice(&out_buf, wasm_alloc, ",\"nodes\":[");
     for (network.nodes.items, 0..) |*node, i| {
         if (i > 0) try bufAppend(&out_buf, wasm_alloc, ',');
         const base = node.base();
@@ -553,7 +571,8 @@ fn runOlgaExport(input: []const u8) ![]u8 {
     defer arena.deinit();
     const a = arena.allocator();
 
-    const pi = try parseInput(a, json_parsed.value);
+    var pi = try parseInput(a, json_parsed.value);
+    try injectConfigFile(a, &pi.files, pi.config);
 
     var validation = net_mod.ValidationResult.init(a);
     var network = try net_mod.loadNetworkFromFiles(a, &pi.files, &validation);

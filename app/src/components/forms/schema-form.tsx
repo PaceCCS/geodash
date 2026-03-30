@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useForm } from "@tanstack/react-form";
-import { useStore } from "@tanstack/react-store";
 import { FieldRenderer } from "./field-renderer";
 import { toFieldApiLike } from "./fields/types";
 import {
@@ -108,15 +107,8 @@ export type SchemaFormProps = {
    * Receives the property name that was cleared.
    */
   onClearValue?: (propertyName: string) => void;
-  /**
-   * Per-property extra props passed to FieldRenderer.
-   * Currently used to supply `pipeDi` for uValue fields so the ID mismatch
-   * warning works when selecting from the U-value catalogue.
-   *
-   * @example
-   * fieldOverrides={{ uValue: { pipeDi: "0.762 m" }, enabled: { exclusiveKey: "agi-compressor" } }}
-   */
-  fieldOverrides?: Record<string, { pipeDi?: string; exclusiveKey?: string }>;
+  /** Per-property extra props passed to FieldRenderer. */
+  fieldOverrides?: Record<string, { exclusiveKey?: string }>;
 };
 
 /**
@@ -234,13 +226,6 @@ export function SchemaForm({
 
   const serializedValues = JSON.stringify(values);
   const prevSerializedValuesRef = useRef(serializedValues);
-
-  // Subscribe to the live diameter value so the U-value ID mismatch warning
-  // always reflects the current form state, not the stale initial block value.
-  const liveDiameter = useStore(form.baseStore, (state) => {
-    const d = (state.values as Record<string, unknown>).diameter;
-    return d != null ? String(d) : undefined;
-  });
 
   // Track previous values to avoid infinite loops in autoSave
   const prevValuesRef = useRef<string>("");
@@ -368,11 +353,6 @@ export function SchemaForm({
                         field.handleChange(undefined);
                         onClearValue(propertyName);
                       }
-                    : undefined
-                }
-                pipeDi={
-                  metadata.dimension === "uValue"
-                    ? (liveDiameter ?? fieldOverrides?.[propertyName]?.pipeDi)
                     : undefined
                 }
                 exclusiveKey={fieldOverrides?.[propertyName]?.exclusiveKey}

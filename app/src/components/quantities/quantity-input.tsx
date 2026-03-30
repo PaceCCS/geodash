@@ -80,7 +80,16 @@ export default function QuantityInput({
   );
 }
 
-function ResultCheck({ results, unit }: { results: string[]; unit: string }) {
+export function ResultCheck({
+  results,
+  unit,
+}: {
+  results: string[];
+  unit: string;
+  expression?: string | undefined;
+  dimension?: string | undefined;
+  property?: string | undefined;
+}) {
   if (results.length !== 1) {
     return <XIcon />;
   }

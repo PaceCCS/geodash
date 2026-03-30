@@ -49,6 +49,7 @@ test("launches the Electron app and enters watch mode", async () => {
     await expect(
       page.getByRole("button", { name: "Stop Watching" }),
     ).toBeVisible();
+    await expect(page.getByText("Preset 1")).toBeVisible();
     await expect(page.getByText("Auto-saving")).toBeVisible();
     await expect(
       page.getByText("No recent activity."),

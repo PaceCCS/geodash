@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useMemo, useSyncExternalStore } from "react";
 import {
   EXPANDED_BLOCK_QUERY_PARAM,
   buildBranchPanelSearch,
@@ -9,12 +8,32 @@ import {
   parseBlockPath,
 } from "@/lib/branch-panel-query";
 
-export function useBranchPanelQueryState() {
-  const pathname = usePathname();
-  const router = useRouter();
-  const searchParams = useSearchParams();
+function subscribe(onStoreChange: () => void) {
+  if (typeof window === "undefined") {
+    return () => {};
+  }
 
-  const currentSearch = searchParams.toString();
+  window.addEventListener("popstate", onStoreChange);
+  return () => {
+    window.removeEventListener("popstate", onStoreChange);
+  };
+}
+
+function getSnapshot() {
+  if (typeof window === "undefined") {
+    return { pathname: "", search: "" };
+  }
+
+  return {
+    pathname: window.location.pathname,
+    search: window.location.search,
+  };
+}
+
+export function useBranchPanelQueryState() {
+  const location = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  const pathname = location.pathname;
+  const currentSearch = location.search.replace(/^\?/, "");
 
   const state = useMemo(
     () => getBranchPanelState(new URLSearchParams(currentSearch)),
@@ -27,11 +46,12 @@ export function useBranchPanelQueryState() {
       const nextUrl = nextSearch ? `${pathname}?${nextSearch}` : pathname;
       const currentUrl = currentSearch ? `${pathname}?${currentSearch}` : pathname;
 
-      if (nextUrl !== currentUrl) {
-        router.replace(nextUrl, { scroll: false });
+      if (typeof window !== "undefined" && nextUrl !== currentUrl) {
+        window.history.replaceState(window.history.state, "", nextUrl);
+        window.dispatchEvent(new PopStateEvent("popstate"));
       }
     },
-    [currentSearch, pathname, router],
+    [currentSearch, pathname],
   );
 
   const setSelectedBranchId = useCallback(

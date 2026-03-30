@@ -36,7 +36,13 @@ type Node = {
 };
 type EdgeData = { weight: number };
 type Edge = { id: string; source: string; target: string; data: EdgeData };
-type NetworkResponse = { nodes: Node[]; edges: Edge[]; warnings?: string[] };
+type NetworkResponse = {
+  id: string;
+  label: string;
+  nodes: Node[];
+  edges: Edge[];
+  warnings?: string[];
+};
 
 function createApp() {
   const config = createGeodashServerConfig();
@@ -74,6 +80,8 @@ describe("GET /api/network", () => {
       new Request(`http://localhost/api/network?network=${encodeURIComponent(PRESET1)}`),
     );
     const body = await res.json() as NetworkResponse;
+    expect(body.id).toBe("preset1");
+    expect(body.label).toBe("Preset 1");
     expect(Array.isArray(body.nodes)).toBe(true);
     expect(Array.isArray(body.edges)).toBe(true);
   });
