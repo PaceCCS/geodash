@@ -12,7 +12,7 @@ export function BranchDetailsPanel({
 }: BranchDetailsPanelProps) {
   return (
     <div className="flex flex-col">
-      <div className="px-4 py-3 border-b border-border">
+      <div className="px-4 py-3 border-b border-border sticky top-0 bg-background">
         <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
           Branch
         </p>

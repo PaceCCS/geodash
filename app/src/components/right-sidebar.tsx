@@ -39,7 +39,7 @@ export function RightSidebarTrigger({
 
 function RightSidebarContent() {
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col relative">
       <div className="flex items-center border-b border-border">
         <span className="text-sm font-semibold px-4 py-2">Status</span>
       </div>
@@ -57,7 +57,7 @@ function RightSidebarContent() {
       <p className="text-xs text-muted-foreground">No recent activity.</p>
       <Separator />
 
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto relative">
         <div className="flex flex-col gap-1 border-b border-border">
           <div className="flex items-center gap-2 text-sm font-medium px-4 py-2">
             <Info className="size-4 shrink-0" />
