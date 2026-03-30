@@ -2,8 +2,8 @@ type = "branch"
 label = "Branch 4"
 
 [position]
-x = -160.67267489335273
-y = -128.9834539181701
+x = -136.01317040643693
+y = -112.0300445834155
 
 [[outgoing]]
 target = "branch-2"

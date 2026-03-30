@@ -7,8 +7,17 @@ import {
 import { getNetworkFromPath } from "@/lib/api-client";
 import {
   clearFlowCollections,
+  getNetworkSourceFromCollections,
   resetFlowToNetwork,
 } from "@/lib/collections/flow";
+import {
+  appendActivityLogEntries,
+  clearActivityLog,
+} from "@/contexts/activity-log-context";
+import {
+  createNetworkSnapshotFromResponse,
+  diffNetworkSnapshots,
+} from "@/lib/network-activity";
 
 export type WatchModeState = {
   enabled: boolean;
@@ -42,6 +51,10 @@ export function useFileWatcher() {
       const reloadId = ++reloadSequenceRef.current;
 
       try {
+        const previousNetwork =
+          source === "external"
+            ? (await getNetworkSourceFromCollections().catch(() => null))?.network
+            : null;
         const network = await getNetworkFromPath(directoryPath);
         if (reloadId !== reloadSequenceRef.current) {
           return;
@@ -49,6 +62,23 @@ export function useFileWatcher() {
 
         await resetFlowToNetwork(network);
         console.log("[watch] Network reloaded from disk");
+
+        if (source === "external") {
+          const diffEntries = previousNetwork
+            ? diffNetworkSnapshots(
+                createNetworkSnapshotFromResponse(previousNetwork),
+                createNetworkSnapshotFromResponse(network),
+                {
+                  source: "filesystem",
+                },
+              )
+            : [];
+
+          if (diffEntries.length > 0) {
+            appendActivityLogEntries(diffEntries);
+          }
+        }
+
         if (source === "external") {
           setIsApplyingExternalChange(false);
         }
@@ -102,6 +132,7 @@ export function useFileWatcher() {
   }, [watchMode.enabled, watchMode.directoryPath, reloadNetwork]);
 
   const enableWatchMode = useCallback(async (directoryPath: string) => {
+    clearActivityLog();
     await startWatchingDirectory(directoryPath);
     await reloadNetwork(directoryPath, { retriesRemaining: 0 });
     setWatchMode({ enabled: true, directoryPath, isWatching: true });
@@ -111,6 +142,7 @@ export function useFileWatcher() {
     clearTimeout(reloadTimerRef.current);
     reloadSequenceRef.current += 1;
     setIsApplyingExternalChange(false);
+    clearActivityLog();
     await stopWatchingDirectory();
     await clearFlowCollections();
     setWatchMode({ enabled: false, directoryPath: null, isWatching: false });

@@ -2,7 +2,11 @@ import * as TOML from "@iarna/toml";
 import type { FlowNode, FlowEdge } from "@/lib/collections/flow-nodes";
 import type { Block, NetworkNode } from "@/lib/api-client";
 import { toNetworkNode } from "@/lib/utils/filter-reactflow-props";
-import { writeNetworkFile } from "@/lib/desktop";
+import {
+  deleteNetworkFile,
+  readNetworkDirectory,
+  writeNetworkFile,
+} from "@/lib/desktop";
 
 export function buildTomlBlockObject(block: Block): Record<string, unknown> {
   const blockObj: Record<string, unknown> = {};
@@ -100,13 +104,61 @@ export function buildTomlFiles(
   });
 }
 
+const MANAGED_NODE_TYPES = new Set([
+  "branch",
+  "labeledGroup",
+  "geographicAnchor",
+  "geographicWindow",
+  "image",
+]);
+
+export function getTomlPathsToDelete(
+  existingFiles: Array<{ path: string; content: string }>,
+  nextFiles: Array<{ path: string; content: string }>,
+): string[] {
+  const nextContentByPath = new Map(
+    nextFiles.map(({ path, content }) => [path, content]),
+  );
+
+  return existingFiles
+    .filter(({ path, content }) => {
+      if (nextContentByPath.has(path)) {
+        return false;
+      }
+
+      try {
+        const parsed = TOML.parse(content) as Record<string, unknown>;
+        return (
+          typeof parsed?.type === "string"
+          && MANAGED_NODE_TYPES.has(parsed.type)
+        );
+      } catch {
+        return false;
+      }
+    })
+    .map(({ path }) => path);
+}
+
 export async function exportNetworkToToml(
   nodes: FlowNode[],
   edges: FlowEdge[],
   directoryPath: string,
 ): Promise<void> {
-  const files = buildTomlFiles(nodes, edges, directoryPath);
-  await Promise.all(
-    files.map(({ path, content }) => writeNetworkFile(path, content)),
+  const nextFiles = buildTomlFiles(nodes, edges, directoryPath);
+  const existingFiles = await readNetworkDirectory(directoryPath);
+  const existingContentByPath = new Map(
+    existingFiles.map(({ path, content }) => [path, content]),
   );
+
+  const writes = nextFiles
+    .filter(({ path, content }) => {
+      const existingContent = existingContentByPath.get(path);
+      return existingContent !== content;
+    })
+    .map(({ path, content }) => writeNetworkFile(path, content));
+
+  const deletes = getTomlPathsToDelete(existingFiles, nextFiles)
+    .map((path) => deleteNetworkFile(path));
+
+  await Promise.all([...writes, ...deletes]);
 }

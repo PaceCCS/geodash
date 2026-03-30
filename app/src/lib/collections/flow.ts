@@ -4,6 +4,7 @@ import {
 } from "@tanstack/react-db";
 import type { FlowNode, FlowEdge } from "./flow-nodes";
 import type { NetworkResponse } from "@/lib/api-client";
+import { toNetworkNode } from "@/lib/utils/filter-reactflow-props";
 
 // ── Z-index helpers ───────────────────────────────────────────────────────────
 
@@ -128,6 +129,51 @@ export async function clearFlowCollections(): Promise<void> {
     const tx = nodesCollection.delete(nodeKeys);
     await tx.isPersisted.promise;
   }
+}
+
+async function getNodesFromCollection(): Promise<FlowNode[]> {
+  await nodesCollection.preload();
+
+  return sortNodesWithParentsFirst(
+    (Array.from(nodesCollection.keys()) as string[])
+      .map((key) => nodesCollection.get(key) as FlowNode | undefined)
+      .filter((node): node is FlowNode => node !== undefined),
+  );
+}
+
+async function getEdgesFromCollection(): Promise<FlowEdge[]> {
+  await edgesCollection.preload();
+
+  return (Array.from(edgesCollection.keys()) as string[])
+    .map((key) => edgesCollection.get(key) as FlowEdge | undefined)
+    .filter((edge): edge is FlowEdge => edge !== undefined);
+}
+
+export async function getNetworkSourceFromCollections(): Promise<{
+  type: "data";
+  network: NetworkResponse;
+}> {
+  const [nodes, edges] = await Promise.all([
+    getNodesFromCollection(),
+    getEdgesFromCollection(),
+  ]);
+
+  return {
+    type: "data",
+    network: {
+      id: "current-network",
+      label: "Current Network",
+      nodes: nodes.map((node) => toNetworkNode(node)),
+      edges: edges.map((edge) => ({
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        data: {
+          weight: edge.data.weight,
+        },
+      })),
+    },
+  };
 }
 
 /**

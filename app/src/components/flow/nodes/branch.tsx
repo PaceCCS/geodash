@@ -13,6 +13,7 @@ export function BranchNode({ data, selected }: NodeProps) {
 
   return (
     <div
+      data-testid={`branch-node-${nodeData.id}`}
       className={cn(
         "bg-card text-card-foreground border border-border rounded-lg shadow-sm p-3 min-w-[200px]",
         selected && "ring-2 ring-primary",
