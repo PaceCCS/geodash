@@ -36,7 +36,12 @@ export const Route = createFileRoute("/network/watch")({
 });
 
 function WatchPage() {
-  const { watchMode, enableWatchMode, disableWatchMode } = useFileWatcher();
+  const {
+    watchMode,
+    isApplyingExternalChange,
+    enableWatchMode,
+    disableWatchMode,
+  } = useFileWatcher();
   const hydrated = useHydrated();
   const [isBusy, setIsBusy] = useState(false);
   const search = Route.useSearch();
@@ -79,6 +84,13 @@ function WatchPage() {
     setIsBusy(true);
     try {
       await disableWatchMode();
+      navigate({
+        replace: true,
+        search: (prev) => ({
+          ...prev,
+          selected: undefined,
+        }),
+      });
     } catch (err) {
       console.error("[watch] Failed to disable watch mode:", err);
     } finally {
@@ -168,6 +180,7 @@ function WatchPage() {
               <HydratedWatchNetwork
                 selectedQuery={selectedQuery}
                 syncDirectory={watchMode.directoryPath}
+                suspendPersistence={isApplyingExternalChange}
                 onSelectedQueryChange={handleSelectedQueryChange}
               />
             ) : (
@@ -203,10 +216,12 @@ function WatchPage() {
 function HydratedWatchNetwork({
   selectedQuery,
   syncDirectory,
+  suspendPersistence,
   onSelectedQueryChange,
 }: {
   selectedQuery?: string;
   syncDirectory: string;
+  suspendPersistence: boolean;
   onSelectedQueryChange: (query: string | null) => void;
 }) {
   const { data: nodesRaw = [] } = useLiveQuery(nodesCollection);
@@ -235,6 +250,7 @@ function HydratedWatchNetwork({
       nodes={nodes}
       edges={edges}
       syncDirectory={syncDirectory}
+      suspendPersistence={suspendPersistence}
       selectedQuery={selectedQuery}
       onSelectedQueryChange={onSelectedQueryChange}
     />

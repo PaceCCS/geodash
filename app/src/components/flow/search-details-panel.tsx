@@ -1,22 +1,20 @@
 import { Search } from "lucide-react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
+import { useLiveQuery } from "@tanstack/react-db";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { normalizeFlowSelectionQuery } from "@/lib/flow-selection";
+import { nodesCollection } from "@/lib/collections/flow";
 
 export function SearchDetailsPanel() {
   const watchSearch = useSearch({
     from: "/network/watch",
     shouldThrow: false,
   });
-  const navigate = useNavigate({ from: "/network/watch" });
-  const [draftQuery, setDraftQuery] = useState(watchSearch?.selected ?? "");
-
-  useEffect(() => {
-    setDraftQuery(watchSearch?.selected ?? "");
-  }, [watchSearch?.selected]);
+  const hydrated = useHydrated();
 
   if (!watchSearch) {
     return (
@@ -24,6 +22,46 @@ export function SearchDetailsPanel() {
         <p className="text-xs font-medium">Search</p>
         <p className="text-xs text-muted-foreground">
           Open the network editor to run a query path.
+        </p>
+      </div>
+    );
+  }
+
+  if (!hydrated) {
+    return (
+      <div className="px-4 py-3 border-b border-border space-y-1">
+        <p className="text-xs font-medium">Search</p>
+        <p className="text-xs text-muted-foreground">
+          Loading search...
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <HydratedSearchDetailsPanelContent selectedQuery={watchSearch.selected} />
+  );
+}
+
+function HydratedSearchDetailsPanelContent({
+  selectedQuery,
+}: {
+  selectedQuery?: string;
+}) {
+  const { data: nodes = [] } = useLiveQuery(nodesCollection);
+  const navigate = useNavigate({ from: "/network/watch" });
+  const [draftQuery, setDraftQuery] = useState(selectedQuery ?? "");
+
+  useEffect(() => {
+    setDraftQuery(selectedQuery ?? "");
+  }, [selectedQuery]);
+
+  if (nodes.length === 0) {
+    return (
+      <div className="px-4 py-3 border-b border-border space-y-1">
+        <p className="text-xs font-medium">Search</p>
+        <p className="text-xs text-muted-foreground">
+          Watch a network directory to run a query path.
         </p>
       </div>
     );

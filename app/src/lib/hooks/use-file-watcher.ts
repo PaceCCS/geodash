@@ -1,11 +1,14 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   onFileChanged,
   startWatchingDirectory,
   stopWatchingDirectory,
 } from "@/lib/desktop";
 import { getNetworkFromPath } from "@/lib/api-client";
-import { resetFlowToNetwork } from "@/lib/collections/flow";
+import {
+  clearFlowCollections,
+  resetFlowToNetwork,
+} from "@/lib/collections/flow";
 
 export type WatchModeState = {
   enabled: boolean;
@@ -13,42 +16,110 @@ export type WatchModeState = {
   isWatching: boolean;
 };
 
+const WATCH_RELOAD_DEBOUNCE_MS = 150;
+
 export function useFileWatcher() {
   const [watchMode, setWatchMode] = useState<WatchModeState>({
     enabled: false,
     directoryPath: null,
     isWatching: false,
   });
+  const [isApplyingExternalChange, setIsApplyingExternalChange] = useState(false);
+  const reloadTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const reloadSequenceRef = useRef(0);
+
+  const reloadNetwork = useCallback(
+    async (
+      directoryPath: string,
+      {
+        retriesRemaining = 1,
+        source = "manual",
+      }: {
+        retriesRemaining?: number;
+        source?: "manual" | "external";
+      } = {},
+    ) => {
+      const reloadId = ++reloadSequenceRef.current;
+
+      try {
+        const network = await getNetworkFromPath(directoryPath);
+        if (reloadId !== reloadSequenceRef.current) {
+          return;
+        }
+
+        await resetFlowToNetwork(network);
+        console.log("[watch] Network reloaded from disk");
+        if (source === "external") {
+          setIsApplyingExternalChange(false);
+        }
+      } catch (error) {
+        if (reloadId !== reloadSequenceRef.current) {
+          return;
+        }
+
+        if (retriesRemaining > 0) {
+          clearTimeout(reloadTimerRef.current);
+          reloadTimerRef.current = setTimeout(() => {
+            void reloadNetwork(directoryPath, {
+              retriesRemaining: retriesRemaining - 1,
+              source,
+            });
+          }, WATCH_RELOAD_DEBOUNCE_MS);
+          return;
+        }
+
+        if (source === "external") {
+          setIsApplyingExternalChange(false);
+        }
+        console.error("[watch] Error reloading network:", error);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!watchMode.enabled || !watchMode.directoryPath) return;
 
-    const unlisten = onFileChanged(async (changedPaths) => {
-      console.log("[watch] External file change:", changedPaths);
+    const scheduleReload = (directoryPath: string) => {
+      clearTimeout(reloadTimerRef.current);
+      reloadTimerRef.current = setTimeout(() => {
+        void reloadNetwork(directoryPath, {
+          source: "external",
+        });
+      }, WATCH_RELOAD_DEBOUNCE_MS);
+    };
 
-      try {
-        const network = await getNetworkFromPath(watchMode.directoryPath!);
-        await resetFlowToNetwork(network);
-        console.log("[watch] Network reloaded from external file change");
-      } catch (error) {
-        console.error("[watch] Error reloading network:", error);
-      }
+    const unlisten = onFileChanged((changedPaths) => {
+      console.log("[watch] External file change:", changedPaths);
+      setIsApplyingExternalChange(true);
+      scheduleReload(watchMode.directoryPath!);
     });
 
-    return unlisten;
-  }, [watchMode.enabled, watchMode.directoryPath]);
+    return () => {
+      clearTimeout(reloadTimerRef.current);
+      unlisten();
+    };
+  }, [watchMode.enabled, watchMode.directoryPath, reloadNetwork]);
 
   const enableWatchMode = useCallback(async (directoryPath: string) => {
     await startWatchingDirectory(directoryPath);
-    const network = await getNetworkFromPath(directoryPath);
-    await resetFlowToNetwork(network);
+    await reloadNetwork(directoryPath, { retriesRemaining: 0 });
     setWatchMode({ enabled: true, directoryPath, isWatching: true });
-  }, []);
+  }, [reloadNetwork]);
 
   const disableWatchMode = useCallback(async () => {
+    clearTimeout(reloadTimerRef.current);
+    reloadSequenceRef.current += 1;
+    setIsApplyingExternalChange(false);
     await stopWatchingDirectory();
+    await clearFlowCollections();
     setWatchMode({ enabled: false, directoryPath: null, isWatching: false });
   }, []);
 
-  return { watchMode, enableWatchMode, disableWatchMode };
+  return {
+    watchMode,
+    isApplyingExternalChange,
+    enableWatchMode,
+    disableWatchMode,
+  };
 }

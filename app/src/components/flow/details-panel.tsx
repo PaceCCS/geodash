@@ -32,14 +32,6 @@ export function DetailsPanel() {
     );
   }
 
-  if (!selectedQuery) {
-    return (
-      <p className="px-4 py-3 text-xs text-muted-foreground">
-        Select a branch, group, or block to view its properties.
-      </p>
-    );
-  }
-
   if (!hydrated) {
     return (
       <p className="px-4 py-3 text-xs text-muted-foreground">
@@ -54,7 +46,7 @@ export function DetailsPanel() {
 function HydratedDetailsPanelContent({
   selectedQuery,
 }: {
-  selectedQuery: string;
+  selectedQuery?: string;
 }) {
   const { data: nodes = [] } = useLiveQuery(nodesCollection);
   const { data: edges = [] } = useLiveQuery(edgesCollection);
@@ -62,6 +54,22 @@ function HydratedDetailsPanelContent({
     () => resolveFlowSelection(selectedQuery, nodes),
     [nodes, selectedQuery],
   );
+
+  if (nodes.length === 0) {
+    return (
+      <p className="px-4 py-3 text-xs text-muted-foreground">
+        Watch a network directory to inspect properties.
+      </p>
+    );
+  }
+
+  if (!selectedQuery) {
+    return (
+      <p className="px-4 py-3 text-xs text-muted-foreground">
+        Select a branch, group, or block to view its properties.
+      </p>
+    );
+  }
 
   if (!selection) {
     return (
