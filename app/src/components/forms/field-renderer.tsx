@@ -66,7 +66,7 @@ export function FieldRenderer({
     onClear,
   };
 
-  if (metadata.type === "object" && metadata.property === "fluidComposition") {
+  if (metadata.type === "object" && metadata.property === "composition") {
     return <FluidCompositionInput {...fieldProps} />;
   }
 

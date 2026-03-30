@@ -5,12 +5,21 @@ export type Position = {
   y: number;
 };
 
+export type NetworkValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | NetworkValue[]
+  | { [key: string]: NetworkValue };
+
 export type Block = {
   quantity: number;
   type: string;
   kind: string;
   label: string;
-  [key: string]: string | number | boolean | null | undefined;
+  [key: string]: NetworkValue;
 };
 
 export type BaseNodeProperties = {
@@ -27,18 +36,19 @@ export type BranchNodeData = {
   id: string;
   label: string;
   blocks: Block[];
+  [key: string]: NetworkValue;
 };
 
 export type GroupNodeData = {
   id: string;
   label?: string | null;
-  [key: string]: string | number | boolean | null | undefined;
+  [key: string]: NetworkValue;
 };
 
 export type GeographicNodeData = {
   id: string;
   label?: string | null;
-  [key: string]: string | number | boolean | null | undefined;
+  [key: string]: NetworkValue;
 };
 
 export type ImageNodeData = {
@@ -95,6 +105,7 @@ export type NetworkResponse = {
   label: string;
   nodes: NetworkNode[];
   edges: NetworkEdge[];
+  warnings?: string[];
 };
 
 async function apiGet<T>(

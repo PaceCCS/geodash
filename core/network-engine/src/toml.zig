@@ -1099,7 +1099,7 @@ test "parse nested table under array of tables" {
         \\label = "Emitter"
         \\pressure = 10
         \\
-        \\[block.fluidComposition]
+        \\[block.composition]
         \\carbonDioxideFraction = 0.96
         \\hydrogenFraction = 0.0075
         \\nitrogenFraction = 0.0325
@@ -1117,7 +1117,7 @@ test "parse nested table under array of tables" {
     const first = blocks[0].table;
     try std.testing.expectEqualStrings("Source", first.get("type").?.getString().?);
 
-    const fluid = first.get("fluidComposition").?.getTable().?;
+    const fluid = first.get("composition").?.getTable().?;
     try std.testing.expectApproxEqAbs(@as(f64, 0.96), fluid.get("carbonDioxideFraction").?.getFloat().?, 0.001);
     try std.testing.expectApproxEqAbs(@as(f64, 0.0075), fluid.get("hydrogenFraction").?.getFloat().?, 0.0001);
     try std.testing.expectApproxEqAbs(@as(f64, 0.0325), fluid.get("nitrogenFraction").?.getFloat().?, 0.0001);

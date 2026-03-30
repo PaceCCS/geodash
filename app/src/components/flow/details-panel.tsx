@@ -12,6 +12,7 @@ import {
   normalizeFlowSelectionQuery,
   resolveFlowSelection,
 } from "@/lib/flow-selection";
+import type { FlowResolvedSelection } from "@/lib/flow-selection";
 import { BranchDetailsPanel } from "@/components/flow/branch/details-panel";
 import { BlockDetailsPanel } from "@/components/flow/block/details-panel";
 import { GroupDetailsPanel } from "@/components/flow/group/details-panel";
@@ -41,6 +42,24 @@ export function DetailsPanel() {
   }
 
   return <HydratedDetailsPanelContent selectedQuery={selectedQuery} />;
+}
+
+function buildBranchDetailsValue(
+  selection: Extract<FlowResolvedSelection, { kind: "branch" }>,
+  outgoing: Array<{ target: string; weight: number }>,
+): Record<string, unknown> {
+  const branchValue = buildTomlNodeObject(selection.node, outgoing);
+  const derivedEntries = Object.entries(selection.node.data as Record<string, unknown>)
+    .filter(([key]) => key !== "id" && key !== "label" && key !== "blocks");
+
+  if (derivedEntries.length === 0) {
+    return branchValue;
+  }
+
+  return {
+    ...branchValue,
+    ...Object.fromEntries(derivedEntries),
+  };
 }
 
 function HydratedDetailsPanelContent({
@@ -91,7 +110,7 @@ function HydratedDetailsPanelContent({
       return (
         <BranchDetailsPanel
           selection={selection}
-          value={buildTomlNodeObject(selection.node, outgoing)}
+          value={buildBranchDetailsValue(selection, outgoing)}
         />
       );
     }
