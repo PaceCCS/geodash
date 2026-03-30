@@ -23,6 +23,7 @@ import { RightSidebar, RightSidebarTrigger } from "@/components/right-sidebar";
 import { HeaderSlotProvider, HeaderSlotTarget } from "@/components/header-slot";
 import { cn } from "@/lib/utils";
 import { GlobalCommandDialog } from "@/components/command-dialog";
+import { useTheme } from "@/hooks/use-theme";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -117,9 +118,27 @@ function LeftSidebarTrigger({
 }
 
 function RootDocument({ children }: { children: React.ReactNode }) {
+  const theme = useTheme((state) => state.theme);
+
   return (
-    <html lang="en" className="h-full">
+    <html
+      lang="en"
+      className={cn("h-full", theme === "dark" && "dark")}
+      suppressHydrationWarning
+    >
       <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                const storedTheme = localStorage.getItem('theme');
+                const parsedTheme = storedTheme ? JSON.parse(storedTheme) : null;
+                const theme = parsedTheme?.state?.theme === 'dark' ? 'dark' : 'light';
+                document.documentElement.classList.toggle('dark', theme === 'dark');
+              } catch {}
+            `,
+          }}
+        />
         <HeadContent />
         <script
           dangerouslySetInnerHTML={{

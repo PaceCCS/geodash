@@ -7,7 +7,7 @@
     "start": "bun src/index.ts",
     "build": "tsc --noEmit -p tsconfig.json",
     "test": "bun test",
-    "build:wasm": "cd ../core/network-engine && zig build wasm && cp zig-out/bin/geodash.wasm ../server/wasm/geodash.wasm"
+    "build:wasm": "cd ../core/network-engine && zig build wasm && cp zig-out/bin/geodash.wasm ../../server/wasm/geodash.wasm"
   },
   "dependencies": {
     "@elysiajs/cors": "^1.4.1",

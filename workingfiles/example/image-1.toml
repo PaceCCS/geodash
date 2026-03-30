@@ -1,9 +1,0 @@
-type = "image"
-label = "Pipeline Map"
-width = 300
-height = 200
-path = "assets/sample-diagram.svg"
-
-[position]
-x = 400
-y = -100

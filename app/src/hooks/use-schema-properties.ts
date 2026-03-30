@@ -542,7 +542,6 @@ export type ResolvedValue = {
  * POSTs inline network data from collections to include user modifications.
  */
 async function fetchValidationResults(
-  networkId: string,
   schemaVersion: string
 ): Promise<ValidationResponse> {
   const baseUrl = getApiBaseUrl();
@@ -596,7 +595,7 @@ export function useResolvedValues(options?: {
           "schemaVersion is required. Either provide it via options or use within an OperationProvider."
         );
       }
-      return fetchValidationResults(networkId, schemaVersion);
+      return fetchValidationResults(schemaVersion);
     },
     enabled: options?.enabled !== false && !!schemaVersion,
     staleTime: 1000 * 30, // 30 seconds - validation can be expensive

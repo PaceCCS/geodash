@@ -27,12 +27,18 @@ export type WatchModeState = {
 
 const WATCH_RELOAD_DEBOUNCE_MS = 150;
 
+function getWatchNetworkLabel(label: string | null | undefined): string | null {
+  const trimmed = label?.trim();
+  return trimmed ? trimmed : null;
+}
+
 export function useFileWatcher() {
   const [watchMode, setWatchMode] = useState<WatchModeState>({
     enabled: false,
     directoryPath: null,
     isWatching: false,
   });
+  const [networkLabel, setNetworkLabel] = useState<string | null>(null);
   const [isApplyingExternalChange, setIsApplyingExternalChange] = useState(false);
   const reloadTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const reloadSequenceRef = useRef(0);
@@ -56,7 +62,7 @@ export function useFileWatcher() {
         retriesRemaining?: number;
         source?: "manual" | "external";
       } = {},
-    ) => {
+    ): Promise<string | null> => {
       const reloadId = ++reloadSequenceRef.current;
 
       try {
@@ -66,10 +72,12 @@ export function useFileWatcher() {
             : null;
         const network = await getNetworkFromPath(directoryPath);
         if (reloadId !== reloadSequenceRef.current) {
-          return;
+          return null;
         }
 
         await resetFlowToNetwork(network);
+        const networkLabel = getWatchNetworkLabel(network.label);
+        setNetworkLabel(networkLabel);
         console.log("[watch] Network reloaded from disk");
 
         if (source === "external") {
@@ -91,9 +99,11 @@ export function useFileWatcher() {
         if (source === "external") {
           setIsApplyingExternalChange(false);
         }
+
+        return networkLabel;
       } catch (error) {
         if (reloadId !== reloadSequenceRef.current) {
-          return;
+          return null;
         }
 
         if (retriesRemaining > 0) {
@@ -104,13 +114,14 @@ export function useFileWatcher() {
               source,
             });
           }, WATCH_RELOAD_DEBOUNCE_MS);
-          return;
+          return null;
         }
 
         if (source === "external") {
           setIsApplyingExternalChange(false);
         }
         console.error("[watch] Error reloading network:", error);
+        return null;
       }
     },
     [],
@@ -150,7 +161,12 @@ export function useFileWatcher() {
 
       if (resetState) {
         setIsApplyingExternalChange(false);
-        setWatchMode({ enabled: false, directoryPath: null, isWatching: false });
+        setWatchMode({
+          enabled: false,
+          directoryPath: null,
+          isWatching: false,
+        });
+        setNetworkLabel(null);
       }
     },
     [],
@@ -159,7 +175,8 @@ export function useFileWatcher() {
   const enableWatchMode = useCallback(async (directoryPath: string) => {
     clearActivityLog();
     await startWatchingDirectory(directoryPath);
-    await reloadNetwork(directoryPath, { retriesRemaining: 0 });
+    const networkLabel = await reloadNetwork(directoryPath, { retriesRemaining: 0 });
+    setNetworkLabel(networkLabel);
     setWatchMode({ enabled: true, directoryPath, isWatching: true });
   }, [reloadNetwork]);
 
@@ -179,6 +196,7 @@ export function useFileWatcher() {
 
   return {
     watchMode,
+    networkLabel,
     isApplyingExternalChange,
     enableWatchMode,
     disableWatchMode,

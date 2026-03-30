@@ -1,3 +1,6 @@
+id = "preset1"
+label = "Preset 1"
+
 # Global properties (preset-level defaults)
 [properties]
 ambientTemperature = 20.0
@@ -10,4 +13,3 @@ general = ["block", "branch", "group", "global"]
 [inheritance.rules]
 ambientTemperature = ["group", "global"]
 pressure = ["block"]
-
