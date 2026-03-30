@@ -2,7 +2,7 @@
 
 Per-module quality assessment. Updated manually when significant changes land.
 
-Last updated: 2026-02-20
+Last updated: 2026-03-30
 
 ## Grading
 
@@ -58,18 +58,18 @@ Last updated: 2026-02-20
 
 ## Server
 
-| Area                                    | Grade | Tests           | Notes                                                                                                                                                                                                                                |
-| --------------------------------------- | ----- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **WASM bridge** (`services/core.ts`)    | B     | 4 (integration) | Exercised via query and network route tests against real WASM + preset1. Missing: direct tests for OOM, empty input, oversized input.                                                                                                |
-| **OLGA routes** (`routes/olga.ts`)      | B     | 5 integration   | Validate, export, import endpoints tested. Covers invalid JSON, missing fields, valid preset1.                                                                                                                                       |
-| **OLGA service** (`services/olga.ts`)   | B     | 1 (via route)   | Validation tested via route integration test against preset1. Missing: direct unit tests for resolveRouteSegments.                                                                                                                   |
-| **Query route** (`routes/query.ts`)     | B     | 4 integration   | Missing params, valid query, invalid network dir.                                                                                                                                                                                    |
-| **Network route** (`routes/network.ts`) | A     | 20 integration  | Missing params, valid load, invalid dir, node structure (position, parentId, width/height, data.blocks, block shape, extra properties, data.path), edge structure (data.weight, referential integrity, no self-loops), assets route. |
-| **Health / 404** (`index.ts`)           | A     | 2               | Health check and 404 handler.                                                                                                                                                                                                        |
-| **Utils** (`utils/network.ts`)          | A     | 4 unit          | resolveNetworkPath: null, empty, absolute, relative.                                                                                                                                                                                 |
-| **Effect schemas** (`schemas/olga/`)    | C     | 0               | Schema definitions exist but no tests verify them against sample data.                                                                                                                                                               |
+| Area                                    | Grade | Tests          | Notes                                                                                                                                                                                                                                               |
+| --------------------------------------- | ----- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **WASM bridge** (`services/core.ts`)    | B     | 0 direct       | Exercised indirectly via query and network route tests against real WASM + preset1. Missing: direct tests for OOM, empty input, oversized input.                                                                                                    |
+| **OLGA routes** (`routes/olga.ts`)      | B     | 5 integration  | Validate, export, import endpoints tested. Covers invalid JSON, missing fields, valid preset1.                                                                                                                                                      |
+| **OLGA service** (`services/olga.ts`)   | B     | 1 (via route)  | Validation tested via route integration test against preset1. Missing: direct unit tests for resolveRouteSegments.                                                                                                                                  |
+| **Query route** (`routes/query.ts`)     | B     | 4 integration  | Missing params, valid query, invalid network dir.                                                                                                                                                                                                   |
+| **Network route** (`routes/network.ts`) | A     | 23 integration | Missing params, valid load, invalid dir, node structure (position, parentId, width/height, data.blocks, block shape, extra properties, nested tables, data.path), edge structure (data.weight, referential integrity, no self-loops), assets route. |
+| **Health / 404** (`index.ts`)           | A     | 2              | Health check and 404 handler.                                                                                                                                                                                                                       |
+| **Utils** (`utils/network.ts`)          | A     | 4 unit         | resolveNetworkPath: null, empty, absolute, relative.                                                                                                                                                                                                |
+| **Effect schemas** (`schemas/olga/`)    | C     | 0              | Schema definitions exist but no tests verify them against sample data.                                                                                                                                                                              |
 
-**Total TypeScript tests: 37**
+**Total TypeScript tests: 38**
 
 ## Cross-Cutting Concerns
 
