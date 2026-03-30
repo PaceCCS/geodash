@@ -16,6 +16,8 @@ const rendererDevUrl = process.env.ELECTRON_RENDERER_URL ?? "http://127.0.0.1:30
 const rendererProdPath = join(appRoot, "dist", "client", "index.html");
 const backendPort = 3001;
 const OWN_WRITE_IGNORE_WINDOW_MS = 1500;
+const shouldOpenDevTools =
+  !app.isPackaged && process.env.GEODASH_DISABLE_DEVTOOLS !== "1";
 
 let mainWindow: BrowserWindow | null = null;
 let backendProcess: ChildProcess | null = null;
@@ -164,7 +166,9 @@ async function createMainWindow(): Promise<void> {
     await mainWindow.loadFile(rendererProdPath);
   } else {
     await mainWindow.loadURL(rendererDevUrl);
-    mainWindow.webContents.openDevTools({ mode: "detach" });
+    if (shouldOpenDevTools) {
+      mainWindow.webContents.openDevTools({ mode: "detach" });
+    }
   }
 
   mainWindow.on("closed", () => {
@@ -265,6 +269,11 @@ function registerIpcHandlers(): void {
   });
 
   ipcMain.handle("desktop:pick-network-directory", async () => {
+    const testDirectory = process.env.GEODASH_TEST_PICK_DIRECTORY;
+    if (testDirectory) {
+      return testDirectory;
+    }
+
     const result = mainWindow
       ? await dialog.showOpenDialog(mainWindow, {
           properties: ["openDirectory"],

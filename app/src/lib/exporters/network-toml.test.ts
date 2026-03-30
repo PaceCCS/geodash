@@ -6,7 +6,11 @@
  */
 import { describe, test, expect } from "bun:test";
 import * as TOML from "@iarna/toml";
-import { buildTomlFiles, serializeNodeToToml } from "./network-toml";
+import {
+  buildTomlFiles,
+  getTomlPathsToDelete,
+  serializeNodeToToml,
+} from "./network-toml";
 import type { FlowNode, FlowEdge } from "@/lib/collections/flow-nodes";
 import type { NetworkNode } from "@/lib/api-client";
 
@@ -291,5 +295,44 @@ describe("buildTomlFiles", () => {
     expect(parsed.parentId).toBe("group-1");
     expect((parsed.position as Record<string, number>).x).toBe(20);
     expect((parsed.position as Record<string, number>).y).toBe(30);
+  });
+});
+
+describe("getTomlPathsToDelete", () => {
+  test("preserves config.toml and other non-node TOMLs", () => {
+    const nextFiles = buildTomlFiles([makeBranchNode("branch-1")], [], "/net");
+    const existingFiles = [
+      ...nextFiles,
+      {
+        path: "/net/config.toml",
+        content: [
+          "[properties]",
+          "ambientTemperature = 20",
+          "",
+          "[inheritance]",
+          'general = ["block", "global"]',
+          "",
+        ].join("\n"),
+      },
+    ];
+
+    expect(getTomlPathsToDelete(existingFiles, nextFiles)).toEqual([]);
+  });
+
+  test("deletes stale node TOMLs that are no longer generated", () => {
+    const nextFiles = buildTomlFiles([makeBranchNode("branch-1")], [], "/net");
+    const existingFiles = [
+      ...nextFiles,
+      {
+        path: "/net/branch-9.toml",
+        content: serializeNodeToToml(
+          makeBranchNode("branch-9") as unknown as NetworkNode,
+        ),
+      },
+    ];
+
+    expect(getTomlPathsToDelete(existingFiles, nextFiles)).toEqual([
+      "/net/branch-9.toml",
+    ]);
   });
 });

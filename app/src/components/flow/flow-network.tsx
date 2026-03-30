@@ -35,6 +35,11 @@ import {
   getSelectedNodeIdFromQuery,
   normalizeFlowSelectionQuery,
 } from "@/lib/flow-selection";
+import { appendActivityLogEntries } from "@/contexts/activity-log-context";
+import {
+  createNetworkSnapshotFromFlow,
+  diffNetworkSnapshots,
+} from "@/lib/network-activity";
 
 const nodeTypes: NodeTypes = {
   branch: BranchNode as NodeTypes["branch"],
@@ -85,15 +90,19 @@ export function FlowNetwork({
   const [localEdges, setLocalEdges] = useState<FlowEdge[]>(edges);
   const localNodesRef = useRef<FlowNode[]>(nodes);
   const localEdgesRef = useRef<FlowEdge[]>(edges);
+  const persistedNodesRef = useRef<FlowNode[]>(nodes);
+  const persistedEdgesRef = useRef<FlowEdge[]>(edges);
 
   useEffect(() => {
     setLocalNodes(nodes);
     localNodesRef.current = nodes;
+    persistedNodesRef.current = nodes;
   }, [nodes]);
 
   useEffect(() => {
     setLocalEdges(edges);
     localEdgesRef.current = edges;
+    persistedEdgesRef.current = edges;
   }, [edges]);
 
   useEffect(() => {
@@ -129,21 +138,31 @@ export function FlowNetwork({
         return;
       }
 
-      setLocalNodes((currentNodes) => {
-        const updated = applyNodeChanges(
-          relevantChanges,
-          currentNodes as Node[],
-        ) as FlowNode[];
+      const currentNodes = localNodesRef.current;
+      const updated = applyNodeChanges(
+        relevantChanges,
+        currentNodes as Node[],
+      ) as FlowNode[];
 
-        localNodesRef.current = updated;
+      localNodesRef.current = updated;
+      setLocalNodes(updated);
 
-        if (shouldPersistNodeChanges(relevantChanges) && !suspendPersistence) {
-          writeNodesToCollection(updated);
-          scheduleSyncToFiles(updated, localEdgesRef.current);
-        }
-
-        return updated;
-      });
+      if (shouldPersistNodeChanges(relevantChanges) && !suspendPersistence) {
+        const activityEntries = diffNetworkSnapshots(
+          createNetworkSnapshotFromFlow(
+            persistedNodesRef.current,
+            persistedEdgesRef.current,
+          ),
+          createNetworkSnapshotFromFlow(updated, localEdgesRef.current),
+          {
+            source: "canvas",
+          },
+        );
+        writeNodesToCollection(updated);
+        persistedNodesRef.current = updated;
+        scheduleSyncToFiles(updated, localEdgesRef.current);
+        appendActivityLogEntries(activityEntries);
+      }
     },
     [scheduleSyncToFiles, suspendPersistence],
   );
@@ -155,19 +174,31 @@ export function FlowNetwork({
         return;
       }
 
-      setLocalEdges((currentEdges) => {
-        const updated = applyEdgeChanges(
-          persistedChanges,
-          currentEdges as Edge[],
-        ) as FlowEdge[];
+      const currentEdges = localEdgesRef.current;
+      const updated = applyEdgeChanges(
+        persistedChanges,
+        currentEdges as Edge[],
+      ) as FlowEdge[];
 
-        localEdgesRef.current = updated;
-        if (!suspendPersistence) {
-          writeEdgesToCollection(updated);
-          scheduleSyncToFiles(localNodesRef.current, updated);
-        }
-        return updated;
-      });
+      localEdgesRef.current = updated;
+      setLocalEdges(updated);
+
+      if (!suspendPersistence) {
+        const activityEntries = diffNetworkSnapshots(
+          createNetworkSnapshotFromFlow(
+            persistedNodesRef.current,
+            persistedEdgesRef.current,
+          ),
+          createNetworkSnapshotFromFlow(localNodesRef.current, updated),
+          {
+            source: "canvas",
+          },
+        );
+        writeEdgesToCollection(updated);
+        persistedEdgesRef.current = updated;
+        scheduleSyncToFiles(localNodesRef.current, updated);
+        appendActivityLogEntries(activityEntries);
+      }
     },
     [scheduleSyncToFiles, suspendPersistence],
   );
@@ -195,8 +226,20 @@ export function FlowNetwork({
       setLocalEdges(updated);
       localEdgesRef.current = updated;
       if (!suspendPersistence) {
+        const activityEntries = diffNetworkSnapshots(
+          createNetworkSnapshotFromFlow(
+            persistedNodesRef.current,
+            persistedEdgesRef.current,
+          ),
+          createNetworkSnapshotFromFlow(localNodesRef.current, updated),
+          {
+            source: "canvas",
+          },
+        );
         writeEdgesToCollection(updated);
+        persistedEdgesRef.current = updated;
         scheduleSyncToFiles(localNodesRef.current, updated);
+        appendActivityLogEntries(activityEntries);
       }
     },
     [scheduleSyncToFiles, suspendPersistence],

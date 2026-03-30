@@ -1,0 +1,131 @@
+import { expect, test, type Page } from "@playwright/test";
+import { _electron as electron } from "playwright";
+import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
+import { createRequire } from "node:module";
+import { dirname, join, resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
+
+const require = createRequire(import.meta.url);
+const electronBinary = require("electron");
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const appRoot = resolve(__dirname, "..", "..");
+const mainScriptPath = join(appRoot, "dist-electron", "main.js");
+const rendererEntryPath = "http://127.0.0.1:3000";
+const presetFixtureDirectory = resolve(
+  appRoot,
+  "..",
+  "core",
+  "network-engine",
+  "test-data",
+  "preset1",
+);
+
+test("launches the Electron app and enters watch mode", async () => {
+  const watchDirectory = await createWatchFixture();
+  const electronApp = await electron.launch({
+    executablePath: electronBinary,
+    args: [mainScriptPath],
+    env: {
+      ...process.env,
+      ELECTRON_RENDERER_URL: rendererEntryPath,
+      GEODASH_DISABLE_DEVTOOLS: "1",
+      GEODASH_TEST_PICK_DIRECTORY: watchDirectory,
+    },
+  });
+
+  try {
+    const page = await electronApp.firstWindow();
+
+    await page.waitForLoadState("domcontentloaded");
+    await expect(page.getByRole("heading", { name: "geodash" })).toBeVisible();
+    await page.getByRole("link", { name: "Network Editor", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "Select Directory" }).first(),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Select Directory" }).first().click();
+
+    await expect(
+      page.getByRole("button", { name: "Stop Watching" }),
+    ).toBeVisible();
+    await expect(page.getByText("Auto-saving")).toBeVisible();
+    await expect(
+      page.getByText("Network changes will appear here while watch mode is active."),
+    ).toBeVisible();
+  } finally {
+    await electronApp.close();
+    await rm(watchDirectory, { recursive: true, force: true });
+  }
+});
+
+test("repositioning a branch logs the move event", async () => {
+  const watchDirectory = await createWatchFixture();
+  const electronApp = await electron.launch({
+    executablePath: electronBinary,
+    args: [mainScriptPath],
+    env: {
+      ...process.env,
+      ELECTRON_RENDERER_URL: rendererEntryPath,
+      GEODASH_DISABLE_DEVTOOLS: "1",
+      GEODASH_TEST_PICK_DIRECTORY: watchDirectory,
+    },
+  });
+
+  try {
+    const page = await electronApp.firstWindow();
+
+    await openWatchMode(page);
+
+    const branchNodeContent = page.getByTestId("branch-node-branch-4");
+    await expect(branchNodeContent).toBeVisible();
+
+    const branchNode = page.locator('.react-flow__node[data-id="branch-4"]');
+    await expect(branchNode).toBeVisible();
+
+    const initialToml = await readFile(join(watchDirectory, "branch-4.toml"), "utf8");
+    const box = await branchNode.boundingBox();
+    if (!box) {
+      throw new Error("Unable to determine branch-4 position in the canvas");
+    }
+
+    const startX = box.x + box.width / 2;
+    const startY = box.y + box.height / 2;
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    await page.mouse.move(startX + 120, startY + 80, { steps: 16 });
+    await page.mouse.up();
+
+    await expect(
+      page.getByText(/Branch Branch 4 \(branch-4\) moved:/).first(),
+    ).toBeVisible();
+
+    await expect.poll(
+      async () => readFile(join(watchDirectory, "branch-4.toml"), "utf8"),
+    )
+      .not.toBe(initialToml);
+  } finally {
+    await electronApp.close();
+    await rm(watchDirectory, { recursive: true, force: true });
+  }
+});
+
+async function openWatchMode(page: Page) {
+  await page.waitForLoadState("domcontentloaded");
+  await expect(page.getByRole("heading", { name: "geodash" })).toBeVisible();
+  await page.getByRole("link", { name: "Network Editor", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Select Directory" }).first(),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Select Directory" }).first().click();
+  await expect(
+    page.getByRole("button", { name: "Stop Watching" }),
+  ).toBeVisible();
+  await expect(page.getByText("Auto-saving")).toBeVisible();
+}
+
+async function createWatchFixture(): Promise<string> {
+  const directory = await mkdtemp(join(tmpdir(), "geodash-playwright-"));
+  await cp(presetFixtureDirectory, directory, { recursive: true });
+  return directory;
+}
