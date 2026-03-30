@@ -29,6 +29,7 @@ import { LabeledGroupNode } from "./nodes/labeled-group";
 import { GeographicAnchorNode } from "./nodes/geographic-anchor";
 import { GeographicWindowNode } from "./nodes/geographic-window";
 import { ImageNode } from "./nodes/image";
+import { shouldPersistNodeChanges } from "./flow-change-persistence";
 import type { FlowNode, FlowEdge } from "@/lib/collections/flow-nodes";
 import {
   getSelectedNodeIdFromQuery,
@@ -45,24 +46,6 @@ const nodeTypes: NodeTypes = {
 
 /** Debounce delay before flushing canvas edits to TOML files (ms). */
 const SYNC_DEBOUNCE_MS = 300;
-
-function shouldPersistNodeChanges(changes: NodeChange[]): boolean {
-  return changes.some((change) => {
-    if (change.type === "select") {
-      return false;
-    }
-
-    if (change.type === "position") {
-      return change.dragging !== true;
-    }
-
-    if (change.type === "dimensions") {
-      return change.resizing !== true;
-    }
-
-    return true;
-  });
-}
 
 type FlowNetworkProps = {
   nodes: FlowNode[];
