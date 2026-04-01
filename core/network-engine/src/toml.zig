@@ -1139,8 +1139,9 @@ test "evaluateQuantities converts pressure string to quantity" {
     const q = val.quantity;
     // 120 bar = 12,000,000 Pa canonical
     try std.testing.expectApproxEqAbs(@as(f64, 12_000_000), q.value, 1.0);
-    // dim normalizes unit symbols to canonical (Pa for pressure)
-    try std.testing.expectEqualStrings("Pa", q.unit);
+    // dim now preserves simple display units like "bar" while storing the
+    // canonical value internally.
+    try std.testing.expectEqualStrings("bar", q.unit);
 }
 
 test "evaluateQuantities leaves plain strings unchanged" {
@@ -1211,7 +1212,7 @@ test "serialize round-trips quantity back to string" {
 
     evaluateQuantities(allocator, &val);
 
-    // Verify it's now a quantity (dim normalizes to Pa)
+    // Verify it's now a quantity and that the original display unit is kept.
     try std.testing.expect(val.table.get("pressure").? == .quantity);
 
     // Serialize and re-parse
@@ -1221,9 +1222,9 @@ test "serialize round-trips quantity back to string" {
     var reparsed = try Parser.parse(allocator, serialized);
     defer reparsed.deinit(allocator);
 
-    // Should be a string with the unit (serialized as "12000000 Pa")
+    // Should round-trip using the preserved display unit.
     const pressure_str = reparsed.table.get("pressure").?.getString().?;
-    try std.testing.expect(std.mem.indexOf(u8, pressure_str, "Pa") != null);
+    try std.testing.expect(std.mem.indexOf(u8, pressure_str, "bar") != null);
 
     // Re-evaluate to verify round-trip
     evaluateQuantities(allocator, &reparsed);
