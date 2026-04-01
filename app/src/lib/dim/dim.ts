@@ -2,6 +2,7 @@ type DimExports = {
   memory: WebAssembly.Memory;
   dim_alloc: (n: number) => number;
   dim_free: (ptr: number, len: number) => void;
+  dim_ffi_reset: () => void;
   dim_ctx_new: () => number;
   dim_ctx_free: (ctx: number) => void;
   dim_ctx_define: (
@@ -130,7 +131,11 @@ function toPtr(value: number): number {
 }
 
 function alloc(rt: DimRuntime, size: number): number {
-  return toPtr(rt.dim_alloc(size));
+  const ptr = toPtr(rt.dim_alloc(size));
+  if (!ptr) {
+    throw new Error(`dim_alloc failed for ${size} bytes`);
+  }
+  return ptr;
 }
 
 function createWasiImports(
@@ -217,32 +222,47 @@ export function subscribeDimReady(
   };
 }
 
+async function findWasmBytes(): Promise<ArrayBuffer> {
+  const isNode =
+    typeof process !== "undefined" &&
+    process.versions != null &&
+    process.versions.node != null;
+
+  if (isNode) {
+    const { readFile } = await import("node:fs/promises");
+    const { existsSync } = await import("node:fs");
+    const { join, dirname } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const __filename = fileURLToPath(import.meta.url);
+    const thisDir = dirname(__filename);
+
+    const candidates = [
+      join(thisDir, "dim_wasm.wasm"),
+      join(thisDir, "..", "..", "..", "public", "dim", "dim_wasm.wasm"),
+      join(process.cwd(), "dim", "wasm", "dim_wasm.wasm"),
+      join(process.cwd(), "public", "dim", "dim_wasm.wasm"),
+    ];
+
+    const wasmPath = candidates.find((p) => existsSync(p));
+    if (!wasmPath) {
+      throw new Error(
+        `Could not find dim_wasm.wasm. Searched:\n${candidates.join("\n")}`,
+      );
+    }
+
+    const buf = await readFile(wasmPath);
+    return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+  } else {
+    const res = await fetch("/dim/dim_wasm.wasm", { cache: "no-cache" });
+    return res.arrayBuffer();
+  }
+}
+
 export async function initDim(): Promise<void> {
   if (!initPromise) {
     emitReady(false);
     initPromise = (async () => {
-      let bytes: ArrayBuffer;
-      const isNode =
-        typeof process !== "undefined" &&
-        process.versions != null &&
-        process.versions.node != null;
-
-      if (isNode) {
-        const { readFile } = await import("node:fs/promises");
-        const { join } = await import("node:path");
-        const { fileURLToPath } = await import("node:url");
-        const __filename = fileURLToPath(import.meta.url);
-        const __dirname = join(__filename, "..", "..", "..", "..");
-        const wasmPath = join(__dirname, "public", "dim", "dim_wasm.wasm");
-        const buf = await readFile(wasmPath);
-        bytes = buf.buffer.slice(
-          buf.byteOffset,
-          buf.byteOffset + buf.byteLength,
-        );
-      } else {
-        const res = await fetch("/dim/dim_wasm.wasm", { cache: "no-cache" });
-        bytes = await res.arrayBuffer();
-      }
+      const bytes = await findWasmBytes();
 
       let currentMemory: WebAssembly.Memory | null = null;
       const { instance } = await WebAssembly.instantiate(
@@ -255,6 +275,7 @@ export async function initDim(): Promise<void> {
         "memory",
         "dim_alloc",
         "dim_free",
+        "dim_ffi_reset",
         "dim_ctx_new",
         "dim_ctx_free",
         "dim_ctx_define",
@@ -319,10 +340,10 @@ function requireRuntime(): DimRuntime {
 
 function normalizeDimSyntax(value: string): string {
   return value
-    .replaceAll("·", "*")
-    .replaceAll("⋅", "*")
-    .replaceAll("²", "^2")
-    .replaceAll("³", "^3")
+    .replaceAll("\u00b7", "*")
+    .replaceAll("\u22c5", "*")
+    .replaceAll("\u00b2", "^2")
+    .replaceAll("\u00b3", "^3")
     .replace(
       /(^|[^\w.])([+-]?(?:\d+\.?\d*|\.\d+)[eE][+-]?\d+)(?=\s|$|[()*/+\-])/g,
       (_match, prefix, numeric) =>
@@ -428,12 +449,10 @@ function readEvalResult(rt: DimRuntime, ptr: number): DimEvalResult {
       return { kind: "boolean", value: boolValue };
     case KIND_STRING: {
       const value = readUtf8(rt, stringPtr, stringLen);
-      rt.dim_free(stringPtr, stringLen);
       return { kind: "string", value };
     }
     case KIND_QUANTITY: {
       const unit = readUtf8(rt, unitPtr, unitLen);
-      rt.dim_free(unitPtr, unitLen);
       return {
         kind: "quantity",
         value: quantityValue,
@@ -458,7 +477,6 @@ function readQuantityResult(rt: DimRuntime, ptr: number): DimQuantityResult {
   const unitPtr = dv.getUint32(72, true);
   const unitLen = dv.getUint32(76, true);
   const unit = readUtf8(rt, unitPtr, unitLen);
-  rt.dim_free(unitPtr, unitLen);
   return { kind: "quantity", value, unit, dim, isDelta, mode };
 }
 
@@ -475,7 +493,7 @@ function mod(value: number, divisor: number): number {
 }
 
 export function formatQuantity(result: DimQuantityResult): string {
-  const prefix = result.isDelta ? "Δ" : "";
+  const prefix = result.isDelta ? "\u0394" : "";
   switch (result.mode) {
     case "auto":
       return `${prefix}${result.value.toFixed(3)} ${result.unit}`;
@@ -514,24 +532,23 @@ export function formatEvalResult(result: DimEvalResult): string {
 
 export function evalStructured(expr: string): DimEvalResult {
   const rt = requireRuntime();
-  const input = writeUtf8(rt, expr);
-  const outPtr = alloc(rt, EVAL_RESULT_SIZE);
   try {
+    const input = writeUtf8(rt, expr);
+    const outPtr = alloc(rt, EVAL_RESULT_SIZE);
     const rc = rt.dim_ctx_eval(rt.ctx, input.ptr, input.len, outPtr);
     expectStatus(rc, "dim_ctx_eval");
     return readEvalResult(rt, outPtr);
   } finally {
-    rt.dim_free(input.ptr, input.len);
-    rt.dim_free(outPtr, EVAL_RESULT_SIZE);
+    rt.dim_ffi_reset();
   }
 }
 
 export function convertExpr(expr: string, unit: string): DimQuantityResult {
   const rt = requireRuntime();
-  const exprSlice = writeUtf8(rt, expr);
-  const unitSlice = writeUtf8(rt, unit);
-  const outPtr = alloc(rt, QUANTITY_RESULT_SIZE);
   try {
+    const exprSlice = writeUtf8(rt, expr);
+    const unitSlice = writeUtf8(rt, unit);
+    const outPtr = alloc(rt, QUANTITY_RESULT_SIZE);
     const rc = rt.dim_ctx_convert_expr(
       rt.ctx,
       exprSlice.ptr,
@@ -543,9 +560,7 @@ export function convertExpr(expr: string, unit: string): DimQuantityResult {
     expectStatus(rc, "dim_ctx_convert_expr");
     return readQuantityResult(rt, outPtr);
   } finally {
-    rt.dim_free(exprSlice.ptr, exprSlice.len);
-    rt.dim_free(unitSlice.ptr, unitSlice.len);
-    rt.dim_free(outPtr, QUANTITY_RESULT_SIZE);
+    rt.dim_ffi_reset();
   }
 }
 
@@ -555,10 +570,10 @@ export function convertValue(
   toUnit: string,
 ): number {
   const rt = requireRuntime();
-  const fromSlice = writeUtf8(rt, fromUnit);
-  const toSlice = writeUtf8(rt, toUnit);
-  const outPtr = alloc(rt, 8);
   try {
+    const fromSlice = writeUtf8(rt, fromUnit);
+    const toSlice = writeUtf8(rt, toUnit);
+    const outPtr = alloc(rt, 8);
     const rc = rt.dim_ctx_convert_value(
       rt.ctx,
       value,
@@ -571,18 +586,16 @@ export function convertValue(
     expectStatus(rc, "dim_ctx_convert_value");
     return new DataView(rt.memory.buffer, outPtr, 8).getFloat64(0, true);
   } finally {
-    rt.dim_free(fromSlice.ptr, fromSlice.len);
-    rt.dim_free(toSlice.ptr, toSlice.len);
-    rt.dim_free(outPtr, 8);
+    rt.dim_ffi_reset();
   }
 }
 
 export function isCompatible(expr: string, unit: string): boolean {
   const rt = requireRuntime();
-  const exprSlice = writeUtf8(rt, expr);
-  const unitSlice = writeUtf8(rt, unit);
-  const outPtr = alloc(rt, 4);
   try {
+    const exprSlice = writeUtf8(rt, expr);
+    const unitSlice = writeUtf8(rt, unit);
+    const outPtr = alloc(rt, 4);
     const rc = rt.dim_ctx_is_compatible(
       rt.ctx,
       exprSlice.ptr,
@@ -596,18 +609,16 @@ export function isCompatible(expr: string, unit: string): boolean {
     }
     return readBool(rt, outPtr);
   } finally {
-    rt.dim_free(exprSlice.ptr, exprSlice.len);
-    rt.dim_free(unitSlice.ptr, unitSlice.len);
-    rt.dim_free(outPtr, 4);
+    rt.dim_ffi_reset();
   }
 }
 
 export function sameDimension(exprA: string, exprB: string): boolean {
   const rt = requireRuntime();
-  const lhs = writeUtf8(rt, exprA);
-  const rhs = writeUtf8(rt, exprB);
-  const outPtr = alloc(rt, 4);
   try {
+    const lhs = writeUtf8(rt, exprA);
+    const rhs = writeUtf8(rt, exprB);
+    const outPtr = alloc(rt, 4);
     const rc = rt.dim_ctx_same_dimension(
       rt.ctx,
       lhs.ptr,
@@ -621,9 +632,7 @@ export function sameDimension(exprA: string, exprB: string): boolean {
     }
     return readBool(rt, outPtr);
   } finally {
-    rt.dim_free(lhs.ptr, lhs.len);
-    rt.dim_free(rhs.ptr, rhs.len);
-    rt.dim_free(outPtr, 4);
+    rt.dim_ffi_reset();
   }
 }
 
@@ -653,18 +662,18 @@ export function batchConvertExprs(
   }
 
   const rt = requireRuntime();
-  const exprs = writeSlices(
-    rt,
-    items.map((item) => item.expr),
-  );
-  const units = writeSlices(
-    rt,
-    items.map((item) => item.unit),
-  );
-  const outValuesPtr = alloc(rt, items.length * 8);
-  const outStatusesPtr = alloc(rt, items.length * 4);
-
   try {
+    const exprs = writeSlices(
+      rt,
+      items.map((item) => item.expr),
+    );
+    const units = writeSlices(
+      rt,
+      items.map((item) => item.unit),
+    );
+    const outValuesPtr = alloc(rt, items.length * 8);
+    const outStatusesPtr = alloc(rt, items.length * 4);
+
     const rc = rt.dim_ctx_batch_convert_exprs(
       rt.ctx,
       exprs.slicesPtr,
@@ -691,16 +700,7 @@ export function batchConvertExprs(
       return valuesView.getFloat64(index * 8, true);
     });
   } finally {
-    exprs.allocations.forEach((allocation) =>
-      rt.dim_free(allocation.ptr, allocation.len),
-    );
-    units.allocations.forEach((allocation) =>
-      rt.dim_free(allocation.ptr, allocation.len),
-    );
-    rt.dim_free(exprs.slicesPtr, items.length * DIM_SLICE_SIZE);
-    rt.dim_free(units.slicesPtr, items.length * DIM_SLICE_SIZE);
-    rt.dim_free(outValuesPtr, items.length * 8);
-    rt.dim_free(outStatusesPtr, items.length * 4);
+    rt.dim_ffi_reset();
   }
 }
 
@@ -712,27 +712,27 @@ export function batchConvertValues(
   }
 
   const rt = requireRuntime();
-  const valuesPtr = alloc(rt, items.length * 8);
-  const valuesView = new DataView(
-    rt.memory.buffer,
-    valuesPtr,
-    items.length * 8,
-  );
-  items.forEach((item, index) => {
-    valuesView.setFloat64(index * 8, item.value, true);
-  });
-  const fromUnits = writeSlices(
-    rt,
-    items.map((item) => item.fromUnit),
-  );
-  const toUnits = writeSlices(
-    rt,
-    items.map((item) => item.toUnit),
-  );
-  const outValuesPtr = alloc(rt, items.length * 8);
-  const outStatusesPtr = alloc(rt, items.length * 4);
-
   try {
+    const valuesPtr = alloc(rt, items.length * 8);
+    const valuesView = new DataView(
+      rt.memory.buffer,
+      valuesPtr,
+      items.length * 8,
+    );
+    items.forEach((item, index) => {
+      valuesView.setFloat64(index * 8, item.value, true);
+    });
+    const fromUnits = writeSlices(
+      rt,
+      items.map((item) => item.fromUnit),
+    );
+    const toUnits = writeSlices(
+      rt,
+      items.map((item) => item.toUnit),
+    );
+    const outValuesPtr = alloc(rt, items.length * 8);
+    const outStatusesPtr = alloc(rt, items.length * 4);
+
     const rc = rt.dim_ctx_batch_convert_values(
       rt.ctx,
       valuesPtr,
@@ -760,25 +760,15 @@ export function batchConvertValues(
       return outValuesView.getFloat64(index * 8, true);
     });
   } finally {
-    rt.dim_free(valuesPtr, items.length * 8);
-    fromUnits.allocations.forEach((allocation) =>
-      rt.dim_free(allocation.ptr, allocation.len),
-    );
-    toUnits.allocations.forEach((allocation) =>
-      rt.dim_free(allocation.ptr, allocation.len),
-    );
-    rt.dim_free(fromUnits.slicesPtr, items.length * DIM_SLICE_SIZE);
-    rt.dim_free(toUnits.slicesPtr, items.length * DIM_SLICE_SIZE);
-    rt.dim_free(outValuesPtr, items.length * 8);
-    rt.dim_free(outStatusesPtr, items.length * 4);
+    rt.dim_ffi_reset();
   }
 }
 
 export function defineConst(name: string, expr: string): void {
   const rt = requireRuntime();
-  const nameSlice = writeRawUtf8(rt, name);
-  const exprSlice = writeUtf8(rt, expr);
   try {
+    const nameSlice = writeRawUtf8(rt, name);
+    const exprSlice = writeUtf8(rt, expr);
     const rc = rt.dim_ctx_define(
       rt.ctx,
       nameSlice.ptr,
@@ -788,18 +778,17 @@ export function defineConst(name: string, expr: string): void {
     );
     expectStatus(rc, "dim_ctx_define");
   } finally {
-    rt.dim_free(nameSlice.ptr, nameSlice.len);
-    rt.dim_free(exprSlice.ptr, exprSlice.len);
+    rt.dim_ffi_reset();
   }
 }
 
 export function clearConst(name: string): void {
   const rt = requireRuntime();
-  const slice = writeRawUtf8(rt, name);
   try {
+    const slice = writeRawUtf8(rt, name);
     rt.dim_ctx_clear(rt.ctx, slice.ptr, slice.len);
   } finally {
-    rt.dim_free(slice.ptr, slice.len);
+    rt.dim_ffi_reset();
   }
 }
 
