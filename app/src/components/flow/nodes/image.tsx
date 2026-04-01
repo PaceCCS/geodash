@@ -5,6 +5,10 @@ import type { ImageNodeData } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { useNetworkOptional } from "@/contexts/network-context";
 
+const nodeLabelPanelStyle = {
+  margin: 0,
+} as const;
+
 export const ImageNode = forwardRef<HTMLDivElement, NodeProps>(
   ({ data, selected, width, height }, ref) => {
     const { label, path } = data as ImageNodeData;
@@ -21,7 +25,7 @@ export const ImageNode = forwardRef<HTMLDivElement, NodeProps>(
         style={{ width: width ?? "auto", height: height ?? "auto" }}
       >
         {label && (
-          <Panel className="m-0 p-0" position="top-left">
+          <Panel className="p-0" position="top-left" style={nodeLabelPanelStyle}>
             <div className="w-fit bg-primary px-1 text-xs text-primary-foreground">
               {label}
             </div>
