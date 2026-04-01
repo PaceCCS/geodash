@@ -28,7 +28,10 @@ import { LabeledGroupNode } from "./nodes/labeled-group";
 import { GeographicAnchorNode } from "./nodes/geographic-anchor";
 import { GeographicWindowNode } from "./nodes/geographic-window";
 import { ImageNode } from "./nodes/image";
-import { shouldPersistNodeChanges } from "./flow-change-persistence";
+import {
+  shouldPersistNodeChanges,
+  shouldRefreshDerivedDataForNodeChanges,
+} from "./flow-change-persistence";
 import type { FlowNode, FlowEdge } from "@/lib/collections/flow-nodes";
 import {
   getSelectedNodeIdFromQuery,
@@ -56,6 +59,7 @@ type FlowNetworkProps = {
   edges: FlowEdge[];
   selectedQuery?: string;
   onSelectedQueryChange?: (query: string | null) => void;
+  onPropagationInputsChanged?: () => Promise<void> | void;
   /**
    * When provided, canvas edits are written back to TOML files in this
    * directory after a short debounce (bidirectional sync).
@@ -73,6 +77,7 @@ export function FlowNetwork({
   edges,
   selectedQuery,
   onSelectedQueryChange,
+  onPropagationInputsChanged,
   syncDirectory,
   suspendPersistence = false,
 }: FlowNetworkProps) {
@@ -82,6 +87,7 @@ export function FlowNetwork({
     [theme],
   );
   const syncTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const pendingDerivedRefreshRef = useRef(false);
   const reactFlowRef = useRef<ReactFlowInstance<Node, Edge> | null>(null);
   const pendingLocalNodeSelectionRef = useRef<string | undefined>(undefined);
   const lastViewportNodeSelectionRef = useRef<string | undefined>(undefined);
@@ -107,27 +113,42 @@ export function FlowNetwork({
   useEffect(() => {
     return () => {
       clearTimeout(syncTimer.current);
+      pendingDerivedRefreshRef.current = false;
     };
   }, []);
 
   useEffect(() => {
     if (suspendPersistence) {
       clearTimeout(syncTimer.current);
+      pendingDerivedRefreshRef.current = false;
     }
   }, [suspendPersistence]);
 
   // Schedule a write-back of the current nodes+edges to TOML files.
   const scheduleSyncToFiles = useCallback(
-    (updatedNodes: FlowNode[], updatedEdges: FlowEdge[]) => {
+    (
+      updatedNodes: FlowNode[],
+      updatedEdges: FlowEdge[],
+      options?: { reloadDerivedData?: boolean },
+    ) => {
       if (!syncDirectory || suspendPersistence) return;
+      pendingDerivedRefreshRef.current =
+        pendingDerivedRefreshRef.current || Boolean(options?.reloadDerivedData);
       clearTimeout(syncTimer.current);
       syncTimer.current = setTimeout(() => {
-        exportNetworkToToml(updatedNodes, updatedEdges, syncDirectory).catch(
-          (err) => console.error("[sync] Failed to write TOML:", err),
-        );
+        const shouldReloadDerivedData = pendingDerivedRefreshRef.current;
+        pendingDerivedRefreshRef.current = false;
+
+        exportNetworkToToml(updatedNodes, updatedEdges, syncDirectory)
+          .then(async () => {
+            if (shouldReloadDerivedData) {
+              await onPropagationInputsChanged?.();
+            }
+          })
+          .catch((err) => console.error("[sync] Failed to write TOML:", err));
       }, SYNC_DEBOUNCE_MS);
     },
-    [syncDirectory, suspendPersistence],
+    [onPropagationInputsChanged, syncDirectory, suspendPersistence],
   );
 
   const onNodesChange = useCallback(
@@ -149,6 +170,8 @@ export function FlowNetwork({
       setLocalNodes(updated);
 
       if (shouldPersistNodeChanges(relevantChanges) && !suspendPersistence) {
+        const shouldReloadDerivedData =
+          shouldRefreshDerivedDataForNodeChanges(relevantChanges);
         const activityEntries = diffNetworkSnapshots(
           createNetworkSnapshotFromFlow(
             persistedNodesRef.current,
@@ -161,7 +184,9 @@ export function FlowNetwork({
         );
         writeNodesToCollection(updated);
         persistedNodesRef.current = updated;
-        scheduleSyncToFiles(updated, localEdgesRef.current);
+        scheduleSyncToFiles(updated, localEdgesRef.current, {
+          reloadDerivedData: shouldReloadDerivedData,
+        });
         appendActivityLogEntries(activityEntries);
       }
     },
@@ -199,7 +224,9 @@ export function FlowNetwork({
         );
         writeEdgesToCollection(updated);
         persistedEdgesRef.current = updated;
-        scheduleSyncToFiles(localNodesRef.current, updated);
+        scheduleSyncToFiles(localNodesRef.current, updated, {
+          reloadDerivedData: true,
+        });
         appendActivityLogEntries(activityEntries);
       }
     },
@@ -241,7 +268,9 @@ export function FlowNetwork({
         );
         writeEdgesToCollection(updated);
         persistedEdgesRef.current = updated;
-        scheduleSyncToFiles(localNodesRef.current, updated);
+        scheduleSyncToFiles(localNodesRef.current, updated, {
+          reloadDerivedData: true,
+        });
         appendActivityLogEntries(activityEntries);
       }
     },

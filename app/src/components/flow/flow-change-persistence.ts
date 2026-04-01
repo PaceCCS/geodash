@@ -23,3 +23,19 @@ export function shouldPersistNodeChanges(changes: NodeChange[]): boolean {
     return true;
   });
 }
+
+export function shouldRefreshDerivedDataForNodeChanges(
+  changes: NodeChange[],
+): boolean {
+  return changes.some((change) => {
+    if (change.type === "select") {
+      return false;
+    }
+
+    if (change.type === "position" || change.type === "dimensions") {
+      return false;
+    }
+
+    return true;
+  });
+}

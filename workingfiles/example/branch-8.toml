@@ -11,13 +11,13 @@ weight = 1
 
 [[block]]
 type = "Source"
-pressure = 10
 flow_rate = 2
+pressure = 10
 
   [block.composition]
   carbonDioxideFraction = 0.9
-  hydrogenFraction = 0.0675
-  nitrogenFraction = 0.0325
+  nitrogenFraction = 0.05
+  hydrogenFraction = 0.05
 
 [[block]]
 type = "Pipe"

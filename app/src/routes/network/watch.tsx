@@ -8,6 +8,7 @@ import { FlowNetwork } from "@/components/flow/flow-network";
 import {
   nodesCollection,
   edgesCollection,
+  resetFlowToNetwork,
   sortNodesWithParentsFirst,
   writeNodesToCollection,
 } from "@/lib/collections/flow";
@@ -31,7 +32,10 @@ import {
 } from "@/lib/flow-selection";
 import type { FlowNode } from "@/lib/collections/flow-nodes";
 import { createNetworkSnapshotFromFlow, diffNetworkSnapshots } from "@/lib/network-activity";
-import type { NetworkConfigMetadata } from "@/lib/api-client";
+import {
+  getNetworkFromPath,
+  type NetworkConfigMetadata,
+} from "@/lib/api-client";
 import { isEditableFlowSelection } from "@/lib/selection-editor";
 
 type WatchSearch = {
@@ -328,6 +332,11 @@ function HydratedWatchNetwork({
       : [],
   );
 
+  const reloadPersistedNetwork = useCallback(async () => {
+    const refreshedNetwork = await getNetworkFromPath(syncDirectory);
+    await resetFlowToNetwork(refreshedNetwork);
+  }, [syncDirectory]);
+
   const handleSaveSelection = useCallback(
     async (nextNode: FlowNode) => {
       const previousNodes = sortNodesWithParentsFirst(nodesRaw);
@@ -344,9 +353,10 @@ function HydratedWatchNetwork({
 
       writeNodesToCollection(nextNodes);
       await exportNetworkToToml(nextNodes, edgesRaw, syncDirectory);
+      await reloadPersistedNetwork();
       appendActivityLogEntries(activityEntries);
     },
-    [edgesRaw, nodesRaw, syncDirectory],
+    [edgesRaw, nodesRaw, reloadPersistedNetwork, syncDirectory],
   );
 
   return (
@@ -354,6 +364,7 @@ function HydratedWatchNetwork({
       <FlowNetwork
         nodes={nodes}
         edges={edges}
+        onPropagationInputsChanged={reloadPersistedNetwork}
         syncDirectory={syncDirectory}
         suspendPersistence={suspendPersistence}
         selectedQuery={selectedQuery}
