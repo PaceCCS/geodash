@@ -4,6 +4,10 @@ import type { NodeProps } from "@xyflow/react";
 import type { GroupNodeData } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
+const nodeLabelPanelStyle = {
+  margin: 0,
+} as const;
+
 export const LabeledGroupNode = forwardRef<HTMLDivElement, NodeProps>(
   ({ data, selected, width, height }, ref) => {
     const { label } = data as GroupNodeData;
@@ -17,7 +21,7 @@ export const LabeledGroupNode = forwardRef<HTMLDivElement, NodeProps>(
         )}
         style={{ width: width ?? "100%", height: height ?? "100%" }}
       >
-        <Panel className="m-0 p-0" position="top-left">
+        <Panel className="p-0" position="top-left" style={nodeLabelPanelStyle}>
           {label && (
             <div className="w-fit bg-primary px-1 text-xs text-primary-foreground">
               {label}

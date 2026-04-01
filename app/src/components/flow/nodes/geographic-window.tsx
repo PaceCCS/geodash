@@ -3,6 +3,10 @@ import { Panel } from "@xyflow/react";
 import type { NodeProps } from "@xyflow/react";
 import { cn } from "@/lib/utils";
 
+const nodeLabelPanelStyle = {
+  margin: 0,
+} as const;
+
 export const GeographicWindowNode = forwardRef<HTMLDivElement, NodeProps>(
   ({ selected, width, height }, ref) => (
     <div
@@ -13,7 +17,7 @@ export const GeographicWindowNode = forwardRef<HTMLDivElement, NodeProps>(
       )}
       style={{ width: width ?? "100%", height: height ?? "100%" }}
     >
-      <Panel className="m-0 p-0" position="top-left">
+      <Panel className="p-0" position="top-left" style={nodeLabelPanelStyle}>
         <div className="w-fit bg-primary px-1 text-xs text-primary-foreground">
           Geographic Window
         </div>

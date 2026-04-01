@@ -367,7 +367,3 @@ code {
   --xy-edge-stroke: var(--rose-pine-highlight-high);
   --xy-minimap-node-background-color: var(--rose-pine-highlight-med);
 }
-
-.react-flow__panel {
-  margin: 0px;
-}
