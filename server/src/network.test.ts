@@ -382,6 +382,134 @@ describe("GET /api/network", () => {
     }
   });
 
+  test("weighted outgoing edges split upstream flow before downstream blending", async () => {
+    const networkDir = await mkdtemp(join(tmpdir(), "geodash-network-"));
+
+    try {
+      await writeFile(
+        join(networkDir, "branch-1.toml"),
+        [
+          'type = "branch"',
+          "",
+          "[position]",
+          "x = 0",
+          "y = 0",
+          "",
+          "[[outgoing]]",
+          'target = "branch-2"',
+          "weight = 1",
+          "",
+          "[[block]]",
+          'type = "Source"',
+          "flow_rate = 1.0",
+          "composition = {carbonDioxideFraction = 0.96, hydrogenFraction = 0.0075, nitrogenFraction = 0.0325}",
+        ].join("\n"),
+      );
+      await writeFile(
+        join(networkDir, "branch-4.toml"),
+        [
+          'type = "branch"',
+          "",
+          "[position]",
+          "x = 0",
+          "y = 100",
+          "",
+          "[[outgoing]]",
+          'target = "branch-2"',
+          "weight = 1",
+          "",
+          "[[block]]",
+          'type = "Source"',
+          "flow_rate = 3.0",
+          "composition = {carbonDioxideFraction = 0.96, hydrogenFraction = 0.0075, nitrogenFraction = 0.0325}",
+        ].join("\n"),
+      );
+      await writeFile(
+        join(networkDir, "branch-2.toml"),
+        [
+          'type = "branch"',
+          "",
+          "[position]",
+          "x = 100",
+          "y = 50",
+          "",
+          "[[outgoing]]",
+          'target = "branch-3"',
+          "weight = 1",
+          "",
+          "[[outgoing]]",
+          'target = "branch-5"',
+          "weight = 3",
+          "",
+          "[[block]]",
+          'type = "Pipe"',
+        ].join("\n"),
+      );
+      await writeFile(
+        join(networkDir, "branch-3.toml"),
+        [
+          'type = "branch"',
+          "",
+          "[position]",
+          "x = 200",
+          "y = 0",
+          "",
+          "[[block]]",
+          'type = "Pipe"',
+        ].join("\n"),
+      );
+      await writeFile(
+        join(networkDir, "branch-8.toml"),
+        [
+          'type = "branch"',
+          "",
+          "[position]",
+          "x = 100",
+          "y = 150",
+          "",
+          "[[outgoing]]",
+          'target = "branch-5"',
+          "weight = 1",
+          "",
+          "[[block]]",
+          'type = "Source"',
+          "flow_rate = 2.0",
+          "composition = {carbonDioxideFraction = 0.9, hydrogenFraction = 0.0675, nitrogenFraction = 0.0325}",
+        ].join("\n"),
+      );
+      await writeFile(
+        join(networkDir, "branch-5.toml"),
+        [
+          'type = "branch"',
+          "",
+          "[position]",
+          "x = 200",
+          "y = 100",
+          "",
+          "[[block]]",
+          'type = "Pipe"',
+        ].join("\n"),
+      );
+
+      const res = await app.handle(
+        new Request(`http://localhost/api/network?network=${encodeURIComponent(networkDir)}`),
+      );
+      expect(res.status).toBe(200);
+
+      const body = await res.json() as NetworkResponse;
+      const branch3 = body.nodes.find((node) => node.id === "branch-3");
+      const branch5 = body.nodes.find((node) => node.id === "branch-5");
+
+      expect(branch3?.data.flow_rate).toBe(1);
+      expect(branch5?.data.flow_rate).toBe(5);
+      expect((branch5?.data.composition as Record<string, number>).carbonDioxideFraction).toBeCloseTo(0.936, 9);
+      expect((branch5?.data.composition as Record<string, number>).hydrogenFraction).toBeCloseTo(0.0315, 9);
+      expect((branch5?.data.composition as Record<string, number>).nitrogenFraction).toBeCloseTo(0.0325, 9);
+    } finally {
+      await rm(networkDir, { recursive: true, force: true });
+    }
+  });
+
   test("labeled group has width and height", async () => {
     const res = await app.handle(
       new Request(`http://localhost/api/network?network=${encodeURIComponent(PRESET1)}`),

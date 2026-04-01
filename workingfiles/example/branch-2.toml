@@ -1,6 +1,7 @@
 type = "branch"
 label = "Branch 2"
 parentId = "group-1"
+diameter = "0.8 m"
 
 [position]
 x = 331.976328843401

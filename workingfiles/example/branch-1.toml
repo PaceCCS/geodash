@@ -3,8 +3,8 @@ label = "Branch 1"
 parentId = "group-1"
 
 [position]
-x = 71.03600530366414
-y = 54.25570252486324
+x = 28.868145219564397
+y = 48.984720014350785
 
 [[outgoing]]
 target = "branch-2"
@@ -15,10 +15,10 @@ type = "Source"
 pressure = 10
 flow_rate = 1
 
-  [block.composition]
-  carbonDioxideFraction = 0.96
-  hydrogenFraction = 0.0075
-  nitrogenFraction = 0.0325
+[block.composition]
+carbonDioxideFraction = 0.96
+hydrogenFraction = 0.0075
+nitrogenFraction = 0.0325
 
 [[block]]
 quantity = 4

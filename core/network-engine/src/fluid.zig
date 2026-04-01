@@ -221,6 +221,11 @@ pub fn propagate(
     var remaining = std.StringArrayHashMapUnmanaged(u32){};
     defer remaining.deinit(allocator);
 
+    // Cache the total outgoing weight for each branch so downstream propagation
+    // can split a branch's resolved flow across its outgoing edges.
+    var outgoing_weight_totals = std.StringArrayHashMapUnmanaged(u32){};
+    defer outgoing_weight_totals.deinit(allocator);
+
     {
         var it = in_degree.iterator();
         while (it.next()) |entry| {
@@ -228,6 +233,19 @@ pub fn propagate(
             if (entry.value_ptr.* == 0) {
                 try queue.append(allocator, entry.key_ptr.*);
             }
+        }
+    }
+
+    for (net.nodes.items) |*node| {
+        switch (node.*) {
+            .branch => |*b| {
+                var total_weight: u32 = 0;
+                for (b.outgoing.items) |out| {
+                    total_weight += out.weight;
+                }
+                try outgoing_weight_totals.put(allocator, b.base.id, total_weight);
+            },
+            else => {},
         }
     }
 
@@ -259,11 +277,25 @@ pub fn propagate(
         for (net.edges.items) |*edge| {
             if (!std.mem.eql(u8, edge.target, branch_id)) continue;
             const upstream = result.entries.getPtr(edge.source) orelse continue;
+            const total_outgoing_weight = outgoing_weight_totals.get(edge.source) orelse 0;
+            if (total_outgoing_weight == 0) {
+                try validation.addWarningFmt(
+                    "Branch '{s}' has zero total outgoing weight; downstream propagation to '{s}' skipped",
+                    .{ edge.source, edge.target },
+                );
+                continue;
+            }
+
+            const contributed_flow = upstream.flow_rate
+                * @as(f64, @floatFromInt(edge.weight))
+                / @as(f64, @floatFromInt(total_outgoing_weight));
+            if (contributed_flow == 0.0) continue;
+
             if (acc_comp == null) {
                 acc_comp = try upstream.composition.clone(allocator);
-                acc_flow = upstream.flow_rate;
+                acc_flow = contributed_flow;
             } else {
-                try blendInto(allocator, &acc_comp.?, &acc_flow, &upstream.composition, upstream.flow_rate);
+                try blendInto(allocator, &acc_comp.?, &acc_flow, &upstream.composition, contributed_flow);
             }
         }
 
@@ -422,6 +454,83 @@ test "junction blends two upstream compositions by flow rate" {
     try std.testing.expectApproxEqAbs(@as(f64, 15.0), bf.flow_rate, 1e-9);
     try std.testing.expectApproxEqAbs(@as(f64, 10.0 / 15.0), bf.composition.components.get("CO2").?, 1e-6);
     try std.testing.expectApproxEqAbs(@as(f64, 5.0 / 15.0), bf.composition.components.get("N2").?, 1e-6);
+}
+
+test "weighted downstream split affects merged flow rate and composition" {
+    const allocator = std.testing.allocator;
+
+    var files = std.StringArrayHashMapUnmanaged([]const u8){};
+    defer files.deinit(allocator);
+
+    try files.put(allocator, "branch-1.toml",
+        \\type = "branch"
+        \\[[outgoing]]
+        \\target = "branch-2"
+        \\weight = 1
+        \\[[block]]
+        \\type = "Source"
+        \\flow_rate = 1.0
+        \\composition = {carbonDioxideFraction = 0.96, hydrogenFraction = 0.0075, nitrogenFraction = 0.0325}
+    );
+    try files.put(allocator, "branch-4.toml",
+        \\type = "branch"
+        \\[[outgoing]]
+        \\target = "branch-2"
+        \\weight = 1
+        \\[[block]]
+        \\type = "Source"
+        \\flow_rate = 3.0
+        \\composition = {carbonDioxideFraction = 0.96, hydrogenFraction = 0.0075, nitrogenFraction = 0.0325}
+    );
+    try files.put(allocator, "branch-2.toml",
+        \\type = "branch"
+        \\[[outgoing]]
+        \\target = "branch-3"
+        \\weight = 1
+        \\[[outgoing]]
+        \\target = "branch-5"
+        \\weight = 3
+        \\[[block]]
+        \\type = "Pipe"
+    );
+    try files.put(allocator, "branch-3.toml",
+        \\type = "branch"
+        \\[[block]]
+        \\type = "Pipe"
+    );
+    try files.put(allocator, "branch-8.toml",
+        \\type = "branch"
+        \\[[outgoing]]
+        \\target = "branch-5"
+        \\weight = 1
+        \\[[block]]
+        \\type = "Source"
+        \\flow_rate = 2.0
+        \\composition = {carbonDioxideFraction = 0.9, hydrogenFraction = 0.0675, nitrogenFraction = 0.0325}
+    );
+    try files.put(allocator, "branch-5.toml",
+        \\type = "branch"
+        \\[[block]]
+        \\type = "Pipe"
+    );
+
+    var validation = network_mod.ValidationResult.init(allocator);
+    defer validation.deinit();
+
+    var net = try network_mod.loadNetworkFromFiles(allocator, &files, &validation);
+    defer net.deinit(allocator);
+
+    var fluid_map = try propagate(allocator, &net, &validation);
+    defer fluid_map.deinit(allocator);
+
+    const branch_3 = fluid_map.get("branch-3").?;
+    try std.testing.expectApproxEqAbs(@as(f64, 1.0), branch_3.flow_rate, 1e-9);
+
+    const branch_5 = fluid_map.get("branch-5").?;
+    try std.testing.expectApproxEqAbs(@as(f64, 5.0), branch_5.flow_rate, 1e-9);
+    try std.testing.expectApproxEqAbs(@as(f64, 0.936), branch_5.composition.components.get("carbonDioxideFraction").?, 1e-9);
+    try std.testing.expectApproxEqAbs(@as(f64, 0.0315), branch_5.composition.components.get("hydrogenFraction").?, 1e-9);
+    try std.testing.expectApproxEqAbs(@as(f64, 0.0325), branch_5.composition.components.get("nitrogenFraction").?, 1e-9);
 }
 
 test "branch with no source or upstream gets a warning" {

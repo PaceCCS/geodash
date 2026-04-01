@@ -1,8 +1,8 @@
 type = "labeledGroup"
 label = "Labeled Group"
 width = 700
-height = 300
+height = 400
 
 [position]
-x = -143.12220973234832
-y = -465.40698168212157
+x = -5.198288048682343
+y = -436.53918412042407

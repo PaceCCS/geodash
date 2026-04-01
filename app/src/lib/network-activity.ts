@@ -3,7 +3,10 @@ import type {
   NetworkNode,
   NetworkResponse,
 } from "@/lib/api-client";
-import { buildTomlBlockObject, buildTomlNodeObject } from "@/lib/exporters/network-toml";
+import {
+  buildTomlBlockObject,
+  buildTomlNodeObject,
+} from "@/lib/exporters/network-toml";
 import type { FlowEdge, FlowNode } from "@/lib/collections/flow-nodes";
 import { toNetworkNode } from "@/lib/utils/filter-reactflow-props";
 import type {
@@ -107,13 +110,13 @@ export function diffNetworkSnapshots(
     }
 
     if (
-      previousNode.position.x !== nextNode.position.x
-      || previousNode.position.y !== nextNode.position.y
+      previousNode.position.x !== nextNode.position.x ||
+      previousNode.position.y !== nextNode.position.y
     ) {
       entries.push({
         source: options.source,
         kind: "change",
-        message: `${formatNodeKind(nextNode)} ${formatNodeDisplayName(nextNode)} moved: ${formatPosition(previousNode.position)} -> ${formatPosition(nextNode.position)}`,
+        message: `${formatNodeKind(nextNode)} ${formatNodeDisplayName(nextNode)} moved: ${formatPosition(previousNode.position)} → ${formatPosition(nextNode.position)}`,
       });
     }
 
@@ -122,7 +125,12 @@ export function diffNetworkSnapshots(
   }
 
   entries.push(
-    ...diffEdges(previous.edges, next.edges, options.source, addedOrRemovedNodeIds),
+    ...diffEdges(
+      previous.edges,
+      next.edges,
+      options.source,
+      addedOrRemovedNodeIds,
+    ),
   );
 
   if (entries.length <= maxEntries) {
@@ -156,7 +164,7 @@ function diffNodeProperties(
     .map((diff) => ({
       source,
       kind: "change" as const,
-      message: `${formatNodeKind(nextNode)} ${formatNodeDisplayName(nextNode)} ${formatPropertyPath(diff.path)}: ${formatDiffValue(diff.before)} -> ${formatDiffValue(diff.after)}`,
+      message: `${formatNodeKind(nextNode)} ${formatNodeDisplayName(nextNode)} ${formatPropertyPath(diff.path)}: ${formatDiffValue(diff.before)} → ${formatDiffValue(diff.after)}`,
     }));
 }
 
@@ -208,7 +216,7 @@ function diffBranchBlocks(
       entryDrafts.push({
         source,
         kind: "change",
-        message: `${formatNodeKind(nextNode)} ${formatNodeDisplayName(nextNode)} ${blockLabel} ${formatPropertyPath(diff.path)}: ${formatDiffValue(diff.before)} -> ${formatDiffValue(diff.after)}`,
+        message: `${formatNodeKind(nextNode)} ${formatNodeDisplayName(nextNode)} ${blockLabel} ${formatPropertyPath(diff.path)}: ${formatDiffValue(diff.before)} → ${formatDiffValue(diff.after)}`,
       });
     }
   }
@@ -225,7 +233,9 @@ function diffEdges(
   const previousEdgeMap = new Map(
     previousEdges.map((edge) => [getEdgeKey(edge), edge]),
   );
-  const nextEdgeMap = new Map(nextEdges.map((edge) => [getEdgeKey(edge), edge]));
+  const nextEdgeMap = new Map(
+    nextEdges.map((edge) => [getEdgeKey(edge), edge]),
+  );
   const edgeKeys = Array.from(
     new Set([...previousEdgeMap.keys(), ...nextEdgeMap.keys()]),
   ).sort();
@@ -240,14 +250,11 @@ function diffEdges(
       continue;
     }
 
-    if (
-      ignoredNodeIds.has(edge.source)
-      || ignoredNodeIds.has(edge.target)
-    ) {
+    if (ignoredNodeIds.has(edge.source) || ignoredNodeIds.has(edge.target)) {
       continue;
     }
 
-    const connectionLabel = `Connection ${edge.source} -> ${edge.target}`;
+    const connectionLabel = `Connection ${edge.source} → ${edge.target}`;
 
     if (!previousEdge && nextEdge) {
       entries.push({
@@ -268,14 +275,14 @@ function diffEdges(
     }
 
     if (
-      previousEdge
-      && nextEdge
-      && previousEdge.data.weight !== nextEdge.data.weight
+      previousEdge &&
+      nextEdge &&
+      previousEdge.data.weight !== nextEdge.data.weight
     ) {
       entries.push({
         source,
         kind: "change",
-        message: `${connectionLabel} weight: ${formatDiffValue(previousEdge.data.weight)} -> ${formatDiffValue(nextEdge.data.weight)}`,
+        message: `${connectionLabel} weight: ${formatDiffValue(previousEdge.data.weight)} → ${formatDiffValue(nextEdge.data.weight)}`,
       });
     }
   }
