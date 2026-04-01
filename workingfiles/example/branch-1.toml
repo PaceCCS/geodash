@@ -3,8 +3,8 @@ label = "Branch 1"
 parentId = "group-1"
 
 [position]
-x = 28.868145219564397
-y = 48.984720014350785
+x = 31.473801421615534
+y = 39.864923307171864
 
 [[outgoing]]
 target = "branch-2"
