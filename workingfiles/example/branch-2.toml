@@ -4,8 +4,8 @@ parentId = "group-1"
 diameter = "0.8 m"
 
 [position]
-x = 331.976328843401
-y = 10.468491517719087
+x = 412.7516711069858
+y = 18.285460123872497
 
 [[outgoing]]
 target = "branch-3"
