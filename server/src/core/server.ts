@@ -2,6 +2,16 @@ import { cors } from "@elysiajs/cors";
 import { Elysia } from "elysia";
 import { HttpError } from "./http";
 import { openapi, fromTypes } from "@elysiajs/openapi";
+import { opentelemetry } from "@elysiajs/opentelemetry";
+
+import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-node";
+import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-proto";
+
+// const exporter = new OTLPTraceExporter({
+//   url: "http://localhost:4318/v1/traces",
+// });
+
+// const processor = new BatchSpanProcessor(exporter);
 
 export type CreateFlowServerOptions<Env> = {
   readonly serviceName: string;
@@ -21,6 +31,21 @@ export async function createFlowServer<Env>(
     .use(
       openapi({
         references: fromTypes(),
+      }),
+    )
+    .use(
+      opentelemetry({
+        spanProcessors: [
+          new BatchSpanProcessor(
+            new OTLPTraceExporter({
+              url: "https://api.axiom.co/v1/traces",
+              headers: {
+                Authorization: `Bearer ${Bun.env.AXIOM_TOKEN}`,
+                "X-Axiom-Dataset": Bun.env.AXIOM_DATASET,
+              },
+            }),
+          ),
+        ],
       }),
     )
     .use(cors())
