@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { Elysia } from "elysia";
+import { Elysia, t } from "elysia";
 import { join, normalize, resolve } from "node:path";
 import { createModule } from "../core/operations";
 import {
@@ -14,10 +14,11 @@ import type { GeodashServerConfig } from "../config";
 import { loadNetwork } from "../services/core";
 import { resolveNetworkPath } from "../utils/network";
 
-export const networkModule = createModule(
-  (_config: GeodashServerConfig) =>
-    new Elysia({ prefix: "/api/network" })
-      .get("/assets/*", async ({ params, query, set }) =>
+export const networkModule = createModule((_config: GeodashServerConfig) =>
+  new Elysia({ prefix: "/api/network" })
+    .get(
+      "/assets/*",
+      async ({ params, query, set }) =>
         runRequest(
           Effect.gen(function* () {
             set.headers["cache-control"] = "no-store";
@@ -46,7 +47,8 @@ export const networkModule = createModule(
               () => file.exists(),
               (error) =>
                 internalError("Failed to load asset", {
-                  message: error instanceof Error ? error.message : String(error),
+                  message:
+                    error instanceof Error ? error.message : String(error),
                 }),
             );
 
@@ -54,13 +56,25 @@ export const networkModule = createModule(
               return yield* Effect.fail(notFound("Asset not found"));
             }
 
-            set.headers["content-type"] = file.type || "application/octet-stream";
+            set.headers["content-type"] =
+              file.type || "application/octet-stream";
             return file;
           }),
           set,
         ),
-      )
-      .get("/", async ({ query, set }) =>
+      {
+        query: t.Object({
+          network: t.String({ description: "Path to the network directory" }),
+        }),
+        detail: {
+          summary: "Get network asset",
+          description: "Serves a static asset file from a network directory",
+        },
+      },
+    )
+    .get(
+      "/",
+      async ({ query, set }) =>
         runRequest(
           Effect.gen(function* () {
             set.headers["cache-control"] = "no-store";
@@ -78,11 +92,22 @@ export const networkModule = createModule(
               () => loadNetwork(networkDir),
               (error) =>
                 internalError("Failed to load network", {
-                  message: error instanceof Error ? error.message : String(error),
+                  message:
+                    error instanceof Error ? error.message : String(error),
                 }),
             );
           }),
           set,
         ),
-      ),
+      {
+        query: t.Object({
+          network: t.String({ description: "Path to the network directory" }),
+        }),
+        detail: {
+          summary: "Load network",
+          description:
+            "Loads and returns the complete network definition from a directory of TOML files",
+        },
+      },
+    ),
 );

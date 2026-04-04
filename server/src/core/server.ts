@@ -1,6 +1,7 @@
 import { cors } from "@elysiajs/cors";
 import { Elysia } from "elysia";
 import { HttpError } from "./http";
+import { openapi, fromTypes } from "@elysiajs/openapi";
 
 export type CreateFlowServerOptions<Env> = {
   readonly serviceName: string;
@@ -17,6 +18,11 @@ export async function createFlowServer<Env>(
   }
 
   const app = new Elysia()
+    .use(
+      openapi({
+        references: fromTypes(),
+      }),
+    )
     .use(cors())
     .get("/health", () => ({
       status: "ok",

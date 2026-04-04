@@ -95,6 +95,10 @@ build-dim-wasm:
 install-app:
     cd app && bun install
 
+# Check all route handlers have OpenAPI annotations
+check-openapi:
+    bash scripts/check-openapi.sh
+
 # Run all checks
 check:
     zig fmt --check core/shapefile/src/ core/network-engine/src/
@@ -105,3 +109,4 @@ check:
     bash scripts/check-docs-freshness.sh
     bash scripts/check-test-coverage.sh
     bash scripts/check-test-counts.sh
+    bash scripts/check-openapi.sh

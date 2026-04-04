@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { Elysia } from "elysia";
+import { Elysia, t } from "elysia";
 import { createModule } from "../core/operations";
 import {
   badRequest,
@@ -11,9 +11,10 @@ import type { GeodashServerConfig } from "../config";
 import { queryNetwork } from "../services/core";
 import { resolveNetworkPath } from "../utils/network";
 
-export const queryModule = createModule(
-  (_config: GeodashServerConfig) =>
-    new Elysia({ prefix: "/api/query" }).get("/", async ({ query, set }) =>
+export const queryModule = createModule((_config: GeodashServerConfig) =>
+  new Elysia({ prefix: "/api/query" }).get(
+    "/",
+    async ({ query, set }) =>
       runRequest(
         Effect.gen(function* () {
           set.headers["cache-control"] = "no-store";
@@ -43,5 +44,18 @@ export const queryModule = createModule(
         }),
         set,
       ),
-    ),
+    {
+      query: t.Object({
+        q: t.String({
+          description: "Query string to execute against the network",
+        }),
+        network: t.String({ description: "Path to the network directory" }),
+      }),
+      detail: {
+        summary: "Query a network",
+        description:
+          "Executes a query against a loaded network using the WASM engine",
+      },
+    },
+  ),
 );
