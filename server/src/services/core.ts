@@ -12,6 +12,7 @@
 
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { record } from "@elysiajs/opentelemetry";
 
 // ── WASM export types ─────────────────────────────────────────────────────────
 
@@ -99,6 +100,7 @@ async function init(): Promise<void> {
 // ── Call helper ───────────────────────────────────────────────────────────────
 
 function callWasm(
+  name: string,
   rt: Runtime,
   fn: (
     inPtr: number,
@@ -108,41 +110,43 @@ function callWasm(
   ) => number,
   request: unknown
 ): unknown {
-  const input = rt.enc.encode(JSON.stringify(request));
+  return record(`wasm.${name}`, () => {
+    const input = rt.enc.encode(JSON.stringify(request));
 
-  const inPtr = rt.geodash_alloc(input.length);
-  if (inPtr === 0) throw new Error("geodash_alloc failed (OOM)");
-  new Uint8Array(rt.memory.buffer, inPtr, input.length).set(input);
+    const inPtr = rt.geodash_alloc(input.length);
+    if (inPtr === 0) throw new Error("geodash_alloc failed (OOM)");
+    new Uint8Array(rt.memory.buffer, inPtr, input.length).set(input);
 
-  // 8 bytes: [out_ptr: u32, out_len: u32]
-  const scratchPtr = rt.geodash_alloc(8);
-  if (scratchPtr === 0) {
+    // 8 bytes: [out_ptr: u32, out_len: u32]
+    const scratchPtr = rt.geodash_alloc(8);
+    if (scratchPtr === 0) {
+      rt.geodash_free(inPtr, input.length);
+      throw new Error("geodash_alloc failed (OOM)");
+    }
+
+    const rc = fn(inPtr, input.length, scratchPtr, scratchPtr + 4);
     rt.geodash_free(inPtr, input.length);
-    throw new Error("geodash_alloc failed (OOM)");
-  }
 
-  const rc = fn(inPtr, input.length, scratchPtr, scratchPtr + 4);
-  rt.geodash_free(inPtr, input.length);
+    const dv = new DataView(rt.memory.buffer);
+    const outPtr = dv.getUint32(scratchPtr, true);
+    const outLen = dv.getUint32(scratchPtr + 4, true);
+    rt.geodash_free(scratchPtr, 8);
 
-  const dv = new DataView(rt.memory.buffer);
-  const outPtr = dv.getUint32(scratchPtr, true);
-  const outLen = dv.getUint32(scratchPtr + 4, true);
-  rt.geodash_free(scratchPtr, 8);
+    if (outPtr === 0 || outLen === 0) {
+      throw new Error("WASM returned empty output");
+    }
 
-  if (outPtr === 0 || outLen === 0) {
-    throw new Error("WASM returned empty output");
-  }
+    const text = rt.dec.decode(new Uint8Array(rt.memory.buffer, outPtr, outLen));
+    rt.geodash_free(outPtr, outLen);
 
-  const text = rt.dec.decode(new Uint8Array(rt.memory.buffer, outPtr, outLen));
-  rt.geodash_free(outPtr, outLen);
+    const result = JSON.parse(text) as unknown;
+    if (rc !== 0) {
+      const err = result as { error?: string };
+      throw new Error(err.error ?? "WASM call failed");
+    }
 
-  const result = JSON.parse(text) as unknown;
-  if (rc !== 0) {
-    const err = result as { error?: string };
-    throw new Error(err.error ?? "WASM call failed");
-  }
-
-  return result;
+    return result;
+  });
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -152,22 +156,24 @@ export async function readNetworkDir(dir: string): Promise<{
   files: Record<string, string>;
   config: string | null;
 }> {
-  const { readdir } = await import("node:fs/promises");
-  const entries = await readdir(dir, { withFileTypes: true });
-  const files: Record<string, string> = {};
-  let config: string | null = null;
+  return record("io.read_network_dir", async () => {
+    const { readdir } = await import("node:fs/promises");
+    const entries = await readdir(dir, { withFileTypes: true });
+    const files: Record<string, string> = {};
+    let config: string | null = null;
 
-  await Promise.all(
-    entries
-      .filter((e) => e.isFile() && e.name.endsWith(".toml"))
-      .map(async (e) => {
-        const content = await readFile(join(dir, e.name), "utf-8");
-        if (e.name === "config.toml") config = content;
-        else files[e.name] = content;
-      })
-  );
+    await Promise.all(
+      entries
+        .filter((e) => e.isFile() && e.name.endsWith(".toml"))
+        .map(async (e) => {
+          const content = await readFile(join(dir, e.name), "utf-8");
+          if (e.name === "config.toml") config = content;
+          else files[e.name] = content;
+        })
+    );
 
-  return { files, config };
+    return { files, config };
+  });
 }
 
 export async function queryNetwork(
@@ -178,6 +184,7 @@ export async function queryNetwork(
   const rt = runtime!;
   const { files, config } = await readNetworkDir(networkDir);
   return callWasm(
+    "query",
     rt,
     (a, b, c, d) => rt.geodash_query(a, b, c, d),
     { files, config, query }
@@ -189,6 +196,7 @@ export async function loadNetwork(networkDir: string): Promise<unknown> {
   const rt = runtime!;
   const { files, config } = await readNetworkDir(networkDir);
   return callWasm(
+    "load_network",
     rt,
     (a, b, c, d) => rt.geodash_load_network(a, b, c, d),
     { files, config }
@@ -223,6 +231,7 @@ export async function importFromOlga(
   await init();
   const rt = runtime!;
   return callWasm(
+    "olga_import",
     rt,
     (a, b, c, d) => rt.geodash_olga_import(a, b, c, d),
     { key_content: keyContent, root_location: rootLocation }
@@ -237,6 +246,7 @@ export async function exportToOlga(
   await init();
   const rt = runtime!;
   return callWasm(
+    "olga_export",
     rt,
     (a, b, c, d) => rt.geodash_olga_export(a, b, c, d),
     { files, config, route_segments: routeSegments }
@@ -247,6 +257,7 @@ export async function computeRouteKp(shpB64: string): Promise<RouteKpResult> {
   await init();
   const rt = runtime!;
   return callWasm(
+    "compute_route_kp",
     rt,
     (a, b, c, d) => rt.geodash_compute_route_kp(a, b, c, d),
     { shp_b64: shpB64 }
@@ -260,6 +271,7 @@ export async function createRoute(
   await init();
   const rt = runtime!;
   return callWasm(
+    "create_route",
     rt,
     (a, b, c, d) => rt.geodash_create_route(a, b, c, d),
     { segments, root }

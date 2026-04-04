@@ -1,6 +1,7 @@
 import { Schema } from "effect";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { record } from "@elysiajs/opentelemetry";
 import {
   loadNetwork,
   readNetworkDir,
@@ -155,10 +156,12 @@ export async function validateNetworkForOlga(
 export async function computeRouteSegments(
   shpPath: string
 ): Promise<RouteSegment[]> {
-  const bytes = await readFile(shpPath);
-  const b64 = bytes.toString("base64");
-  const result = await computeRouteKp(b64);
-  return result.segments;
+  return record("olga.compute_route_segments", async () => {
+    const bytes = await readFile(shpPath);
+    const b64 = bytes.toString("base64");
+    const result = await computeRouteKp(b64);
+    return result.segments;
+  });
 }
 
 // ── resolveRouteSegments ──────────────────────────────────────────────────────
@@ -168,43 +171,45 @@ export async function resolveRouteSegments(
   networkDir: string,
   files: Record<string, string>
 ): Promise<Record<string, RouteSegment[]>> {
-  const { parse: parseTOML } = await import("smol-toml").catch(() => ({
-    parse: null,
-  }));
-  if (!parseTOML) return {};
+  return record("olga.resolve_route_segments", async () => {
+    const { parse: parseTOML } = await import("smol-toml").catch(() => ({
+      parse: null,
+    }));
+    if (!parseTOML) return {};
 
-  const result: Record<string, RouteSegment[]> = {};
+    const result: Record<string, RouteSegment[]> = {};
 
-  for (const [filename, content] of Object.entries(files)) {
-    if (!filename.endsWith(".toml")) continue;
+    for (const [filename, content] of Object.entries(files)) {
+      if (!filename.endsWith(".toml")) continue;
 
-    let parsed: { block?: Array<Record<string, unknown>> };
-    try {
-      parsed = parseTOML(content) as typeof parsed;
-    } catch {
-      continue;
-    }
-
-    if (!parsed.block) continue;
-
-    // Derive branch ID from filename (strip .toml)
-    const branchId = filename.slice(0, -5);
-
-    for (let bi = 0; bi < parsed.block.length; bi++) {
-      const block = parsed.block[bi];
-      if (block.type !== "Pipe") continue;
-      const route = block.route;
-      if (typeof route !== "string") continue;
-
-      const shpPath = join(networkDir, route);
+      let parsed: { block?: Array<Record<string, unknown>> };
       try {
-        const segs = await computeRouteSegments(shpPath);
-        result[`${branchId}/blocks/${bi}`] = segs;
+        parsed = parseTOML(content) as typeof parsed;
       } catch {
-        // Route file not found — skip; writer will use block properties
+        continue;
+      }
+
+      if (!parsed.block) continue;
+
+      // Derive branch ID from filename (strip .toml)
+      const branchId = filename.slice(0, -5);
+
+      for (let bi = 0; bi < parsed.block.length; bi++) {
+        const block = parsed.block[bi];
+        if (block.type !== "Pipe") continue;
+        const route = block.route;
+        if (typeof route !== "string") continue;
+
+        const shpPath = join(networkDir, route);
+        try {
+          const segs = await computeRouteSegments(shpPath);
+          result[`${branchId}/blocks/${bi}`] = segs;
+        } catch {
+          // Route file not found — skip; writer will use block properties
+        }
       }
     }
-  }
 
-  return result;
+    return result;
+  });
 }

@@ -99,6 +99,10 @@ install-app:
 check-openapi:
     bash scripts/check-openapi.sh
 
+# Check observability patterns (record, plugins)
+check-observability:
+    bash scripts/check-observability.sh
+
 # Run all checks
 check:
     zig fmt --check core/shapefile/src/ core/network-engine/src/
@@ -110,3 +114,4 @@ check:
     bash scripts/check-test-coverage.sh
     bash scripts/check-test-counts.sh
     bash scripts/check-openapi.sh
+    bash scripts/check-observability.sh
