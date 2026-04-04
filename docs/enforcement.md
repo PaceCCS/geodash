@@ -36,6 +36,10 @@ Tests must pass on every push. CI runs `zig build test` for shapefile and networ
 
 `scripts/check-test-coverage.sh` — checks that every Zig source file with logic has at least one `test` block. Excludes `root.zig`, `main.zig`, `wasm.zig`, `types.zig`, and `integration_test.zig`.
 
+### Observability check
+
+`scripts/check-observability.sh` — verifies that `server.ts` wires up both `opentelemetry` and `serverTiming` plugins, and that every service file in `server/src/services/` imports and calls `record()` from `@elysiajs/opentelemetry`.
+
 ## Philosophy
 
 > "Enforce boundaries centrally, allow autonomy locally."
