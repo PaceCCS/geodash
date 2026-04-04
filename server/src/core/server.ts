@@ -3,6 +3,7 @@ import { Elysia } from "elysia";
 import { HttpError } from "./http";
 import { openapi, fromTypes } from "@elysiajs/openapi";
 import { opentelemetry } from "@elysiajs/opentelemetry";
+import { serverTiming } from "@elysiajs/server-timing";
 
 import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-node";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-proto";
@@ -48,6 +49,7 @@ export async function createFlowServer<Env>(
         ],
       }),
     )
+    .use(serverTiming())
     .use(cors())
     .get("/health", () => ({
       status: "ok",
