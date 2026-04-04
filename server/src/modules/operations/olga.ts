@@ -1,4 +1,5 @@
 import { Effect } from "effect";
+import { Elysia, t } from "elysia";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createOperationModule } from "../../core/operations";
@@ -95,6 +96,15 @@ export const olgaOperationModule = createOperationModule({
           }),
           set,
         ),
+        {
+          body: t.Object({
+            network: t.String({ description: "Path to the network directory" }),
+          }),
+          detail: {
+            summary: "Validate network for OLGA",
+            description: "Checks whether a network meets the requirements for OLGA export",
+          },
+        },
       )
       .post("/export", async ({ body, set }) =>
         runRequest(
@@ -131,6 +141,15 @@ export const olgaOperationModule = createOperationModule({
           }),
           set,
         ),
+        {
+          body: t.Object({
+            network: t.String({ description: "Path to the network directory" }),
+          }),
+          detail: {
+            summary: "Export network to OLGA",
+            description: "Exports a network to OLGA .key format with route segment resolution",
+          },
+        },
       )
       .post("/import", async ({ body, set }) =>
         runRequest(
@@ -184,5 +203,20 @@ export const olgaOperationModule = createOperationModule({
           }),
           set,
         ),
+        {
+          body: t.Object({
+            key_content: t.String({ description: "OLGA .key file content" }),
+            output_dir: t.Optional(t.String({ description: "Directory to write imported files to" })),
+            root_location: t.Optional(t.Object({
+              x: t.Number(),
+              y: t.Number(),
+              z: t.Number(),
+            }, { description: "Root coordinate for the imported network" })),
+          }),
+          detail: {
+            summary: "Import OLGA network",
+            description: "Imports a network from OLGA .key format, producing TOML files and shapefiles",
+          },
+        },
       ),
 });
