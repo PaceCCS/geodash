@@ -110,7 +110,11 @@ function callWasm(
   ) => number,
   request: unknown
 ): unknown {
-  return record(`wasm.${name}`, () => {
+  return record(`wasm.${name}`, (span) => {
+    span.setAttributes({
+      'wasm.memory_bytes': rt.memory.buffer.byteLength,
+    });
+
     const input = rt.enc.encode(JSON.stringify(request));
 
     const inPtr = rt.geodash_alloc(input.length);
