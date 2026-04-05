@@ -235,13 +235,17 @@ async function findWasmBytes(): Promise<ArrayBuffer> {
     const { fileURLToPath } = await import("node:url");
     const __filename = fileURLToPath(import.meta.url);
     const thisDir = dirname(__filename);
+    const envWasmPath = process.env.DIM_WASM_PATH;
+    const envWasmDir = process.env.DIM_WASM_DIR;
 
     const candidates = [
+      envWasmPath,
+      envWasmDir ? join(envWasmDir, "dim_wasm.wasm") : null,
       join(thisDir, "dim_wasm.wasm"),
       join(thisDir, "..", "..", "..", "public", "dim", "dim_wasm.wasm"),
       join(process.cwd(), "dim", "wasm", "dim_wasm.wasm"),
       join(process.cwd(), "public", "dim", "dim_wasm.wasm"),
-    ];
+    ].filter((candidate): candidate is string => !!candidate);
 
     const wasmPath = candidates.find((p) => existsSync(p));
     if (!wasmPath) {
