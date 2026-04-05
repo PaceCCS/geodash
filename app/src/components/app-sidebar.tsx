@@ -86,9 +86,15 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton disabled tooltip="Coming soon">
-                  <Wrench />
-                  <span>Shapefile Tools</span>
+                <SidebarMenuButton
+                  asChild
+                  isActive={pathname === "/shapefiles/watch"}
+                  tooltip="Shapefile Tools"
+                >
+                  <Link to="/shapefiles/watch">
+                    <Wrench />
+                    <span>Shapefile Tools</span>
+                  </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>

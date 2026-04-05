@@ -896,3 +896,533 @@ fn runCreateRoute(input: []const u8) ![]u8 {
 
     return out_buf.toOwnedSlice(wasm_alloc);
 }
+
+// ── Generic shapefile JSON bridge ────────────────────────────────────────────
+
+fn geometryTypeName(geometry: shapefile.Geometry) []const u8 {
+    return switch (geometry) {
+        .point_z => "PointZ",
+        .poly_line_z => "PolyLineZ",
+    };
+}
+
+fn dbfFieldNameSlice(name: [11]u8) []const u8 {
+    const end = std.mem.indexOfScalar(u8, name[0..], 0) orelse name.len;
+    return std.mem.trimRight(u8, name[0..end], " ");
+}
+
+fn writeEditablePointJson(point: shapefile.PointZ, buf: *Buf, a: Allocator) !void {
+    try bufPrint(buf, a, "{{\"x\":{d},\"y\":{d},\"z\":{d},\"m\":{d}}}", .{
+        point.x,
+        point.y,
+        point.z,
+        point.m,
+    });
+}
+
+fn writeEditableRecordJson(record: shapefile.ShpRecord, buf: *Buf, a: Allocator) !void {
+    try bufPrint(buf, a, "{{\"number\":{d},\"geometry\":", .{record.number});
+    switch (record.geometry) {
+        .point_z => |point| {
+            try bufAppendSlice(buf, a, "{\"type\":\"PointZ\",");
+            try bufPrint(buf, a, "\"x\":{d},\"y\":{d},\"z\":{d},\"m\":{d}", .{
+                point.x,
+                point.y,
+                point.z,
+                point.m,
+            });
+            try bufAppendSlice(buf, a, "}}");
+        },
+        .poly_line_z => |poly| {
+            try bufAppendSlice(buf, a, "{\"type\":\"PolyLineZ\",\"parts\":[");
+            for (poly.parts, 0..) |part, index| {
+                if (index > 0) try bufAppend(buf, a, ',');
+                try bufPrint(buf, a, "{d}", .{part});
+            }
+            try bufAppendSlice(buf, a, "],\"points\":[");
+            for (poly.points, 0..) |coords, index| {
+                if (index > 0) try bufAppend(buf, a, ',');
+                const point = shapefile.PointZ{
+                    .x = coords[0],
+                    .y = coords[1],
+                    .z = poly.z[index],
+                    .m = poly.m[index],
+                };
+                try writeEditablePointJson(point, buf, a);
+            }
+            try bufAppendSlice(buf, a, "]}}");
+        },
+    }
+}
+
+fn writeDbfValueJson(value: shapefile.DbfValue, buf: *Buf, a: Allocator) !void {
+    switch (value) {
+        .string => |s| try writeJsonString(s, buf, a),
+        .number => |n| try bufPrint(buf, a, "{d}", .{n}),
+        .boolean => |b| try bufAppendSlice(buf, a, if (b) "true" else "false"),
+        .date => |d| try writeJsonString(d[0..], buf, a),
+        .null => try bufAppendSlice(buf, a, "null"),
+    }
+}
+
+fn parseJsonNumber(value: std.json.Value) !f64 {
+    return switch (value) {
+        .float => |f| f,
+        .integer => |i| @as(f64, @floatFromInt(i)),
+        .number_string => |s| try std.fmt.parseFloat(f64, s),
+        else => error.InvalidInput,
+    };
+}
+
+fn parseJsonU32(value: std.json.Value) !u32 {
+    return switch (value) {
+        .integer => |i| blk: {
+            if (i < 0) return error.InvalidInput;
+            break :blk @intCast(i);
+        },
+        .number_string => |s| try std.fmt.parseInt(u32, s, 10),
+        else => error.InvalidInput,
+    };
+}
+
+fn parseEditablePoint(value: std.json.Value) !shapefile.PointZ {
+    const obj = switch (value) {
+        .object => |o| o,
+        else => return error.InvalidInput,
+    };
+
+    return shapefile.PointZ{
+        .x = try parseJsonNumber(obj.get("x") orelse return error.InvalidInput),
+        .y = try parseJsonNumber(obj.get("y") orelse return error.InvalidInput),
+        .z = try parseJsonNumber(obj.get("z") orelse return error.InvalidInput),
+        .m = try parseJsonNumber(obj.get("m") orelse return error.InvalidInput),
+    };
+}
+
+fn parseDbfField(value: std.json.Value) !shapefile.DbfField {
+    const obj = switch (value) {
+        .object => |o| o,
+        else => return error.InvalidInput,
+    };
+
+    const name_value = switch (obj.get("name") orelse return error.InvalidInput) {
+        .string => |s| s,
+        else => return error.InvalidInput,
+    };
+    if (name_value.len == 0 or name_value.len > 11) return error.InvalidInput;
+
+    const field_type_value = switch (obj.get("fieldType") orelse return error.InvalidInput) {
+        .string => |s| s,
+        else => return error.InvalidInput,
+    };
+    if (field_type_value.len != 1) return error.InvalidInput;
+
+    var name: [11]u8 = .{0} ** 11;
+    @memcpy(name[0..name_value.len], name_value);
+
+    const field_length = try parseJsonU32(obj.get("length") orelse return error.InvalidInput);
+    const decimal_count = try parseJsonU32(obj.get("decimalCount") orelse return error.InvalidInput);
+
+    return shapefile.DbfField{
+        .name = name,
+        .field_type = field_type_value[0],
+        .length = std.math.cast(u8, field_length) orelse return error.InvalidInput,
+        .decimal_count = std.math.cast(u8, decimal_count) orelse return error.InvalidInput,
+    };
+}
+
+fn parseDbfValue(
+    allocator: Allocator,
+    field: shapefile.DbfField,
+    value: std.json.Value,
+) !shapefile.DbfValue {
+    if (value == .null) return .{ .null = {} };
+
+    return switch (field.field_type) {
+        'C' => switch (value) {
+            .string => |s| .{ .string = try allocator.dupe(u8, s) },
+            else => error.InvalidInput,
+        },
+        'N', 'F' => .{ .number = try parseJsonNumber(value) },
+        'L' => switch (value) {
+            .bool => |b| .{ .boolean = b },
+            else => error.InvalidInput,
+        },
+        'D' => switch (value) {
+            .string => |s| blk: {
+                if (s.len != 8) return error.InvalidInput;
+                var date: [8]u8 = undefined;
+                @memcpy(&date, s[0..8]);
+                break :blk .{ .date = date };
+            },
+            else => error.InvalidInput,
+        },
+        else => return error.InvalidInput,
+    };
+}
+
+fn buildEditablePolyLineZ(
+    allocator: Allocator,
+    parts: []const u32,
+    points: []const shapefile.PointZ,
+) !shapefile.PolyLineZ {
+    if (points.len == 0) return error.InvalidInput;
+
+    const next_parts = if (parts.len > 0) blk: {
+        const copy = try allocator.alloc(u32, parts.len);
+        @memcpy(copy, parts);
+        break :blk copy;
+    } else blk: {
+        const copy = try allocator.alloc(u32, 1);
+        copy[0] = 0;
+        break :blk copy;
+    };
+
+    for (next_parts) |part| {
+        if (part >= points.len) return error.InvalidInput;
+    }
+
+    const coords = try allocator.alloc([2]f64, points.len);
+    const z = try allocator.alloc(f64, points.len);
+    const m = try allocator.alloc(f64, points.len);
+
+    var min_x = std.math.inf(f64);
+    var min_y = std.math.inf(f64);
+    var max_x = -std.math.inf(f64);
+    var max_y = -std.math.inf(f64);
+    var min_z = std.math.inf(f64);
+    var max_z = -std.math.inf(f64);
+    var min_m = std.math.inf(f64);
+    var max_m = -std.math.inf(f64);
+
+    for (points, 0..) |point, index| {
+        coords[index] = .{ point.x, point.y };
+        z[index] = point.z;
+        m[index] = point.m;
+
+        min_x = @min(min_x, point.x);
+        min_y = @min(min_y, point.y);
+        max_x = @max(max_x, point.x);
+        max_y = @max(max_y, point.y);
+        min_z = @min(min_z, point.z);
+        max_z = @max(max_z, point.z);
+        min_m = @min(min_m, point.m);
+        max_m = @max(max_m, point.m);
+    }
+
+    return shapefile.PolyLineZ{
+        .bbox = .{
+            .min_x = min_x,
+            .min_y = min_y,
+            .max_x = max_x,
+            .max_y = max_y,
+        },
+        .parts = next_parts,
+        .points = coords,
+        .z_range = .{ .min = min_z, .max = max_z },
+        .z = z,
+        .m_range = .{ .min = min_m, .max = max_m },
+        .m = m,
+    };
+}
+
+fn parseEditableRecord(allocator: Allocator, value: std.json.Value, index: usize) !shapefile.ShpRecord {
+    const obj = switch (value) {
+        .object => |o| o,
+        else => return error.InvalidInput,
+    };
+    const geometry_value = obj.get("geometry") orelse return error.InvalidInput;
+    const geometry_obj = switch (geometry_value) {
+        .object => |o| o,
+        else => return error.InvalidInput,
+    };
+    const type_name = switch (geometry_obj.get("type") orelse return error.InvalidInput) {
+        .string => |s| s,
+        else => return error.InvalidInput,
+    };
+
+    const geometry: shapefile.Geometry = if (std.mem.eql(u8, type_name, "PointZ")) blk: {
+        const point = shapefile.PointZ{
+            .x = try parseJsonNumber(geometry_obj.get("x") orelse return error.InvalidInput),
+            .y = try parseJsonNumber(geometry_obj.get("y") orelse return error.InvalidInput),
+            .z = try parseJsonNumber(geometry_obj.get("z") orelse return error.InvalidInput),
+            .m = try parseJsonNumber(geometry_obj.get("m") orelse return error.InvalidInput),
+        };
+        break :blk .{ .point_z = point };
+    } else if (std.mem.eql(u8, type_name, "PolyLineZ")) blk: {
+        const parts_value = geometry_obj.get("parts") orelse return error.InvalidInput;
+        const points_value = geometry_obj.get("points") orelse return error.InvalidInput;
+
+        const part_items = switch (parts_value) {
+            .array => |arr| arr.items,
+            else => return error.InvalidInput,
+        };
+        const point_items = switch (points_value) {
+            .array => |arr| arr.items,
+            else => return error.InvalidInput,
+        };
+
+        const parts = try allocator.alloc(u32, part_items.len);
+        for (part_items, parts) |item, *part| {
+            part.* = try parseJsonU32(item);
+        }
+
+        const points = try allocator.alloc(shapefile.PointZ, point_items.len);
+        for (point_items, points) |item, *point| {
+            point.* = try parseEditablePoint(item);
+        }
+
+        break :blk .{ .poly_line_z = try buildEditablePolyLineZ(allocator, parts, points) };
+    } else return error.InvalidInput;
+
+    return shapefile.ShpRecord{
+        .number = @intCast(index + 1),
+        .geometry = geometry,
+    };
+}
+
+fn encodeBase64Alloc(allocator: Allocator, bytes: []const u8) ![]u8 {
+    const enc = std.base64.standard.Encoder;
+    const out = try allocator.alloc(u8, enc.calcSize(bytes.len));
+    _ = enc.encode(out, bytes);
+    return out;
+}
+
+// ── geodash_read_shapefile ───────────────────────────────────────────────────
+//
+// Input:  { shp_b64: string, dbf_b64?: string | null, prj?: string | null }
+// Output: {
+//   geometryType: "PointZ" | "PolyLineZ" | null,
+//   records: [{ number, geometry: { ... } }],
+//   fields: [{ name, fieldType, length, decimalCount }],
+//   rows: [(string | number | boolean | null)[]],
+//   prj: string | null
+// }
+
+export fn geodash_read_shapefile(in_ptr: u32, in_len: u32, out_ptr: u32, out_len: u32) i32 {
+    const input = @as([*]const u8, @ptrFromInt(in_ptr))[0..in_len];
+    const data = runReadShapefile(input) catch |e| return setError(e, out_ptr, out_len);
+    return setOutput(out_ptr, out_len, data);
+}
+
+fn runReadShapefile(input: []const u8) ![]u8 {
+    const json_parsed = try std.json.parseFromSlice(std.json.Value, wasm_alloc, input, .{});
+    defer json_parsed.deinit();
+
+    var arena = std.heap.ArenaAllocator.init(wasm_alloc);
+    defer arena.deinit();
+    const a = arena.allocator();
+
+    const obj = switch (json_parsed.value) {
+        .object => |o| o,
+        else => return error.InvalidInput,
+    };
+
+    const shp_b64 = switch (obj.get("shp_b64") orelse return error.MissingShpB64) {
+        .string => |s| s,
+        else => return error.InvalidInput,
+    };
+
+    const dec = std.base64.standard.Decoder;
+    const shp_len = try dec.calcSizeForSlice(shp_b64);
+    const shp_bytes = try a.alloc(u8, shp_len);
+    try dec.decode(shp_bytes, shp_b64);
+
+    const records = try shapefile.readShpFromBytes(a, shp_bytes);
+
+    var dbf_file: ?shapefile.dbf.DbfFile = null;
+    if (obj.get("dbf_b64")) |dbf_value| {
+        switch (dbf_value) {
+            .null => {},
+            .string => |dbf_b64| {
+                const dbf_len = try dec.calcSizeForSlice(dbf_b64);
+                const dbf_bytes = try a.alloc(u8, dbf_len);
+                try dec.decode(dbf_bytes, dbf_b64);
+                dbf_file = try shapefile.readDbfFromBytes(a, dbf_bytes);
+            },
+            else => return error.InvalidInput,
+        }
+    }
+
+    const prj: ?[]const u8 = if (obj.get("prj")) |prj_value| switch (prj_value) {
+        .null => null,
+        .string => |s| s,
+        else => return error.InvalidInput,
+    } else null;
+
+    var out_buf: Buf = .{};
+    errdefer out_buf.deinit(wasm_alloc);
+
+    try bufAppendSlice(&out_buf, wasm_alloc, "{\"geometryType\":");
+    if (records.len > 0) {
+        try writeJsonString(geometryTypeName(records[0].geometry), &out_buf, wasm_alloc);
+    } else {
+        try bufAppendSlice(&out_buf, wasm_alloc, "null");
+    }
+
+    try bufAppendSlice(&out_buf, wasm_alloc, ",\"records\":[");
+    for (records, 0..) |record, index| {
+        if (index > 0) try bufAppend(&out_buf, wasm_alloc, ',');
+        try writeEditableRecordJson(record, &out_buf, wasm_alloc);
+    }
+    try bufAppendSlice(&out_buf, wasm_alloc, "],\"fields\":[");
+
+    if (dbf_file) |file| {
+        for (file.header.fields, 0..) |field, index| {
+            if (index > 0) try bufAppend(&out_buf, wasm_alloc, ',');
+            try bufAppendSlice(&out_buf, wasm_alloc, "{\"name\":");
+            try writeJsonString(dbfFieldNameSlice(field.name), &out_buf, wasm_alloc);
+            try bufAppendSlice(&out_buf, wasm_alloc, ",\"fieldType\":");
+            try writeJsonString((&[_]u8{field.field_type})[0..1], &out_buf, wasm_alloc);
+            try bufPrint(&out_buf, wasm_alloc, ",\"length\":{d},\"decimalCount\":{d}", .{
+                field.length,
+                field.decimal_count,
+            });
+            try bufAppend(&out_buf, wasm_alloc, '}');
+        }
+    }
+
+    try bufAppendSlice(&out_buf, wasm_alloc, "],\"rows\":[");
+    if (dbf_file) |file| {
+        for (file.records, 0..) |row, row_index| {
+            if (row_index > 0) try bufAppend(&out_buf, wasm_alloc, ',');
+            try bufAppend(&out_buf, wasm_alloc, '[');
+            for (row, 0..) |cell, cell_index| {
+                if (cell_index > 0) try bufAppend(&out_buf, wasm_alloc, ',');
+                try writeDbfValueJson(cell, &out_buf, wasm_alloc);
+            }
+            try bufAppend(&out_buf, wasm_alloc, ']');
+        }
+    } else {
+        for (records, 0..) |_, row_index| {
+            if (row_index > 0) try bufAppend(&out_buf, wasm_alloc, ',');
+            try bufAppendSlice(&out_buf, wasm_alloc, "[]");
+        }
+    }
+
+    try bufAppendSlice(&out_buf, wasm_alloc, "],\"prj\":");
+    if (prj) |wkt| {
+        try writeJsonString(wkt, &out_buf, wasm_alloc);
+    } else {
+        try bufAppendSlice(&out_buf, wasm_alloc, "null");
+    }
+    try bufAppendSlice(&out_buf, wasm_alloc, "}");
+
+    return out_buf.toOwnedSlice(wasm_alloc);
+}
+
+// ── geodash_build_shapefile ──────────────────────────────────────────────────
+//
+// Input:  {
+//   records: [{ number?, geometry: { ... } }],
+//   fields: [{ name, fieldType, length, decimalCount }],
+//   rows: [(string | number | boolean | null)[]],
+//   prj?: string | null
+// }
+// Output: { shp_b64: string, shx_b64: string, dbf_b64: string, prj_b64?: string }
+
+export fn geodash_build_shapefile(in_ptr: u32, in_len: u32, out_ptr: u32, out_len: u32) i32 {
+    const input = @as([*]const u8, @ptrFromInt(in_ptr))[0..in_len];
+    const data = runBuildShapefile(input) catch |e| return setError(e, out_ptr, out_len);
+    return setOutput(out_ptr, out_len, data);
+}
+
+fn runBuildShapefile(input: []const u8) ![]u8 {
+    const json_parsed = try std.json.parseFromSlice(std.json.Value, wasm_alloc, input, .{});
+    defer json_parsed.deinit();
+
+    var arena = std.heap.ArenaAllocator.init(wasm_alloc);
+    defer arena.deinit();
+    const a = arena.allocator();
+
+    const obj = switch (json_parsed.value) {
+        .object => |o| o,
+        else => return error.InvalidInput,
+    };
+
+    const record_items = switch (obj.get("records") orelse return error.InvalidInput) {
+        .array => |arr| arr.items,
+        else => return error.InvalidInput,
+    };
+    const records = try a.alloc(shapefile.ShpRecord, record_items.len);
+    var shape_type: ?[]const u8 = null;
+    for (record_items, 0..) |record_value, index| {
+        records[index] = try parseEditableRecord(a, record_value, index);
+        const next_type = geometryTypeName(records[index].geometry);
+        if (shape_type) |current| {
+            if (!std.mem.eql(u8, current, next_type)) return shapefile.ShapefileError.MixedShapeTypes;
+        } else {
+            shape_type = next_type;
+        }
+    }
+
+    const fields = if (obj.get("fields")) |fields_value| blk: {
+        const field_items = switch (fields_value) {
+            .array => |arr| arr.items,
+            else => return error.InvalidInput,
+        };
+        const parsed_fields = try a.alloc(shapefile.DbfField, field_items.len);
+        for (field_items, parsed_fields) |field_value, *field| {
+            field.* = try parseDbfField(field_value);
+        }
+        break :blk parsed_fields;
+    } else &.{};
+
+    const row_items = switch (obj.get("rows") orelse return error.InvalidInput) {
+        .array => |arr| arr.items,
+        else => return error.InvalidInput,
+    };
+    if (row_items.len != records.len) return error.InvalidInput;
+
+    const rows = try a.alloc([]const shapefile.DbfValue, row_items.len);
+    for (row_items, rows) |row_value, *row| {
+        const cell_items = switch (row_value) {
+            .array => |arr| arr.items,
+            else => return error.InvalidInput,
+        };
+        if (cell_items.len != fields.len) return error.InvalidInput;
+
+        const values = try a.alloc(shapefile.DbfValue, fields.len);
+        for (cell_items, fields, values) |cell_value, field, *cell| {
+            cell.* = try parseDbfValue(a, field, cell_value);
+        }
+        row.* = values;
+    }
+
+    const prj: ?[]const u8 = if (obj.get("prj")) |prj_value| switch (prj_value) {
+        .null => null,
+        .string => |s| if (s.len > 0) s else null,
+        else => return error.InvalidInput,
+    } else null;
+
+    const shp_bytes = try shapefile.buildSHPBytes(wasm_alloc, records);
+    defer wasm_alloc.free(shp_bytes);
+    const shx_bytes = try shapefile.buildSHXBytes(wasm_alloc, records);
+    defer wasm_alloc.free(shx_bytes);
+    const dbf_bytes = try shapefile.buildDBFBytes(wasm_alloc, fields, rows);
+    defer wasm_alloc.free(dbf_bytes);
+
+    const shp_b64 = try encodeBase64Alloc(a, shp_bytes);
+    const shx_b64 = try encodeBase64Alloc(a, shx_bytes);
+    const dbf_b64 = try encodeBase64Alloc(a, dbf_bytes);
+    const prj_b64 = if (prj) |wkt| try encodeBase64Alloc(a, wkt) else null;
+
+    var out_buf: Buf = .{};
+    errdefer out_buf.deinit(wasm_alloc);
+
+    try bufAppendSlice(&out_buf, wasm_alloc, "{\"shp_b64\":\"");
+    try bufAppendSlice(&out_buf, wasm_alloc, shp_b64);
+    try bufAppendSlice(&out_buf, wasm_alloc, "\",\"shx_b64\":\"");
+    try bufAppendSlice(&out_buf, wasm_alloc, shx_b64);
+    try bufAppendSlice(&out_buf, wasm_alloc, "\",\"dbf_b64\":\"");
+    try bufAppendSlice(&out_buf, wasm_alloc, dbf_b64);
+    try bufAppend(&out_buf, wasm_alloc, '"');
+    if (prj_b64) |encoded_prj| {
+        try bufAppendSlice(&out_buf, wasm_alloc, ",\"prj_b64\":\"");
+        try bufAppendSlice(&out_buf, wasm_alloc, encoded_prj);
+        try bufAppend(&out_buf, wasm_alloc, '"');
+    }
+    try bufAppendSlice(&out_buf, wasm_alloc, "}");
+
+    return out_buf.toOwnedSlice(wasm_alloc);
+}

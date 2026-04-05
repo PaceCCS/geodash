@@ -1,5 +1,7 @@
 import { defineConfig } from "@playwright/test";
 
+const rendererEntryPath = "http://127.0.0.1:3100";
+
 export default defineConfig({
   testDir: "./tests/electron",
   timeout: 60_000,
@@ -14,8 +16,8 @@ export default defineConfig({
     video: "retain-on-failure",
   },
   webServer: {
-    command: "bun run dev:web",
-    url: "http://127.0.0.1:3000",
+    command: "bunx vite dev --strictPort --port 3100 --host 127.0.0.1",
+    url: rendererEntryPath,
     cwd: ".",
     reuseExistingServer: true,
     stdout: "pipe",

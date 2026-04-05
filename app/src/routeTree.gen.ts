@@ -10,11 +10,17 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ShapefilesWatchRouteImport } from './routes/shapefiles/watch'
 import { Route as NetworkWatchRouteImport } from './routes/network/watch'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ShapefilesWatchRoute = ShapefilesWatchRouteImport.update({
+  id: '/shapefiles/watch',
+  path: '/shapefiles/watch',
   getParentRoute: () => rootRouteImport,
 } as any)
 const NetworkWatchRoute = NetworkWatchRouteImport.update({
@@ -26,27 +32,31 @@ const NetworkWatchRoute = NetworkWatchRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/network/watch': typeof NetworkWatchRoute
+  '/shapefiles/watch': typeof ShapefilesWatchRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/network/watch': typeof NetworkWatchRoute
+  '/shapefiles/watch': typeof ShapefilesWatchRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/network/watch': typeof NetworkWatchRoute
+  '/shapefiles/watch': typeof ShapefilesWatchRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/network/watch'
+  fullPaths: '/' | '/network/watch' | '/shapefiles/watch'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/network/watch'
-  id: '__root__' | '/' | '/network/watch'
+  to: '/' | '/network/watch' | '/shapefiles/watch'
+  id: '__root__' | '/' | '/network/watch' | '/shapefiles/watch'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   NetworkWatchRoute: typeof NetworkWatchRoute
+  ShapefilesWatchRoute: typeof ShapefilesWatchRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -56,6 +66,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/shapefiles/watch': {
+      id: '/shapefiles/watch'
+      path: '/shapefiles/watch'
+      fullPath: '/shapefiles/watch'
+      preLoaderRoute: typeof ShapefilesWatchRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/network/watch': {
@@ -71,6 +88,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   NetworkWatchRoute: NetworkWatchRoute,
+  ShapefilesWatchRoute: ShapefilesWatchRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

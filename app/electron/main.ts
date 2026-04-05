@@ -1,5 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
-import { dirname, join, resolve } from "node:path";
+import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promises as fs, type Stats } from "node:fs";
 import net from "node:net";
@@ -182,24 +182,44 @@ function emitFileChanged(paths: string[]): void {
   }
 }
 
-function isTomlFilePath(filePath: string): boolean {
-  return filePath.toLowerCase().endsWith(".toml");
+function normalizeWatchedExtensions(extensions?: string[]): string[] {
+  if (!extensions || extensions.length === 0) {
+    return [".toml"];
+  }
+
+  return extensions.map((extension) =>
+    extension.startsWith(".")
+      ? extension.toLowerCase()
+      : `.${extension.toLowerCase()}`,
+  );
 }
 
-function shouldIgnoreWatchedPath(watchedPath: string, stats?: Stats): boolean {
+function hasAllowedExtension(filePath: string, extensions: string[]): boolean {
+  return extensions.includes(extname(filePath).toLowerCase());
+}
+
+function shouldIgnoreWatchedPath(
+  watchedPath: string,
+  extensions: string[],
+  stats?: Stats,
+): boolean {
   if (stats?.isDirectory()) {
     return false;
   }
 
   if (stats?.isFile()) {
-    return !isTomlFilePath(watchedPath);
+    return !hasAllowedExtension(watchedPath, extensions);
   }
 
   return false;
 }
 
-async function startWatchingDirectory(directoryPath: string): Promise<void> {
+async function startWatchingDirectory(
+  directoryPath: string,
+  extensions?: string[],
+): Promise<void> {
   await stopWatchingDirectory();
+  const watchedExtensions = normalizeWatchedExtensions(extensions);
 
   const nextWatcher = chokidar.watch(directoryPath, {
     ignoreInitial: true,
@@ -208,12 +228,13 @@ async function startWatchingDirectory(directoryPath: string): Promise<void> {
       stabilityThreshold: 250,
       pollInterval: 50,
     },
-    ignored: shouldIgnoreWatchedPath,
+    ignored: (watchedPath, stats) =>
+      shouldIgnoreWatchedPath(watchedPath, watchedExtensions, stats),
   });
 
   const handleChange = (changedPath: string) => {
     const resolvedPath = resolve(changedPath);
-    if (!isTomlFilePath(resolvedPath)) {
+    if (!hasAllowedExtension(resolvedPath, watchedExtensions)) {
       return;
     }
 
@@ -291,6 +312,29 @@ function registerIpcHandlers(): void {
     return result.filePaths[0] ?? null;
   });
 
+  ipcMain.handle("desktop:pick-shapefile-directory", async () => {
+    const testDirectory = process.env.GEODASH_TEST_PICK_DIRECTORY;
+    if (testDirectory) {
+      return testDirectory;
+    }
+
+    const result = mainWindow
+      ? await dialog.showOpenDialog(mainWindow, {
+          properties: ["openDirectory"],
+          title: "Select Shapefile Directory",
+        })
+      : await dialog.showOpenDialog({
+          properties: ["openDirectory"],
+          title: "Select Shapefile Directory",
+        });
+
+    if (result.canceled) {
+      return null;
+    }
+
+    return result.filePaths[0] ?? null;
+  });
+
   ipcMain.handle("desktop:read-network-directory", async (_event, directoryPath: string) => {
     const entries = await fs.readdir(directoryPath, { withFileTypes: true });
     return Promise.all(
@@ -326,9 +370,35 @@ function registerIpcHandlers(): void {
     }
   });
 
-  ipcMain.handle("desktop:start-watching-directory", async (_event, directoryPath: string) => {
-    await startWatchingDirectory(directoryPath);
+  ipcMain.handle(
+    "desktop:write-binary-file",
+    async (_event, filePath: string, base64Content: string) => {
+      recordOwnWrite(filePath);
+      try {
+        await fs.writeFile(filePath, Buffer.from(base64Content, "base64"));
+      } catch (error) {
+        clearOwnWrite(filePath);
+        throw error;
+      }
+    },
+  );
+
+  ipcMain.handle("desktop:delete-file", async (_event, filePath: string) => {
+    recordOwnWrite(filePath);
+    try {
+      await fs.rm(filePath);
+    } catch (error) {
+      clearOwnWrite(filePath);
+      throw error;
+    }
   });
+
+  ipcMain.handle(
+    "desktop:start-watching-directory",
+    async (_event, directoryPath: string, extensions?: string[]) => {
+      await startWatchingDirectory(directoryPath, extensions);
+    },
+  );
 
   ipcMain.handle("desktop:stop-watching-directory", async () => {
     await stopWatchingDirectory();
