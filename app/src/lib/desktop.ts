@@ -9,10 +9,13 @@ type DesktopApi = {
   startLocalServer: (backendPath: string) => Promise<string>;
   stopLocalServer: () => Promise<void>;
   pickNetworkDirectory: () => Promise<string | null>;
+  pickShapefileDirectory: () => Promise<string | null>;
   readNetworkDirectory: (path: string) => Promise<NetworkFile[]>;
   writeNetworkFile: (path: string, content: string) => Promise<void>;
   deleteNetworkFile: (path: string) => Promise<void>;
-  startWatchingDirectory: (path: string) => Promise<void>;
+  writeBinaryFile: (path: string, base64Content: string) => Promise<void>;
+  deleteFile: (path: string) => Promise<void>;
+  startWatchingDirectory: (path: string, extensions?: string[]) => Promise<void>;
   stopWatchingDirectory: () => Promise<void>;
   onFileChanged: (listener: FileChangedListener) => () => void;
 };
@@ -47,6 +50,10 @@ export async function pickNetworkDirectory(): Promise<string | null> {
   return getDesktopApi().pickNetworkDirectory();
 }
 
+export async function pickShapefileDirectory(): Promise<string | null> {
+  return getDesktopApi().pickShapefileDirectory();
+}
+
 export async function readNetworkDirectory(path: string): Promise<NetworkFile[]> {
   return getDesktopApi().readNetworkDirectory(path);
 }
@@ -62,8 +69,22 @@ export async function deleteNetworkFile(path: string): Promise<void> {
   return getDesktopApi().deleteNetworkFile(path);
 }
 
-export async function startWatchingDirectory(path: string): Promise<void> {
-  return getDesktopApi().startWatchingDirectory(path);
+export async function writeBinaryFile(
+  path: string,
+  base64Content: string,
+): Promise<void> {
+  return getDesktopApi().writeBinaryFile(path, base64Content);
+}
+
+export async function deleteFile(path: string): Promise<void> {
+  return getDesktopApi().deleteFile(path);
+}
+
+export async function startWatchingDirectory(
+  path: string,
+  extensions?: string[],
+): Promise<void> {
+  return getDesktopApi().startWatchingDirectory(path, extensions);
 }
 
 export async function stopWatchingDirectory(): Promise<void> {

@@ -12,7 +12,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const appRoot = resolve(__dirname, "..", "..");
 const mainScriptPath = join(appRoot, "dist-electron", "main.js");
-const rendererEntryPath = "http://127.0.0.1:3000";
+const rendererEntryPath = "http://127.0.0.1:3100";
 const presetFixtureDirectory = resolve(
   appRoot,
   "..",
@@ -38,17 +38,7 @@ test("launches the Electron app and enters watch mode", async () => {
   try {
     const page = await electronApp.firstWindow();
 
-    await page.waitForLoadState("domcontentloaded");
-    await expect(page.getByRole("heading", { name: "geodash" })).toBeVisible();
-    await page.getByRole("link", { name: "Network Editor", exact: true }).click();
-    await expect(
-      page.getByRole("button", { name: "Select Directory" }).first(),
-    ).toBeVisible();
-    await page.getByRole("button", { name: "Select Directory" }).first().click();
-
-    await expect(
-      page.getByRole("button", { name: "Stop Watching" }),
-    ).toBeVisible();
+    await openWatchMode(page);
     await expect(page.getByText("Preset 1")).toBeVisible();
     await expect(page.getByText("Auto-saving")).toBeVisible();
     await expect(
@@ -137,13 +127,20 @@ async function openWatchMode(page: Page) {
   await page.waitForLoadState("domcontentloaded");
   await expect(page.getByRole("heading", { name: "geodash" })).toBeVisible();
   await page.getByRole("link", { name: "Network Editor", exact: true }).click();
-  await expect(
-    page.getByRole("button", { name: "Select Directory" }).first(),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Select Directory" }).first().click();
-  await expect(
-    page.getByRole("button", { name: "Stop Watching" }),
-  ).toBeVisible();
+  const selectDirectoryButtons = page.getByRole("button", { name: "Select Directory" });
+  const stopWatchingButton = page.getByRole("button", { name: "Stop Watching" });
+
+  await expect(page.getByText("No Directory Selected")).toBeVisible();
+  await expect(selectDirectoryButtons.last()).toBeVisible();
+  await selectDirectoryButtons.last().click();
+
+  try {
+    await expect(stopWatchingButton).toBeVisible({ timeout: 3_000 });
+  } catch {
+    await selectDirectoryButtons.first().click();
+    await expect(stopWatchingButton).toBeVisible();
+  }
+
   await expect(page.getByText("Auto-saving")).toBeVisible();
 }
 

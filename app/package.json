@@ -5,7 +5,7 @@
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "concurrently -k -n RENDERER,ELECTRON_TS,ELECTRON \"bun run dev:web\" \"bunx tsc -p tsconfig.electron.json --watch --preserveWatchOutput\" \"bunx wait-on http://127.0.0.1:3000 dist-electron/main.js dist-electron/preload.js && bunx electron dist-electron/main.js\"",
-    "dev:web": "vite dev --port 3000 --host 0.0.0.0",
+    "dev:web": "vite dev --strictPort --port 3000 --host 0.0.0.0",
     "build": "bun run build:web && bun run build:electron",
     "build:web": "vite build",
     "build:electron": "bunx tsc -p tsconfig.electron.json",

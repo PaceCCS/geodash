@@ -92,15 +92,7 @@ fn appendU32Le(buf: *std.ArrayListUnmanaged(u8), allocator: std.mem.Allocator, v
 // Public read API
 // ---------------------------------------------------------------------------
 
-/// Parse a .dbf file. Caller owns the result; call result.deinit(allocator).
-pub fn read(allocator: std.mem.Allocator, path: []const u8) !DbfFile {
-    const file = try std.fs.cwd().openFile(path, .{});
-    defer file.close();
-
-    // Read whole file into memory (max 256 MiB).
-    const data = try file.readToEndAlloc(allocator, 256 * 1024 * 1024);
-    defer allocator.free(data);
-
+fn readFromData(allocator: std.mem.Allocator, data: []const u8) !DbfFile {
     var stream = std.io.fixedBufferStream(data);
     const reader = stream.reader();
 
@@ -233,6 +225,23 @@ pub fn read(allocator: std.mem.Allocator, path: []const u8) !DbfFile {
         .header = header,
         .records = records,
     };
+}
+
+/// Parse a .dbf file. Caller owns the result; call result.deinit(allocator).
+pub fn read(allocator: std.mem.Allocator, path: []const u8) !DbfFile {
+    const file = try std.fs.cwd().openFile(path, .{});
+    defer file.close();
+
+    // Read whole file into memory (max 256 MiB).
+    const data = try file.readToEndAlloc(allocator, 256 * 1024 * 1024);
+    defer allocator.free(data);
+
+    return readFromData(allocator, data);
+}
+
+/// Parse a .dbf from in-memory bytes (no file I/O — for WASM).
+pub fn readFromBytes(allocator: std.mem.Allocator, data: []const u8) !DbfFile {
+    return readFromData(allocator, data);
 }
 
 // ---------------------------------------------------------------------------

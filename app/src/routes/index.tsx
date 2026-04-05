@@ -32,13 +32,16 @@ function Home() {
           </p>
         </div>
 
-        <div className="border border-border rounded-lg p-4">
+        <Link
+          to="/shapefiles/watch"
+          className="border border-border rounded-lg p-4 hover:border-primary transition-colors block"
+        >
           <h2 className="text-xl font-bold">Shapefile Tools</h2>
           <p className="text-sm text-muted-foreground mt-1">
             Read and write ESRI shapefiles (SHP, SHX, DBF). PointZ and
-            PolyLineZ geometry types with KP computation.
+            PolyLineZ geometry types with a live directory-backed editor.
           </p>
-        </div>
+        </Link>
 
         <div className="border border-border rounded-lg p-4">
           <h2 className="text-xl font-bold">CRS Reprojection</h2>

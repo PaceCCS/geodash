@@ -4,6 +4,7 @@ import { createGeodashServerConfig } from "./config";
 import { networkModule } from "./modules/network";
 import { olgaOperationModule } from "./modules/operations/olga";
 import { queryModule } from "./modules/query";
+import { shapefileModule } from "./modules/shapefiles";
 
 const config = createGeodashServerConfig();
 
@@ -17,6 +18,7 @@ const app = await createFlowServer({
 const server = app
   .use(queryModule(config))
   .use(networkModule(config))
+  .use(shapefileModule(config))
   .use(operationsApp);
 
 server.listen(config.port);
