@@ -86,10 +86,17 @@ check-wasm-freshness:
 check-test-counts:
     bash scripts/check-test-counts.sh
 
-# Build dim WASM and copy to app
+# Build pinned dim WASM via Nix and copy it to the app's public assets
 build-dim-wasm:
-    cd ~/Repos/dim && zig build wasm -Doptimize=ReleaseSmall
-    cp ~/Repos/dim/zig-out/bin/dim_wasm.wasm app/public/dim/dim_wasm.wasm
+    nix --extra-experimental-features 'nix-command flakes' build path:.#dim-wasm
+    mkdir -p app/public/dim
+    cp result/share/dim/dim_wasm.wasm app/public/dim/dim_wasm.wasm
+
+# Build dim WASM from a local sibling checkout and copy it to the app
+build-dim-wasm-local:
+    nix --extra-experimental-features 'nix-command flakes' build path:.#dim-wasm --override-input dim-src path:../dim
+    mkdir -p app/public/dim
+    cp result/share/dim/dim_wasm.wasm app/public/dim/dim_wasm.wasm
 
 # Install app dependencies
 install-app:

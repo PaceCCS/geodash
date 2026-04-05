@@ -6,6 +6,56 @@ Website: [geoda.sh](https://geoda.sh)
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the system diagram, module boundaries, dependency rules, and data flow.
 
+## Development
+
+From the repo root:
+
+```sh
+# Core Zig/Bun/PROJ work
+nix develop path:.
+
+# App / Electron / Playwright work
+# Includes everything from the core shell, plus desktop/web extras
+nix develop path:.#desktop
+```
+
+If your Nix install reports `experimental Nix feature 'nix-command' is disabled`, either run the commands with:
+
+```sh
+nix --extra-experimental-features 'nix-command flakes' develop path:.
+```
+
+or enable them permanently in `~/.config/nix/nix.conf`:
+
+```text
+experimental-features = nix-command flakes
+```
+
+Initial setup:
+
+```sh
+just install-server
+just install-app
+just build-wasm
+```
+
+Common commands:
+
+```sh
+just dev                 # Electron app + auto-started server
+just dev-web             # Browser-only frontend
+just dev-server          # Standalone server
+just test-zig            # Zig tests
+just test-server         # Server tests
+just build-dim-wasm      # Refresh pinned dim WASM into app/public/dim
+```
+
+If you are iterating on a local sibling checkout of `dim` instead of the pinned GitHub source:
+
+```sh
+just build-dim-wasm-local
+```
+
 ## Workflows
 
 ### Route → Network
@@ -115,6 +165,58 @@ Global (config.toml)
 - **Group** — Organizational container for related branches
 - **Branch** — A network segment (e.g. a pipeline section)
 - **Block** — Individual component within a branch (e.g. a pipe, valve, compressor)
+
+## Nix
+
+Geodash ships a thin `flake.nix` wrapper over plain Nix files in `nix/`. The flake is used for developer entrypoints (`nix develop`, `nix build`) while the reusable logic lives outside the flake body.
+
+When iterating on the Nix files themselves, prefer explicit `path:.` references. That avoids Git-flake behavior where untracked local edits can be invisible to Nix.
+
+### Shells
+
+- `nix develop path:.` or `nix develop path:.#default` — Core Zig/Bun/PROJ workflow
+- `nix develop path:.#desktop` — Core shell plus Node for Electron / Playwright work
+
+Both shells expose:
+
+- `PROJ_DATA` / `PROJ_LIB` for the CRS tool
+- `DIM_WASM_DIR`, `DIM_WASM_PATH`, and `DIM_TS_PATH` pointing at the pinned `dim-wasm` package output
+
+The app's Node-side dim loader checks `DIM_WASM_PATH` / `DIM_WASM_DIR` first, so server-side and SSR code can load the packaged WASM directly when present.
+
+### dim-wasm package
+
+The flake exposes a `dim-wasm` package built from a pinned `dim` source release on GitHub:
+
+```sh
+nix build path:.#dim-wasm
+ls result/share/dim
+```
+
+This produces:
+
+- `result/share/dim/dim_wasm.wasm`
+- `result/share/dim/dim.ts`
+
+To copy the pinned WASM into the app's public assets:
+
+```sh
+just build-dim-wasm
+```
+
+To build from a local sibling checkout instead of the pinned GitHub source:
+
+```sh
+just build-dim-wasm-local
+# or directly:
+nix build path:.#dim-wasm --override-input dim-src path:../dim
+```
+
+To refresh the pinned `dim` input in `flake.lock`, use the modern flake update form:
+
+```sh
+nix flake update dim-src --flake path:.
+```
 
 ## Status
 
