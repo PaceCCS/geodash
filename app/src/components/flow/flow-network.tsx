@@ -303,16 +303,7 @@ export function FlowNetwork({
   }, [handleSelectedQueryChange]);
 
   useEffect(() => {
-    const selectedNodeId = getSelectedNodeIdFromQuery(selectedQuery);
-    if (selectedNodeId) {
-      lastViewportNodeSelectionRef.current = undefined;
-    }
-  }, [selectedQuery]);
-
-  useEffect(() => {
-    if (localNodes.length === 0) {
-      return;
-    }
+    if (localNodes.length === 0) return;
 
     const selectedNodeId = getSelectedNodeIdFromQuery(selectedQuery);
     if (!selectedNodeId) {
@@ -324,15 +315,6 @@ export function FlowNetwork({
     const selectedNode = localNodes.find((node) => node.id === selectedNodeId);
     if (!selectedNode) {
       handleSelectedQueryChange(null);
-    }
-  }, [localNodes, selectedQuery, handleSelectedQueryChange]);
-
-  useEffect(() => {
-    const selectedNodeId = getSelectedNodeIdFromQuery(selectedQuery);
-
-    if (!selectedNodeId) {
-      pendingLocalNodeSelectionRef.current = undefined;
-      lastViewportNodeSelectionRef.current = undefined;
       return;
     }
 
@@ -342,28 +324,21 @@ export function FlowNetwork({
       return;
     }
 
-    const reactFlow = reactFlowRef.current;
-    if (!reactFlow) {
-      return;
-    }
-
-    const selectedNode = localNodes.find((node) => node.id === selectedNodeId);
-    if (!selectedNode) {
-      return;
-    }
-
     if (lastViewportNodeSelectionRef.current === selectedNodeId) {
       return;
     }
 
     lastViewportNodeSelectionRef.current = selectedNodeId;
-    void reactFlow.fitView({
-      nodes: [{ id: selectedNode.id }],
-      duration: 250,
-      maxZoom: 1.25,
-      padding: 0.25,
-    });
-  }, [localNodes, selectedQuery]);
+    const reactFlow = reactFlowRef.current;
+    if (reactFlow) {
+      void reactFlow.fitView({
+        nodes: [{ id: selectedNode.id }],
+        duration: 250,
+        maxZoom: 1.25,
+        padding: 0.25,
+      });
+    }
+  }, [localNodes, selectedQuery, handleSelectedQueryChange]);
 
   return (
     <div className="h-full w-full">

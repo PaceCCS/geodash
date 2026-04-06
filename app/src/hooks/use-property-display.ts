@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   type DimensionKey,
   getPreferredUnit,
@@ -13,11 +13,12 @@ import {
  */
 export function usePreferredUnit(dimension: DimensionKey): string {
   const [unit, setUnit] = useState(() => getPreferredUnit(dimension));
+  const prevDimensionRef = useRef(dimension);
 
-  // Sync with storage on mount and when dimension changes
-  useEffect(() => {
+  if (prevDimensionRef.current !== dimension) {
+    prevDimensionRef.current = dimension;
     setUnit(getPreferredUnit(dimension));
-  }, [dimension]);
+  }
 
   return unit;
 }
@@ -29,11 +30,12 @@ export function useUnitPreference(
   dimension: DimensionKey
 ): [string, (unit: string) => void] {
   const [unit, setUnitState] = useState(() => getPreferredUnit(dimension));
+  const prevDimensionRef = useRef(dimension);
 
-  // Sync with storage on mount and when dimension changes
-  useEffect(() => {
+  if (prevDimensionRef.current !== dimension) {
+    prevDimensionRef.current = dimension;
     setUnitState(getPreferredUnit(dimension));
-  }, [dimension]);
+  }
 
   const setUnit = useCallback(
     (newUnit: string) => {
