@@ -265,54 +265,7 @@ async function findWasmBytes(): Promise<ArrayBuffer> {
 export async function initDim(): Promise<void> {
   if (!initPromise) {
     emitReady(false);
-    initPromise = (async () => {
-      const bytes = await findWasmBytes();
-
-      let currentMemory: WebAssembly.Memory | null = null;
-      const { instance } = await WebAssembly.instantiate(
-        bytes,
-        createWasiImports(() => currentMemory),
-      );
-      const exports = instance.exports as unknown as DimExports;
-      currentMemory = exports.memory;
-      const required: Array<keyof DimExports> = [
-        "memory",
-        "dim_alloc",
-        "dim_free",
-        "dim_ffi_reset",
-        "dim_ctx_new",
-        "dim_ctx_free",
-        "dim_ctx_define",
-        "dim_ctx_clear",
-        "dim_ctx_clear_all",
-        "dim_ctx_eval",
-        "dim_ctx_convert_expr",
-        "dim_ctx_convert_value",
-        "dim_ctx_is_compatible",
-        "dim_ctx_same_dimension",
-        "dim_ctx_batch_convert_exprs",
-        "dim_ctx_batch_convert_values",
-      ];
-
-      for (const name of required) {
-        if (!(name in exports)) {
-          throw new Error(`dim wasm exports mismatch: missing ${String(name)}`);
-        }
-      }
-
-      const ctx = toPtr(exports.dim_ctx_new());
-      if (!ctx) {
-        throw new Error("dim_ctx_new failed");
-      }
-
-      runtime = {
-        ...exports,
-        ctx,
-        enc: new TextEncoder(),
-        dec: new TextDecoder(),
-      };
-      emitReady(true);
-    })().catch((error) => {
+    initPromise = initializeDimRuntime().catch((error) => {
       if (runtime) {
         runtime.dim_ctx_free(runtime.ctx);
       }
@@ -323,6 +276,55 @@ export async function initDim(): Promise<void> {
     });
   }
   return initPromise;
+}
+
+async function initializeDimRuntime(): Promise<void> {
+  const bytes = await findWasmBytes();
+
+  let currentMemory: WebAssembly.Memory | null = null;
+  const { instance } = await WebAssembly.instantiate(
+    bytes,
+    createWasiImports(() => currentMemory),
+  );
+  const exports = instance.exports as unknown as DimExports;
+  currentMemory = exports.memory;
+  const required: Array<keyof DimExports> = [
+    "memory",
+    "dim_alloc",
+    "dim_free",
+    "dim_ffi_reset",
+    "dim_ctx_new",
+    "dim_ctx_free",
+    "dim_ctx_define",
+    "dim_ctx_clear",
+    "dim_ctx_clear_all",
+    "dim_ctx_eval",
+    "dim_ctx_convert_expr",
+    "dim_ctx_convert_value",
+    "dim_ctx_is_compatible",
+    "dim_ctx_same_dimension",
+    "dim_ctx_batch_convert_exprs",
+    "dim_ctx_batch_convert_values",
+  ];
+
+  for (const name of required) {
+    if (!(name in exports)) {
+      throw new Error(`dim wasm exports mismatch: missing ${String(name)}`);
+    }
+  }
+
+  const ctx = toPtr(exports.dim_ctx_new());
+  if (!ctx) {
+    throw new Error("dim_ctx_new failed");
+  }
+
+  runtime = {
+    ...exports,
+    ctx,
+    enc: new TextEncoder(),
+    dec: new TextDecoder(),
+  };
+  emitReady(true);
 }
 
 export async function recoverDim(): Promise<void> {
