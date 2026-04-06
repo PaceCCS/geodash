@@ -32,11 +32,10 @@ export function BooleanField({
   const showClearButton = onClear && hasLocalValue;
 
   // Display value priority: form value > stored block value > inherited value
-  const displayValue = hasFormValue
-    ? Boolean(field.state.value)
-    : inheritedValue?.rawValue != null
-      ? Boolean(inheritedValue.rawValue)
-      : false;
+  const displayValueSource = hasFormValue
+    ? field.state.value
+    : inheritedValue?.rawValue;
+  const displayValue = Boolean(displayValueSource);
 
   return (
     <div className={cn("space-y-2", className)}>

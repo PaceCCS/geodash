@@ -294,11 +294,7 @@ export function useCommands(initial?: CommandItem[] | (() => CommandItem[])) {
     unregistersRef.current = [];
   }, []);
 
-  const resolvedItems = initial
-    ? typeof initial === "function"
-      ? initial()
-      : initial
-    : [];
+  const resolvedItems = (typeof initial === "function" ? initial() : initial) ?? [];
 
   const commandsKey = resolvedItems
     .map((c) => `${c.id}:${c.label}`)

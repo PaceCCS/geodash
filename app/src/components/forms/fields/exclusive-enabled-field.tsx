@@ -30,11 +30,10 @@ export function ExclusiveEnabledField({
   const isInherited = inheritedValue?.scope && inheritedValue.scope !== "block";
   const showClearButton = onClear && hasLocalValue;
 
-  const displayValue = hasFormValue
-    ? Boolean(field.state.value)
-    : inheritedValue?.rawValue != null
-      ? Boolean(inheritedValue.rawValue)
-      : false;
+  const displayValueSource = hasFormValue
+    ? field.state.value
+    : inheritedValue?.rawValue;
+  const displayValue = Boolean(displayValueSource);
 
   const description =
     metadata.description ??

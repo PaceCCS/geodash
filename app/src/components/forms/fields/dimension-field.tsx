@@ -75,12 +75,12 @@ export function DimensionField({
       return "";
     }
     const strValue = String(value).trim();
-    const rawNumber =
-      typeof value === "number"
-        ? value
-        : /^-?\d*\.?\d+(?:[eE][+-]?\d+)?$/.test(strValue)
-          ? Number(strValue)
-          : null;
+    let rawNumber: number | null = null;
+    if (typeof value === "number") {
+      rawNumber = value;
+    } else if (/^-?\d*\.?\d+(?:[eE][+-]?\d+)?$/.test(strValue)) {
+      rawNumber = Number(strValue);
+    }
 
     // Raw numeric values from the network are interpreted in the schema's
     // base/default unit, then displayed in the user's preferred unit.
@@ -105,11 +105,9 @@ export function DimensionField({
   };
 
   // Get the value to display: form value > stored block value > inherited value
-  const effectiveValue = hasFormValue
-    ? field.state.value
-    : inheritedValue?.value != null
-      ? inheritedValue.value
-      : "";
+  const effectiveValue = (
+    hasFormValue ? field.state.value : inheritedValue?.value
+  ) ?? "";
 
   // Track whether user has started typing (to avoid overwriting with inherited value)
   const [hasUserTyped, setHasUserTyped] = useState(false);
