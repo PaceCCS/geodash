@@ -51,37 +51,78 @@ export function ShapefileEditorDialog({
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-auto">
-          {loadState.status === "loading" ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="text-center">
-                <RefreshCcw className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
-                <p className="mt-3 text-sm text-muted-foreground">
-                  Loading shapefile...
-                </p>
-              </div>
-            </div>
-          ) : loadState.status === "error" ? (
-            <div className="py-12 text-center">
-              <p className="text-sm text-destructive">{loadState.error}</p>
-            </div>
-          ) : loadState.status === "ready" && draft ? (
-            <ShapefileEditor
-              document={draft}
-              summary={loadState.summary}
-              onUpdate={updateDraft}
-            />
-          ) : (
-            <div className="flex items-center justify-center py-12">
-              <div className="text-center">
-                <TableProperties className="mx-auto h-8 w-8 text-muted-foreground" />
-                <p className="mt-3 text-sm text-muted-foreground">
-                  No shapefiles found in this directory.
-                </p>
-              </div>
-            </div>
-          )}
+          <ShapefileEditorDialogBody
+            loadState={loadState}
+            draft={draft}
+            updateDraft={updateDraft}
+          />
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+type ShapefileEditorDialogBodyProps = Pick<
+  ReturnType<typeof useShapefileEditor>,
+  "loadState" | "draft" | "updateDraft"
+>;
+
+function ShapefileEditorDialogBody({
+  loadState,
+  draft,
+  updateDraft,
+}: ShapefileEditorDialogBodyProps) {
+  if (loadState.status === "loading") {
+    return <ShapefileLoadingState />;
+  }
+
+  if (loadState.status === "error") {
+    return <ShapefileErrorState message={loadState.error} />;
+  }
+
+  if (loadState.status === "ready" && draft) {
+    return (
+      <ShapefileEditor
+        document={draft}
+        summary={loadState.summary}
+        onUpdate={updateDraft}
+      />
+    );
+  }
+
+  return <ShapefileEmptyState />;
+}
+
+function ShapefileLoadingState() {
+  return (
+    <div className="flex items-center justify-center py-12">
+      <div className="text-center">
+        <RefreshCcw className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
+        <p className="mt-3 text-sm text-muted-foreground">
+          Loading shapefile...
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function ShapefileErrorState({ message }: { message: string }) {
+  return (
+    <div className="py-12 text-center">
+      <p className="text-sm text-destructive">{message}</p>
+    </div>
+  );
+}
+
+function ShapefileEmptyState() {
+  return (
+    <div className="flex items-center justify-center py-12">
+      <div className="text-center">
+        <TableProperties className="mx-auto h-8 w-8 text-muted-foreground" />
+        <p className="mt-3 text-sm text-muted-foreground">
+          No shapefiles found in this directory.
+        </p>
+      </div>
+    </div>
   );
 }
