@@ -47,11 +47,11 @@ export function NumberField({
   const showClearButton = onClear && hasLocalValue;
 
   // Display value priority: form value > stored block value > inherited value
-  const displayValue = hasFormValue
-    ? String(field.state.value)
-    : inheritedValue?.value != null
-      ? String(inheritedValue.value)
-      : "";
+  const displayValueSource = hasFormValue
+    ? field.state.value
+    : inheritedValue?.value;
+  const displayValue =
+    displayValueSource == null ? "" : String(displayValueSource);
 
   const [rawValue, setRawValue] = useState(displayValue);
   const [prevDisplayValue, setPrevDisplayValue] = useState(displayValue);

@@ -480,11 +480,8 @@ const ComponentAmount = forwardRef<
     value !== undefined ? formatAmount(value) : "",
   );
   const [isEditing, setIsEditing] = useState(false);
-  const inputValue = isEditing
-    ? draftValue
-    : value !== undefined
-      ? formatAmount(value)
-      : "";
+  const formattedValue = value !== undefined ? formatAmount(value) : "";
+  const inputValue = isEditing ? draftValue : formattedValue;
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value;

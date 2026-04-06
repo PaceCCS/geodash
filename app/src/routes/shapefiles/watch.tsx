@@ -60,6 +60,43 @@ function ShapefileWatchPage() {
 
   const displayDirectoryPath =
     watch.phase === "active" ? watch.directoryPath.replace(/^\/+/, "") : null;
+  let mainContent = (
+    <div className="flex flex-1 items-center justify-center px-6">
+      <div className="max-w-md text-center">
+        <TableProperties className="mx-auto h-12 w-12 text-muted-foreground" />
+        <h2 className="mt-4 text-xl font-semibold">No Shapefile Selected</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Choose a `.shp` stem from the directory to inspect and edit its
+          geometry, DBF rows, and projection text.
+        </p>
+      </div>
+    </div>
+  );
+  if (docState.status === "loading") {
+    mainContent = (
+      <div
+        data-testid="shapefile-loading"
+        className="flex flex-1 items-center justify-center px-6"
+      >
+        <div className="max-w-md text-center">
+          <RefreshCcw className="mx-auto h-12 w-12 animate-spin text-muted-foreground" />
+          <h2 className="mt-4 text-xl font-semibold">Loading shapefile...</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Large point sets can take a moment to deserialize and prepare for
+            editing.
+          </p>
+        </div>
+      </div>
+    );
+  } else if (draft) {
+    mainContent = (
+      <ShapefileEditor
+        document={draft}
+        summary={selectedSummary}
+        onUpdate={updateDraft}
+      />
+    );
+  }
 
   // Expose test API in dev mode.
   useEffect(() => {
@@ -216,38 +253,7 @@ function ShapefileWatchPage() {
             />
 
             <main className="flex min-h-0 flex-1 flex-col overflow-auto">
-              {docState.status === "loading" ? (
-                <div
-                  data-testid="shapefile-loading"
-                  className="flex flex-1 items-center justify-center px-6"
-                >
-                  <div className="max-w-md text-center">
-                    <RefreshCcw className="mx-auto h-12 w-12 animate-spin text-muted-foreground" />
-                    <h2 className="mt-4 text-xl font-semibold">Loading shapefile...</h2>
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      Large point sets can take a moment to deserialize and prepare for
-                      editing.
-                    </p>
-                  </div>
-                </div>
-              ) : draft ? (
-                <ShapefileEditor
-                  document={draft}
-                  summary={selectedSummary}
-                  onUpdate={updateDraft}
-                />
-              ) : (
-                <div className="flex flex-1 items-center justify-center px-6">
-                  <div className="max-w-md text-center">
-                    <TableProperties className="mx-auto h-12 w-12 text-muted-foreground" />
-                    <h2 className="mt-4 text-xl font-semibold">No Shapefile Selected</h2>
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      Choose a `.shp` stem from the directory to inspect and edit its
-                      geometry, DBF rows, and projection text.
-                    </p>
-                  </div>
-                </div>
-              )}
+              {mainContent}
             </main>
           </div>
         </div>

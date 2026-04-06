@@ -1,6 +1,18 @@
 import { Input } from "@/components/ui/input";
 import type { ShapefileCell, ShapefileField } from "@/lib/api-client";
 
+function getLogicalFieldValue(value: ShapefileCell): string {
+  if (value === true) {
+    return "true";
+  }
+
+  if (value === false) {
+    return "false";
+  }
+
+  return "";
+}
+
 export function DbfCellEditor({
   field,
   value,
@@ -13,9 +25,7 @@ export function DbfCellEditor({
   if (field.fieldType === "L") {
     return (
       <select
-        value={
-          value === null ? "" : value === true ? "true" : value === false ? "false" : ""
-        }
+        value={getLogicalFieldValue(value)}
         onChange={(event) => {
           if (event.target.value === "") {
             onChange(null);

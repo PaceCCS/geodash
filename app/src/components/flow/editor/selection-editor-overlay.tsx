@@ -645,14 +645,7 @@ function createEmptyFieldDraft(
       ? inferredKind
       : fallbackKind;
 
-  const initialValue: NetworkValue =
-    kind === "boolean"
-      ? false
-      : kind === "json"
-        ? {}
-        : kind === "composition"
-          ? {}
-          : "";
+  const initialValue = getInitialValueForFieldKind(kind);
 
   return createDraftForKind(key, initialValue, kind, selection, configMetadata);
 }
@@ -671,14 +664,7 @@ function createDraftForKind(
   return {
     key,
     kind,
-    textValue:
-      kind === "json"
-        ? JSON.stringify(value ?? {}, null, 2)
-        : kind === "number" || kind === "quantity" || kind === "text"
-          ? value === undefined || value === null
-            ? ""
-            : String(value)
-          : "",
+    textValue: getDraftTextValue(kind, value),
     booleanValue: typeof value === "boolean" ? value : false,
     compositionValue: value,
     removable: isFieldRemovable(selection, key),
@@ -686,6 +672,30 @@ function createDraftForKind(
     dimension: unitFallback?.dimension,
     defaultUnit: unitFallback?.defaultUnit,
   };
+}
+
+function getInitialValueForFieldKind(kind: EditorFieldKind): NetworkValue {
+  switch (kind) {
+    case "boolean":
+      return false;
+    case "json":
+    case "composition":
+      return {};
+    default:
+      return "";
+  }
+}
+
+function getDraftTextValue(kind: EditorFieldKind, value: NetworkValue): string {
+  if (kind === "json") {
+    return JSON.stringify(value ?? {}, null, 2);
+  }
+
+  if (kind === "number" || kind === "quantity" || kind === "text") {
+    return value == null ? "" : String(value);
+  }
+
+  return "";
 }
 
 function inferFieldKind(

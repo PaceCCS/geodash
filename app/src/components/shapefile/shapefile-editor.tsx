@@ -94,7 +94,7 @@ export function ShapefileEditor({
 
       <AttributesSection document={draftDocument} onUpdate={onUpdate} />
 
-      {draftDocument.geometryType === "PointZ" ? (
+      {draftDocument.geometryType === "PointZ" && (
         <SectionCard
           title="Points"
           description="Edit PointZ geometry and matching DBF row values."
@@ -149,9 +149,11 @@ export function ShapefileEditor({
             }}
           />
         </SectionCard>
-      ) : draftDocument.geometryType === "PolyLineZ" ? (
+      )}
+
+      {draftDocument.geometryType === "PolyLineZ" && (
         <PolyLineSection document={draftDocument} onUpdate={onUpdate} />
-      ) : null}
+      )}
 
       <SectionCard
         title="Projection"
@@ -298,13 +300,10 @@ function FieldRow({
           disabled={field.fieldType === "L" || field.fieldType === "D"}
           onChange={(event) => {
             onUpdate((draft) => {
+              const minLength = field.fieldType === "D" ? 8 : 1;
               draft.fields[fieldIndex].length = clampByte(
                 Number(event.target.value) || 0,
-                field.fieldType === "L"
-                  ? 1
-                  : field.fieldType === "D"
-                    ? 8
-                    : 1,
+                minLength,
               );
             });
           }}
