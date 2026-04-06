@@ -50,7 +50,7 @@ export function useShapefileEditor(open: boolean, directoryPath: string) {
     let cancelled = false;
     setLoadState({ status: "loading" });
 
-    (async () => {
+    async function loadInitialDocument() {
       try {
         const summaries = await getShapefileSummaries(directoryPath);
         const selectable = summaries.filter((s) => !s.error);
@@ -74,7 +74,9 @@ export function useShapefileEditor(open: boolean, directoryPath: string) {
           error: err instanceof Error ? err.message : String(err),
         });
       }
-    })();
+    }
+
+    void loadInitialDocument();
 
     return () => {
       cancelled = true;

@@ -280,7 +280,7 @@ export function useShapefileWatch(autoOpenDirectory?: string | null) {
       );
       if (!relevant) return;
 
-      void (async () => {
+      async function handleRelevantFileChange() {
         try {
           if (isDirty) {
             setHasExternalChanges(true);
@@ -296,7 +296,9 @@ export function useShapefileWatch(autoOpenDirectory?: string | null) {
         } catch (err) {
           setError(err instanceof Error ? err.message : String(err));
         }
-      })();
+      }
+
+      void handleRelevantFileChange();
     });
 
     return unlisten;
