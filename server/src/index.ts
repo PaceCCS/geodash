@@ -2,13 +2,16 @@ import { createOperationsApp } from "./core/operations";
 import { createFlowServer } from "./core/server";
 import { createGeodashServerConfig } from "./config";
 import { networkModule } from "./modules/network";
+import { geoModule } from "./modules/operations/geo";
 import { olgaOperationModule } from "./modules/operations/olga";
 import { queryModule } from "./modules/query";
 import { shapefileModule } from "./modules/shapefiles";
 
 const config = createGeodashServerConfig();
 
-const operationsApp = createOperationsApp().use(olgaOperationModule(config));
+const operationsApp = createOperationsApp()
+  .use(geoModule(config))
+  .use(olgaOperationModule(config));
 
 const app = await createFlowServer({
   serviceName: config.serviceName,

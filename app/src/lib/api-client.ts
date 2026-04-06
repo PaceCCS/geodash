@@ -273,3 +273,27 @@ export async function buildShapefileDocument(
 ): Promise<BuildShapefileResponse> {
   return apiPost<BuildShapefileResponse>("/api/shapefiles/build", document);
 }
+
+// ── Geo Inspect ──────────────────────────────────────────────────────────────
+
+export type GeoFormat = "shapefile" | "kmz" | "csv" | "coordinates";
+
+export type MappableBlock = {
+  branchId: string;
+  blockIndex: number;
+  format: GeoFormat;
+  routePath: string | null;
+  routeLength: string | null;
+};
+
+export type GeoInspectResult = {
+  blocks: MappableBlock[];
+};
+
+export async function inspectGeoBlocks(
+  networkId: string,
+): Promise<GeoInspectResult> {
+  return apiPost<GeoInspectResult>("/api/operations/geo/inspect", {
+    network: networkId,
+  });
+}

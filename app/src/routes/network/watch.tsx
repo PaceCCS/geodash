@@ -12,6 +12,7 @@ import {
   sortNodesWithParentsFirst,
   writeNodesToCollection,
 } from "@/lib/collections/flow";
+import { refreshGeoCollection } from "@/lib/collections/geo";
 import { useFileWatcher } from "@/lib/hooks/use-file-watcher";
 import { pickNetworkDirectory } from "@/lib/desktop";
 import { NetworkProvider } from "@/contexts/network-context";
@@ -335,6 +336,9 @@ function HydratedWatchNetwork({
   const reloadPersistedNetwork = useCallback(async () => {
     const refreshedNetwork = await getNetworkFromPath(syncDirectory);
     await resetFlowToNetwork(refreshedNetwork);
+    refreshGeoCollection(syncDirectory).catch((err) =>
+      console.error("[watch] geo inspect failed:", err),
+    );
   }, [syncDirectory]);
 
   const handleSaveSelection = useCallback(
