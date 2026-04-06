@@ -1,7 +1,10 @@
 import { Handle, Position } from "@xyflow/react";
 import type { NodeProps } from "@xyflow/react";
+import { useLiveQuery } from "@tanstack/react-db";
+import { Map } from "lucide-react";
 import type { BranchNodeData } from "@/lib/api-client";
 import { useFlowSelection } from "@/components/flow/selection-context";
+import { geoCollection } from "@/lib/collections/geo";
 import { getSelectedBlockPath } from "@/lib/flow-selection";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +14,7 @@ export function BranchNode({ data, selected }: NodeProps) {
   const { label, blocks } = nodeData;
   const { selectedQuery, setSelectedQuery } = useFlowSelection();
   const selectedBlock = getSelectedBlockPath(selectedQuery);
+  const { data: geoBlocks = [] } = useLiveQuery(geoCollection);
 
   return (
     <div
@@ -31,33 +35,43 @@ export function BranchNode({ data, selected }: NodeProps) {
       </div>
       {blocks && blocks.length > 0 && (
         <div className="space-y-1 px-0.5">
-          {blocks.map((block, index) => (
-            <button
-              key={index}
-              type="button"
-              className={cn(
-                "w-full rounded-md px-2 py-1 text-left text-xs flex items-center gap-2 hover:bg-accent hover:text-accent-foreground",
-                selectedBlock?.nodeId === nodeData.id &&
-                  selectedBlock.blockIndex === index &&
-                  "bg-accent text-accent-foreground",
-              )}
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                setSelectedQuery?.(`${nodeData.id}/blocks/${index}`);
-              }}
-            >
-              <span className="text-muted-foreground w-6">#{index}</span>
+          {blocks.map((block, index) => {
+            const isMappable = geoBlocks.some(
+              (b) => b.branchId === nodeData.id && b.blockIndex === index,
+            );
 
-              <span className="truncate">
-                {block.label || block.type || block.kind}
-              </span>
+            return (
+              <button
+                key={index}
+                type="button"
+                className={cn(
+                  "w-full rounded-md px-2 py-1 text-left text-xs flex items-center gap-2 hover:bg-accent hover:text-accent-foreground",
+                  selectedBlock?.nodeId === nodeData.id &&
+                    selectedBlock.blockIndex === index &&
+                    "bg-accent text-accent-foreground",
+                )}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setSelectedQuery?.(`${nodeData.id}/blocks/${index}`);
+                }}
+              >
+                <span className="text-muted-foreground w-6">#{index}</span>
 
-              <span className="text-muted-foreground ml-auto">
-                ×{block.quantity}
-              </span>
-            </button>
-          ))}
+                <span className="truncate">
+                  {block.label || block.type || block.kind}
+                </span>
+
+                {isMappable ? (
+                  <Map className="h-3 w-3 shrink-0 text-muted-foreground" />
+                ) : null}
+
+                <span className="text-muted-foreground ml-auto">
+                  ×{block.quantity}
+                </span>
+              </button>
+            );
+          })}
         </div>
       )}
       <Handle type="source" position={Position.Right} />

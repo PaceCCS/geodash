@@ -22,6 +22,7 @@ type = "Capture Unit"
 [[block]]
 quantity = 1
 type = "Pipe"
+route = "assets/spirit"
 
 [[block]]
 type = "Compressor"
