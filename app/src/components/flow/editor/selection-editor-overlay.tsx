@@ -494,24 +494,11 @@ function EditorFieldRow({
       <div className="space-y-1">
         <p className="font-mono text-sm break-all">{field.key}</p>
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          {field.key === "route" && geoBlock ? (
-            <span className="inline-flex items-center">
-              {getGeoFormatLabel(geoBlock.format)}
-              {geoBlock.routeLength ? (
-                <>
-                  {" ("}
-                  <QuantityDisplay unit="km">
-                    {geoBlock.routeLength}
-                  </QuantityDisplay>
-                  {")"}
-                </>
-              ) : null}
-            </span>
-          ) : field.key === "route" ? (
-            <span>Path to route specifier</span>
-          ) : (
-            <span>{getEditorFieldKindLabel(field.kind)}</span>
-          )}
+          <RouteFieldLabel
+            fieldKey={field.key}
+            fieldKind={field.kind}
+            geoBlock={geoBlock}
+          />
           {dimensionLabel ? (
             <span>
               {dimensionLabel}
@@ -873,6 +860,39 @@ function getEditorFieldKindLabel(kind: EditorFieldKind): string {
     case "composition":
       return "Fluid";
   }
+}
+
+function RouteFieldLabel({
+  fieldKey,
+  fieldKind,
+  geoBlock,
+}: {
+  fieldKey: string;
+  fieldKind: EditorFieldKind;
+  geoBlock: { format: string; routeLength: string | null } | null;
+}) {
+  if (fieldKey !== "route") {
+    return <span>{getEditorFieldKindLabel(fieldKind)}</span>;
+  }
+
+  if (!geoBlock) {
+    return <span>Path to route specifier</span>;
+  }
+
+  return (
+    <span className="inline-flex items-center">
+      {getGeoFormatLabel(geoBlock.format)}
+      {geoBlock.routeLength ? (
+        <>
+          {" ("}
+          <QuantityDisplay dimension="length">
+            {geoBlock.routeLength}
+          </QuantityDisplay>
+          {")"}
+        </>
+      ) : null}
+    </span>
+  );
 }
 
 function getGeoFormatLabel(format: string): string {
