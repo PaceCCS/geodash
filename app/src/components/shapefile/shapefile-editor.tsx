@@ -133,17 +133,18 @@ export function ShapefileEditor({
                 if (record.geometry.type !== "PointZ") {
                   return;
                 }
-                record.geometry[key] = value;
+                draft.records[rowIndex] = {
+                  ...record,
+                  geometry: { ...record.geometry, [key]: value },
+                };
               });
             }}
             onCellChange={(rowIndex, fieldIndex, value) => {
               onUpdate((draft) => {
                 draft.rows = ensureRowCount(draft.rows, draft.records.length);
-                draft.rows[rowIndex] = ensureCellCount(
-                  draft.rows[rowIndex],
-                  draft.fields.length,
-                );
-                draft.rows[rowIndex][fieldIndex] = value;
+                const row = [...ensureCellCount(draft.rows[rowIndex], draft.fields.length)];
+                row[fieldIndex] = value;
+                draft.rows[rowIndex] = row;
               });
             }}
           />
