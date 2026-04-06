@@ -38,25 +38,7 @@ function ShapefileWatchPage() {
       ? new URLSearchParams(window.location.search).get("directory")
       : null;
 
-  const {
-    watch,
-    docState,
-    draft,
-    selectedSummary,
-    isDirty,
-    hasExternalChanges,
-    isBusy,
-    isSaving,
-    canSave,
-    error,
-    pickAndOpen,
-    openDirectory,
-    stopWatching,
-    reload,
-    selectStem,
-    save,
-    updateDraft,
-  } = useShapefileWatch(directoryQuery);
+  const { watch, editor, status, actions } = useShapefileWatch(directoryQuery);
 
   const displayDirectoryPath =
     watch.phase === "active" ? watch.directoryPath.replace(/^\/+/, "") : null;
@@ -72,7 +54,7 @@ function ShapefileWatchPage() {
       </div>
     </div>
   );
-  if (docState.status === "loading") {
+  if (editor.state.status === "loading") {
     mainContent = (
       <div
         data-testid="shapefile-loading"
@@ -88,12 +70,12 @@ function ShapefileWatchPage() {
         </div>
       </div>
     );
-  } else if (draft) {
+  } else if (editor.draft) {
     mainContent = (
       <ShapefileEditor
-        document={draft}
-        summary={selectedSummary}
-        onUpdate={updateDraft}
+        document={editor.draft}
+        summary={editor.selectedSummary}
+        onUpdate={actions.updateDraft}
       />
     );
   }
@@ -105,11 +87,11 @@ function ShapefileWatchPage() {
     const testWindow = window as Window & {
       __GEODASH_SHAPEFILE_TEST__?: ShapefileTestApi;
     };
-    testWindow.__GEODASH_SHAPEFILE_TEST__ = { openDirectory };
+    testWindow.__GEODASH_SHAPEFILE_TEST__ = { openDirectory: actions.openDirectory };
     return () => {
       delete testWindow.__GEODASH_SHAPEFILE_TEST__;
     };
-  }, [openDirectory]);
+  }, [actions.openDirectory]);
 
   useCommands(
     watch.phase === "active"
@@ -117,10 +99,10 @@ function ShapefileWatchPage() {
           {
             id: "select-shapefile-directory",
             label: "Change Shapefile Directory",
-            run: (dialog) => {
-              dialog.close();
-              void pickAndOpen();
-            },
+              run: (dialog) => {
+                dialog.close();
+                void actions.pickAndOpen();
+              },
             group: "Shapefile",
             icon: <FolderOpen />,
             shortcut: "Mod+O",
@@ -128,10 +110,10 @@ function ShapefileWatchPage() {
           {
             id: "save-shapefile",
             label: "Save Shapefile",
-            run: (dialog) => {
-              dialog.close();
-              void save();
-            },
+              run: (dialog) => {
+                dialog.close();
+                void actions.save();
+              },
             group: "Shapefile",
             icon: <Save />,
             shortcut: "Mod+S",
@@ -139,20 +121,20 @@ function ShapefileWatchPage() {
           {
             id: "reload-shapefile",
             label: "Reload From Disk",
-            run: (dialog) => {
-              dialog.close();
-              void reload();
-            },
+              run: (dialog) => {
+                dialog.close();
+                void actions.reload();
+              },
             group: "Shapefile",
             icon: <RefreshCcw />,
           },
           {
             id: "stop-shapefile-watch",
             label: "Stop Watching Directory",
-            run: (dialog) => {
-              dialog.close();
-              void stopWatching();
-            },
+              run: (dialog) => {
+                dialog.close();
+                void actions.stopWatching();
+              },
             group: "Shapefile",
             icon: <EyeOff />,
           },
@@ -161,10 +143,10 @@ function ShapefileWatchPage() {
           {
             id: "select-shapefile-directory",
             label: "Select Shapefile Directory",
-            run: (dialog) => {
-              dialog.close();
-              void pickAndOpen();
-            },
+              run: (dialog) => {
+                dialog.close();
+                void actions.pickAndOpen();
+              },
             group: "Shapefile",
             icon: <FolderOpen />,
             shortcut: "Mod+O",
@@ -178,10 +160,10 @@ function ShapefileWatchPage() {
         {watch.phase === "active" ? (
           <div className="flex w-full items-center justify-between gap-3 px-2">
             <div className="flex min-w-0 items-center gap-2">
-              {draft ? (
+              {editor.draft ? (
                 <>
                   <span className="max-w-64 shrink-0 truncate text-sm font-medium">
-                    {draft.name}
+                    {editor.draft.name}
                   </span>
                   <span className="text-xs text-muted-foreground">/</span>
                 </>
@@ -191,28 +173,28 @@ function ShapefileWatchPage() {
               </span>
             </div>
             <div className="flex items-center gap-2">
-              {isDirty ? <Badge variant="secondary">Unsaved</Badge> : null}
-              {hasExternalChanges ? (
+              {status.isDirty ? <Badge variant="secondary">Unsaved</Badge> : null}
+              {status.hasExternalChanges ? (
                 <Badge variant="destructive">Changed on disk</Badge>
               ) : null}
               <Button
                 variant="outline"
                 size="sm"
-                onClick={reload}
-                disabled={isBusy || isSaving}
+                onClick={actions.reload}
+                disabled={status.isBusy || status.isSaving}
               >
                 <RefreshCcw className="mr-1 h-3 w-3" />
                 Reload
               </Button>
-              <Button size="sm" onClick={save} disabled={!canSave}>
+              <Button size="sm" onClick={actions.save} disabled={!status.canSave}>
                 <Save className="mr-1 h-3 w-3" />
                 Save
               </Button>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={stopWatching}
-                disabled={isBusy || isSaving}
+                onClick={actions.stopWatching}
+                disabled={status.isBusy || status.isSaving}
               >
                 <EyeOff className="mr-1 h-3 w-3" />
                 Stop Watching
@@ -222,7 +204,7 @@ function ShapefileWatchPage() {
         ) : (
           <div className="flex w-full items-center justify-between px-2">
             <span className="text-sm font-medium">Watch Shapefile Directory</span>
-            <Button size="sm" onClick={pickAndOpen} disabled={isBusy}>
+            <Button size="sm" onClick={actions.pickAndOpen} disabled={status.isBusy}>
               <FolderOpen className="mr-1 h-3 w-3" />
               Select Directory
             </Button>
@@ -232,13 +214,13 @@ function ShapefileWatchPage() {
 
       {watch.phase === "active" ? (
         <div className="flex min-h-0 flex-1 flex-col">
-          {error ? (
+          {status.error ? (
             <div className="border-b border-border bg-destructive/5 px-4 py-3 text-sm text-destructive">
-              {error}
+              {status.error}
             </div>
           ) : null}
 
-          {hasExternalChanges && isDirty ? (
+          {status.hasExternalChanges && status.isDirty ? (
             <div className="border-b border-border bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
               Disk changes were detected while you had unsaved edits open. Reload to
               refresh from disk or save to keep your current draft.
@@ -249,7 +231,7 @@ function ShapefileWatchPage() {
             <ShapefileSidebar
               summaries={watch.summaries}
               selectedStemPath={watch.selectedStemPath}
-              onSelect={selectStem}
+              onSelect={actions.selectStem}
             />
 
             <main className="flex min-h-0 flex-1 flex-col overflow-auto">
@@ -269,7 +251,7 @@ function ShapefileWatchPage() {
                 You'll be able to browse `.shp` stems and save edits back to disk.
               </p>
             </div>
-            <Button size="lg" onClick={pickAndOpen} disabled={isBusy}>
+            <Button size="lg" onClick={actions.pickAndOpen} disabled={status.isBusy}>
               <FolderOpen className="mr-2 h-4 w-4" />
               Select Directory
             </Button>
