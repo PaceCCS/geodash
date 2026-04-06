@@ -1,4 +1,4 @@
-import * as TOML from "@iarna/toml";
+import TOML from "smol-toml";
 import type { FlowNode, FlowEdge } from "@/lib/collections/flow-nodes";
 import type { Block, NetworkNode } from "@/lib/api-client";
 import { toNetworkNode } from "@/lib/utils/filter-reactflow-props";
@@ -84,7 +84,7 @@ export function serializeNodeToToml(
   node: NetworkNode,
   outgoing?: Array<{ target: string; weight: number }>,
 ): string {
-  return TOML.stringify(buildTomlNodeObject(node, outgoing) as TOML.JsonMap);
+  return TOML.stringify(buildTomlNodeObject(node, outgoing));
 }
 
 export function buildTomlFiles(
@@ -142,7 +142,7 @@ export function getTomlPathsToDelete(
       }
 
       try {
-        const parsed = TOML.parse(content) as Record<string, unknown>;
+        const parsed = TOML.parse(content);
         return (
           typeof parsed?.type === "string"
           && MANAGED_NODE_TYPES.has(parsed.type)
