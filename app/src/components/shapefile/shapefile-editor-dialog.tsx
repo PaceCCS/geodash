@@ -15,6 +15,7 @@ import {
   type ShapefileDocument,
   type ShapefileSummary,
 } from "@/lib/api-client";
+import { appendActivityLogEntry } from "@/contexts/activity-log-context";
 import { deleteFile, writeBinaryFile } from "@/lib/desktop";
 import { ShapefileEditor } from "./shapefile-editor";
 
@@ -119,6 +120,18 @@ export function ShapefileEditorDialog({
       }
 
       isDirtyRef.current = false;
+
+      const name = draft.name ?? draft.stemPath.split("/").pop() ?? "shapefile";
+      appendActivityLogEntry({
+        source: "details",
+        kind: "change",
+        message: `Saved shapefile ${name}`,
+        changedPaths: [
+          `${draft.stemPath}.shp`,
+          `${draft.stemPath}.shx`,
+          `${draft.stemPath}.dbf`,
+        ],
+      });
     } catch (err) {
       console.error("[shapefile-editor-dialog] save failed:", err);
     }
@@ -140,7 +153,14 @@ export function ShapefileEditorDialog({
         if (!current) {
           return current;
         }
-        const next = structuredClone(current);
+        // Shallow-copy at the document level and copy records/rows arrays
+        // so the updater can mutate individual entries without cloning all 65k+.
+        const next: ShapefileDocument = {
+          ...current,
+          records: [...current.records],
+          rows: [...current.rows],
+          fields: [...current.fields],
+        };
         updater(next);
         return next;
       });
