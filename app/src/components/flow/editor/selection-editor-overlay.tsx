@@ -231,7 +231,7 @@ export function SelectionEditorOverlay({
             <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
               Edit {kindLabel}
             </p>
-            <h2 className="text-lg font-semibold break-words">{title}</h2>
+            <h2 className="text-lg font-semibold wrap-break-word">{title}</h2>
             <p className="mt-1 font-mono text-xs text-muted-foreground break-all">
               {selection.query}
             </p>
