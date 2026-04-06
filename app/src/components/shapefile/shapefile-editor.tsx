@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useRef, useState } from "react";
 import { Plus, Shapes, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -37,28 +37,28 @@ export function ShapefileEditor({
   onUpdate: (updater: (draft: ShapefileDocument) => void) => void;
 }) {
   const [pointPage, setPointPage] = useState(0);
+  const prevStemRef = useRef(draftDocument.stemPath);
 
-  useEffect(() => {
-    setPointPage(0);
-  }, [draftDocument.stemPath]);
+  let nextPointPage = pointPage;
 
-  useEffect(() => {
-    if (draftDocument.geometryType !== "PointZ") {
-      if (pointPage !== 0) {
-        setPointPage(0);
-      }
-      return;
-    }
+  // Reset page when switching to a different shapefile.
+  if (prevStemRef.current !== draftDocument.stemPath) {
+    prevStemRef.current = draftDocument.stemPath;
+    nextPointPage = 0;
+  }
 
-    const totalPages = Math.max(
-      1,
-      Math.ceil(draftDocument.records.length / POINT_RECORDS_PER_PAGE),
-    );
-    const maxPage = totalPages - 1;
-    if (pointPage > maxPage) {
-      setPointPage(maxPage);
-    }
-  }, [draftDocument.geometryType, draftDocument.records.length, pointPage]);
+  // Clamp page to valid range during render.
+  const maxPage =
+    draftDocument.geometryType === "PointZ"
+      ? Math.max(
+          0,
+          Math.ceil(draftDocument.records.length / POINT_RECORDS_PER_PAGE) - 1,
+        )
+      : 0;
+  nextPointPage = Math.min(nextPointPage, maxPage);
+  if (nextPointPage !== pointPage) {
+    setPointPage(nextPointPage);
+  }
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 p-4">
@@ -117,7 +117,7 @@ export function ShapefileEditor({
         >
           <PointRecordTable
             document={draftDocument}
-            page={pointPage}
+            page={nextPointPage}
             pageSize={POINT_RECORDS_PER_PAGE}
             onPageChange={setPointPage}
             onDeleteRow={(rowIndex) => {

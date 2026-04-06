@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect } from "react";
 import {
   EyeOff,
   FolderOpen,
@@ -13,24 +13,9 @@ import { ShapefileEditor } from "@/components/shapefile/shapefile-editor";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useCommands } from "@/contexts/keybind-provider";
-import {
-  buildShapefileDocument,
-  getShapefileDocument,
-  getShapefileSummaries,
-  type ShapefileDocument,
-  type ShapefileSummary,
-} from "@/lib/api-client";
-import {
-  deleteFile,
-  onFileChanged,
-  pickShapefileDirectory,
-  startWatchingDirectory,
-  stopWatchingDirectory,
-  writeBinaryFile,
-} from "@/lib/desktop";
+import type { ShapefileSummary } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
-
-const SHAPEFILE_WATCH_EXTENSIONS = [".shp", ".shx", ".dbf", ".prj"];
+import { useShapefileWatch } from "@/lib/hooks/use-shapefile-watch";
 
 type ShapefileWatchSearch = {
   directory?: string;
@@ -43,409 +28,61 @@ export const Route = createFileRoute("/shapefiles/watch")({
   component: ShapefileWatchPage,
 });
 
-type WatchState = {
-  enabled: boolean;
-  directoryPath: string | null;
-};
-
 type ShapefileTestApi = {
   openDirectory: (directoryPath: string) => Promise<void>;
 };
 
 function ShapefileWatchPage() {
-  const [watchState, setWatchState] = useState<WatchState>({
-    enabled: false,
-    directoryPath: null,
-  });
-  const [summaries, setSummaries] = useState<ShapefileSummary[]>([]);
-  const [selectedStemPath, setSelectedStemPath] = useState<string | null>(null);
-  const [loadedDocument, setLoadedDocument] = useState<ShapefileDocument | null>(null);
-  const [draftDocument, setDraftDocument] = useState<ShapefileDocument | null>(null);
-  const [isBusy, setIsBusy] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isLoadingDocument, setIsLoadingDocument] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isDirty, setIsDirty] = useState(false);
-  const [hasExternalChanges, setHasExternalChanges] = useState(false);
-  const watchStateRef = useRef(watchState);
-  const autoOpenedDirectoryRef = useRef<string | null>(null);
   const directoryQuery =
     typeof window !== "undefined"
       ? new URLSearchParams(window.location.search).get("directory")
       : null;
 
+  const {
+    watch,
+    docState,
+    draft,
+    selectedSummary,
+    isDirty,
+    hasExternalChanges,
+    isBusy,
+    isSaving,
+    canSave,
+    error,
+    pickAndOpen,
+    openDirectory,
+    stopWatching,
+    reload,
+    selectStem,
+    save,
+    updateDraft,
+  } = useShapefileWatch(directoryQuery);
+
+  const displayDirectoryPath =
+    watch.phase === "active" ? watch.directoryPath.replace(/^\/+/, "") : null;
+
+  // Expose test API in dev mode.
   useEffect(() => {
-    watchStateRef.current = watchState;
-  }, [watchState]);
-
-  useEffect(() => {
-    return () => {
-      if (watchStateRef.current.enabled) {
-        void stopWatchingDirectory();
-      }
-    };
-  }, []);
-
-  const selectedSummary = useMemo(
-    () => summaries.find((summary) => summary.stemPath === selectedStemPath) ?? null,
-    [selectedStemPath, summaries],
-  );
-  const displayDirectoryPath = watchState.directoryPath?.replace(/^\/+/, "") ?? null;
-  const canSave = watchState.enabled && draftDocument !== null && isDirty && !isSaving;
-
-  const refreshSummaries = useCallback(
-    async (
-      directoryPath: string,
-      {
-        preferredStemPath = selectedStemPath,
-        allowMissingSelection = false,
-      }: {
-        preferredStemPath?: string | null;
-        allowMissingSelection?: boolean;
-      } = {},
-    ) => {
-      const nextSummaries = await getShapefileSummaries(directoryPath);
-      setSummaries(nextSummaries);
-
-      const selectable = nextSummaries.filter((summary) => !summary.error);
-      const selectableStemPaths = new Set(selectable.map((summary) => summary.stemPath));
-
-      let nextSelectedStemPath = preferredStemPath ?? null;
-      if (!nextSelectedStemPath) {
-        nextSelectedStemPath = selectable[0]?.stemPath ?? null;
-      } else if (!allowMissingSelection && !selectableStemPaths.has(nextSelectedStemPath)) {
-        nextSelectedStemPath = selectable[0]?.stemPath ?? null;
-      }
-
-      setSelectedStemPath(nextSelectedStemPath);
-
-      if (!nextSelectedStemPath && !allowMissingSelection) {
-        setLoadedDocument(null);
-        setDraftDocument(null);
-        setIsDirty(false);
-      }
-
-      return {
-        summaries: nextSummaries,
-        selectedStemPath: nextSelectedStemPath,
-      };
-    },
-    [selectedStemPath],
-  );
-
-  const loadDocument = useCallback(async (stemPath: string) => {
-    setIsLoadingDocument(true);
-    try {
-      const nextDocument = await getShapefileDocument(stemPath);
-      setLoadedDocument(nextDocument);
-      setDraftDocument(structuredClone(nextDocument));
-      setIsDirty(false);
-      setHasExternalChanges(false);
-      return nextDocument;
-    } finally {
-      setIsLoadingDocument(false);
-    }
-  }, []);
-
-  const openDirectory = useCallback(
-    async (directoryPath: string) => {
-      setIsBusy(true);
-      setErrorMessage(null);
-
-      try {
-        await startWatchingDirectory(directoryPath, SHAPEFILE_WATCH_EXTENSIONS);
-        setWatchState({
-          enabled: true,
-          directoryPath,
-        });
-
-        const result = await refreshSummaries(directoryPath, {
-          preferredStemPath: null,
-        });
-        if (result.selectedStemPath) {
-          await loadDocument(result.selectedStemPath);
-        } else {
-          setLoadedDocument(null);
-          setDraftDocument(null);
-          setIsDirty(false);
-        }
-      } catch (error) {
-        setErrorMessage(error instanceof Error ? error.message : String(error));
-      } finally {
-        setIsBusy(false);
-      }
-    },
-    [loadDocument, refreshSummaries],
-  );
-
-  const handleSelectDirectory = useCallback(async () => {
-    const directoryPath = await pickShapefileDirectory();
-    if (!directoryPath) {
-      return;
-    }
-    await openDirectory(directoryPath);
-  }, [openDirectory]);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || !import.meta.env.DEV) {
-      return;
-    }
+    if (typeof window === "undefined" || !import.meta.env.DEV) return;
 
     const testWindow = window as Window & {
       __GEODASH_SHAPEFILE_TEST__?: ShapefileTestApi;
     };
-
-    testWindow.__GEODASH_SHAPEFILE_TEST__ = {
-      openDirectory,
-    };
-
+    testWindow.__GEODASH_SHAPEFILE_TEST__ = { openDirectory };
     return () => {
       delete testWindow.__GEODASH_SHAPEFILE_TEST__;
     };
   }, [openDirectory]);
 
-  useEffect(() => {
-    const directoryPath = directoryQuery;
-    if (
-      !directoryPath
-      || watchState.enabled
-      || isBusy
-      || autoOpenedDirectoryRef.current === directoryPath
-    ) {
-      return;
-    }
-
-    let active = true;
-    autoOpenedDirectoryRef.current = directoryPath;
-    setIsBusy(true);
-    setErrorMessage(null);
-
-    void (async () => {
-      try {
-        await startWatchingDirectory(directoryPath, SHAPEFILE_WATCH_EXTENSIONS);
-        if (!active) {
-          return;
-        }
-
-        setWatchState({
-          enabled: true,
-          directoryPath,
-        });
-
-        const result = await refreshSummaries(directoryPath, {
-          preferredStemPath: null,
-        });
-        if (!active) {
-          return;
-        }
-
-        if (result.selectedStemPath) {
-          await loadDocument(result.selectedStemPath);
-        } else {
-          setLoadedDocument(null);
-          setDraftDocument(null);
-          setIsDirty(false);
-        }
-      } catch (error) {
-        if (!active) {
-          return;
-        }
-        setErrorMessage(error instanceof Error ? error.message : String(error));
-      } finally {
-        if (active) {
-          setIsBusy(false);
-        }
-      }
-    })();
-
-    return () => {
-      active = false;
-    };
-  }, [directoryQuery, isBusy, loadDocument, refreshSummaries, watchState.enabled]);
-
-  const handleStopWatching = useCallback(async () => {
-    setIsBusy(true);
-    try {
-      await stopWatchingDirectory();
-      setWatchState({
-        enabled: false,
-        directoryPath: null,
-      });
-      setSummaries([]);
-      setSelectedStemPath(null);
-      setLoadedDocument(null);
-      setDraftDocument(null);
-      setIsLoadingDocument(false);
-      setErrorMessage(null);
-      setIsDirty(false);
-      setHasExternalChanges(false);
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : String(error));
-    } finally {
-      setIsBusy(false);
-    }
-  }, []);
-
-  const handleReloadFromDisk = useCallback(async () => {
-    if (!watchState.directoryPath) {
-      return;
-    }
-
-    setIsBusy(true);
-    setErrorMessage(null);
-
-    try {
-      const result = await refreshSummaries(watchState.directoryPath);
-      if (result.selectedStemPath) {
-        await loadDocument(result.selectedStemPath);
-      } else {
-        setLoadedDocument(null);
-        setDraftDocument(null);
-        setIsLoadingDocument(false);
-        setIsDirty(false);
-        setHasExternalChanges(false);
-      }
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : String(error));
-    } finally {
-      setIsBusy(false);
-    }
-  }, [loadDocument, refreshSummaries, watchState.directoryPath]);
-
-  const handleSelectSummary = useCallback(
-    async (summary: ShapefileSummary) => {
-      if (summary.error || summary.stemPath === selectedStemPath) {
-        return;
-      }
-
-      if (
-        isDirty
-        && typeof window !== "undefined"
-        && !window.confirm("Discard unsaved changes and open another shapefile?")
-      ) {
-        return;
-      }
-
-      setIsBusy(true);
-      setErrorMessage(null);
-
-      try {
-        setSelectedStemPath(summary.stemPath);
-        await loadDocument(summary.stemPath);
-      } catch (error) {
-        setErrorMessage(error instanceof Error ? error.message : String(error));
-      } finally {
-        setIsBusy(false);
-      }
-    },
-    [isDirty, loadDocument, selectedStemPath],
-  );
-
-  const updateDraft = useCallback((updater: (draft: ShapefileDocument) => void) => {
-    setDraftDocument((current) => {
-      if (!current) {
-        return current;
-      }
-      const next = structuredClone(current);
-      updater(next);
-      return next;
-    });
-    setIsDirty(true);
-  }, []);
-
-  const handleSave = useCallback(async () => {
-    if (!draftDocument || !watchState.directoryPath) {
-      return;
-    }
-
-    setIsSaving(true);
-    setErrorMessage(null);
-
-    try {
-      const built = await buildShapefileDocument({
-        records: draftDocument.records,
-        fields: draftDocument.fields,
-        rows: draftDocument.rows,
-        prj: draftDocument.prj,
-      });
-
-      await writeBinaryFile(`${draftDocument.stemPath}.shp`, built.shp_b64);
-      await writeBinaryFile(`${draftDocument.stemPath}.shx`, built.shx_b64);
-      await writeBinaryFile(`${draftDocument.stemPath}.dbf`, built.dbf_b64);
-
-      if (built.prj_b64) {
-        await writeBinaryFile(`${draftDocument.stemPath}.prj`, built.prj_b64);
-      } else if (loadedDocument?.hasPrj) {
-        await deleteFile(`${draftDocument.stemPath}.prj`);
-      }
-
-      const result = await refreshSummaries(watchState.directoryPath, {
-        preferredStemPath: draftDocument.stemPath,
-      });
-      if (result.selectedStemPath) {
-        await loadDocument(result.selectedStemPath);
-      }
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : String(error));
-    } finally {
-      setIsSaving(false);
-    }
-  }, [draftDocument, loadDocument, loadedDocument?.hasPrj, refreshSummaries, watchState.directoryPath]);
-
-  useEffect(() => {
-    const directoryPath = watchState.directoryPath;
-
-    if (!watchState.enabled || !directoryPath) {
-      return;
-    }
-
-    const unlisten = onFileChanged((changedPaths) => {
-      const relevantPaths = changedPaths.filter((changedPath) =>
-        SHAPEFILE_WATCH_EXTENSIONS.some((extension) =>
-          changedPath.toLowerCase().endsWith(extension),
-        ),
-      );
-      if (relevantPaths.length === 0) {
-        return;
-      }
-
-      void (async () => {
-        try {
-          if (isDirty) {
-            setHasExternalChanges(true);
-            await refreshSummaries(directoryPath, {
-              allowMissingSelection: true,
-            });
-            return;
-          }
-
-          const result = await refreshSummaries(directoryPath);
-          if (result.selectedStemPath) {
-            await loadDocument(result.selectedStemPath);
-          } else {
-            setLoadedDocument(null);
-            setDraftDocument(null);
-            setIsLoadingDocument(false);
-            setIsDirty(false);
-          }
-        } catch (error) {
-          setErrorMessage(error instanceof Error ? error.message : String(error));
-        }
-      })();
-    });
-
-    return unlisten;
-  }, [isDirty, loadDocument, refreshSummaries, watchState.directoryPath, watchState.enabled]);
-
   useCommands(
-    watchState.enabled
+    watch.phase === "active"
       ? [
           {
             id: "select-shapefile-directory",
             label: "Change Shapefile Directory",
             run: (dialog) => {
               dialog.close();
-              void handleSelectDirectory();
+              void pickAndOpen();
             },
             group: "Shapefile",
             icon: <FolderOpen />,
@@ -456,7 +93,7 @@ function ShapefileWatchPage() {
             label: "Save Shapefile",
             run: (dialog) => {
               dialog.close();
-              void handleSave();
+              void save();
             },
             group: "Shapefile",
             icon: <Save />,
@@ -467,7 +104,7 @@ function ShapefileWatchPage() {
             label: "Reload From Disk",
             run: (dialog) => {
               dialog.close();
-              void handleReloadFromDisk();
+              void reload();
             },
             group: "Shapefile",
             icon: <RefreshCcw />,
@@ -477,7 +114,7 @@ function ShapefileWatchPage() {
             label: "Stop Watching Directory",
             run: (dialog) => {
               dialog.close();
-              void handleStopWatching();
+              void stopWatching();
             },
             group: "Shapefile",
             icon: <EyeOff />,
@@ -489,7 +126,7 @@ function ShapefileWatchPage() {
             label: "Select Shapefile Directory",
             run: (dialog) => {
               dialog.close();
-              void handleSelectDirectory();
+              void pickAndOpen();
             },
             group: "Shapefile",
             icon: <FolderOpen />,
@@ -501,13 +138,13 @@ function ShapefileWatchPage() {
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-background">
       <HeaderSlot>
-        {watchState.enabled ? (
+        {watch.phase === "active" ? (
           <div className="flex w-full items-center justify-between gap-3 px-2">
             <div className="flex min-w-0 items-center gap-2">
-              {draftDocument ? (
+              {draft ? (
                 <>
                   <span className="max-w-64 shrink-0 truncate text-sm font-medium">
-                    {draftDocument.name}
+                    {draft.name}
                   </span>
                   <span className="text-xs text-muted-foreground">/</span>
                 </>
@@ -524,20 +161,20 @@ function ShapefileWatchPage() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleReloadFromDisk}
+                onClick={reload}
                 disabled={isBusy || isSaving}
               >
                 <RefreshCcw className="mr-1 h-3 w-3" />
                 Reload
               </Button>
-              <Button size="sm" onClick={handleSave} disabled={!canSave}>
+              <Button size="sm" onClick={save} disabled={!canSave}>
                 <Save className="mr-1 h-3 w-3" />
                 Save
               </Button>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleStopWatching}
+                onClick={stopWatching}
                 disabled={isBusy || isSaving}
               >
                 <EyeOff className="mr-1 h-3 w-3" />
@@ -548,7 +185,7 @@ function ShapefileWatchPage() {
         ) : (
           <div className="flex w-full items-center justify-between px-2">
             <span className="text-sm font-medium">Watch Shapefile Directory</span>
-            <Button size="sm" onClick={handleSelectDirectory} disabled={isBusy}>
+            <Button size="sm" onClick={pickAndOpen} disabled={isBusy}>
               <FolderOpen className="mr-1 h-3 w-3" />
               Select Directory
             </Button>
@@ -556,11 +193,11 @@ function ShapefileWatchPage() {
         )}
       </HeaderSlot>
 
-      {watchState.enabled && watchState.directoryPath ? (
+      {watch.phase === "active" ? (
         <div className="flex min-h-0 flex-1 flex-col">
-          {errorMessage ? (
+          {error ? (
             <div className="border-b border-border bg-destructive/5 px-4 py-3 text-sm text-destructive">
-              {errorMessage}
+              {error}
             </div>
           ) : null}
 
@@ -573,13 +210,13 @@ function ShapefileWatchPage() {
 
           <div className="flex min-h-0 flex-1 flex-col md:flex-row">
             <ShapefileSidebar
-              summaries={summaries}
-              selectedStemPath={selectedStemPath}
-              onSelect={handleSelectSummary}
+              summaries={watch.summaries}
+              selectedStemPath={watch.selectedStemPath}
+              onSelect={selectStem}
             />
 
             <main className="flex min-h-0 flex-1 flex-col overflow-auto">
-              {isLoadingDocument ? (
+              {docState.status === "loading" ? (
                 <div
                   data-testid="shapefile-loading"
                   className="flex flex-1 items-center justify-center px-6"
@@ -593,9 +230,9 @@ function ShapefileWatchPage() {
                     </p>
                   </div>
                 </div>
-              ) : draftDocument ? (
+              ) : draft ? (
                 <ShapefileEditor
-                  document={draftDocument}
+                  document={draft}
                   summary={selectedSummary}
                   onUpdate={updateDraft}
                 />
@@ -626,7 +263,7 @@ function ShapefileWatchPage() {
                 You'll be able to browse `.shp` stems and save edits back to disk.
               </p>
             </div>
-            <Button size="lg" onClick={handleSelectDirectory} disabled={isBusy}>
+            <Button size="lg" onClick={pickAndOpen} disabled={isBusy}>
               <FolderOpen className="mr-2 h-4 w-4" />
               Select Directory
             </Button>
