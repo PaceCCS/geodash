@@ -33,6 +33,8 @@ type CoreExports = {
   geodash_olga_export: WasmFn;
   geodash_compute_route_kp: WasmFn;
   geodash_create_route: WasmFn;
+  geodash_read_shapefile: WasmFn;
+  geodash_build_shapefile: WasmFn;
 };
 
 // ── Loader ────────────────────────────────────────────────────────────────────
@@ -80,6 +82,8 @@ async function init(): Promise<void> {
       "geodash_olga_export",
       "geodash_compute_route_kp",
       "geodash_create_route",
+      "geodash_read_shapefile",
+      "geodash_build_shapefile",
     ];
     for (const name of required) {
       if (!(name in instance.exports)) {
@@ -228,6 +232,59 @@ export type CreateRouteResult = {
   dbf_b64: string;
 };
 
+export type ShapefileGeometryType = "PointZ" | "PolyLineZ";
+
+export type ShapefileField = {
+  name: string;
+  fieldType: "C" | "N" | "F" | "L" | "D";
+  length: number;
+  decimalCount: number;
+};
+
+export type ShapefilePoint = {
+  x: number;
+  y: number;
+  z: number;
+  m: number;
+};
+
+export type ShapefileRecord =
+  | {
+      number: number;
+      geometry: {
+        type: "PointZ";
+        x: number;
+        y: number;
+        z: number;
+        m: number;
+      };
+    }
+  | {
+      number: number;
+      geometry: {
+        type: "PolyLineZ";
+        parts: number[];
+        points: ShapefilePoint[];
+      };
+    };
+
+export type ShapefileCell = string | number | boolean | null;
+
+export type ReadShapefileResult = {
+  geometryType: ShapefileGeometryType | null;
+  records: ShapefileRecord[];
+  fields: ShapefileField[];
+  rows: ShapefileCell[][];
+  prj: string | null;
+};
+
+export type BuildShapefileResult = {
+  shp_b64: string;
+  shx_b64: string;
+  dbf_b64: string;
+  prj_b64?: string;
+};
+
 export async function importFromOlga(
   keyContent: string,
   rootLocation?: { x: number; y: number; z: number }
@@ -282,3 +339,30 @@ export async function createRoute(
   ) as CreateRouteResult;
 }
 
+export async function readShapefile(
+  shpB64: string,
+  dbfB64?: string | null,
+  prj?: string | null,
+): Promise<ReadShapefileResult> {
+  await init();
+  const rt = runtime!;
+  return callWasm(
+    "read_shapefile",
+    rt,
+    (a, b, c, d) => rt.geodash_read_shapefile(a, b, c, d),
+    { shp_b64: shpB64, dbf_b64: dbfB64 ?? null, prj: prj ?? null },
+  ) as ReadShapefileResult;
+}
+
+export async function buildShapefile(
+  document: Pick<ReadShapefileResult, "records" | "fields" | "rows" | "prj">,
+): Promise<BuildShapefileResult> {
+  await init();
+  const rt = runtime!;
+  return callWasm(
+    "build_shapefile",
+    rt,
+    (a, b, c, d) => rt.geodash_build_shapefile(a, b, c, d),
+    document,
+  ) as BuildShapefileResult;
+}

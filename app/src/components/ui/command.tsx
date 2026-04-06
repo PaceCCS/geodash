@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useEffect, useState } from "react";
 
 function Command({
   className,
@@ -180,10 +181,16 @@ function CommandShortcut({
 }
 
 export function CmdOrCtrl() {
-  const isMac =
-    typeof navigator !== "undefined" &&
-    /Mac|iPhone|iPod|iPad/i.test(navigator.userAgent);
-  return isMac ? "⌘" : "Ctrl + ";
+  const [shortcut, setShortcut] = useState("Ctrl + ");
+
+  useEffect(() => {
+    const isMac =
+      typeof navigator !== "undefined" &&
+      /Mac|iPhone|iPod|iPad/i.test(navigator.userAgent);
+    setShortcut(isMac ? "⌘" : "Ctrl + ");
+  }, []);
+
+  return shortcut;
 }
 
 export function CmdOrCtrlShortcut() {

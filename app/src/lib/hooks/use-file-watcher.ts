@@ -10,6 +10,7 @@ import {
   getNetworkSourceFromCollections,
   resetFlowToNetwork,
 } from "@/lib/collections/flow";
+import { refreshGeoCollection, clearGeoCollection } from "@/lib/collections/geo";
 import {
   appendActivityLogEntries,
   clearActivityLog,
@@ -78,6 +79,9 @@ export function useFileWatcher() {
         }
 
         await resetFlowToNetwork(network);
+        refreshGeoCollection(directoryPath).catch((err) =>
+          console.error("[watch] geo inspect failed:", err),
+        );
         const networkLabel = getWatchNetworkLabel(network.label);
         setNetworkLabel(networkLabel);
         setNetworkConfig(network.config ?? null);
@@ -160,6 +164,7 @@ export function useFileWatcher() {
       reloadSequenceRef.current += 1;
       clearActivityLog();
       await stopWatchingDirectory();
+      clearGeoCollection();
       await clearFlowCollections();
 
       if (resetState) {

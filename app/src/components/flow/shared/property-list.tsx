@@ -5,6 +5,18 @@ type PropertyRow = {
   value: string;
 };
 
+function formatPropertyValue(value: unknown): string {
+  if (value === undefined) {
+    return "undefined";
+  }
+
+  if (value === null) {
+    return "null";
+  }
+
+  return String(value);
+}
+
 function flattenProperties(
   value: unknown,
   prefix = "",
@@ -39,12 +51,7 @@ function flattenProperties(
   return [
     {
       path: prefix,
-      value:
-        value === undefined
-          ? "undefined"
-          : value === null
-            ? "null"
-            : String(value),
+      value: formatPropertyValue(value),
     },
   ];
 }

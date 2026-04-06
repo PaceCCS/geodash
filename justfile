@@ -66,6 +66,10 @@ check-deps:
 lint:
     cd server && bunx eslint src/
 
+# Lint app TypeScript/TSX
+lint-app:
+    cd app && bunx eslint src/
+
 # Check WASM binary size
 check-wasm-size:
     bash scripts/check-wasm-size.sh
@@ -114,6 +118,7 @@ check-observability:
 check:
     zig fmt --check core/shapefile/src/ core/network-engine/src/
     cd server && bunx eslint src/
+    cd app && bunx eslint src/
     bash scripts/check-wasm-contract.sh
     bash scripts/check-deps.sh
     bash scripts/check-wasm-size.sh

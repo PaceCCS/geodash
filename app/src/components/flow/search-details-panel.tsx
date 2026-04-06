@@ -1,7 +1,7 @@
 import { Search } from "lucide-react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useLiveQuery } from "@tanstack/react-db";
-import { useEffect, useState } from "react";
+import { useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,10 +54,12 @@ function HydratedSearchDetailsPanelContent({
   const { data: nodes = [] } = useLiveQuery(nodesCollection);
   const navigate = useNavigate({ from: "/network/watch" });
   const [draftQuery, setDraftQuery] = useState(selectedQuery ?? "");
+  const prevSelectedRef = useRef(selectedQuery);
 
-  useEffect(() => {
+  if (prevSelectedRef.current !== selectedQuery) {
+    prevSelectedRef.current = selectedQuery;
     setDraftQuery(selectedQuery ?? "");
-  }, [selectedQuery]);
+  }
 
   if (nodes.length === 0) {
     return (

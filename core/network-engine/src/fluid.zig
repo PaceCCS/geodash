@@ -286,9 +286,7 @@ pub fn propagate(
                 continue;
             }
 
-            const contributed_flow = upstream.flow_rate
-                * @as(f64, @floatFromInt(edge.weight))
-                / @as(f64, @floatFromInt(total_outgoing_weight));
+            const contributed_flow = upstream.flow_rate * @as(f64, @floatFromInt(edge.weight)) / @as(f64, @floatFromInt(total_outgoing_weight));
             if (contributed_flow == 0.0) continue;
 
             if (acc_comp == null) {

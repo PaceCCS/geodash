@@ -12,9 +12,13 @@ Tests must pass on every push. CI runs `zig build test` for shapefile and networ
 
 `zig fmt --check` on `core/shapefile/src/` and `core/network-engine/src/`.
 
-### TypeScript typecheck and lint
+### Server TypeScript typecheck and lint
 
 `tsc --noEmit` and ESLint in `server/`. ESLint enforces `no-explicit-any` and restricts route file imports — routes may only import from `services/` and `schemas/`, not from each other.
+
+### App JSX branching lint
+
+ESLint in `app/` enforces `no-nested-ternary` across `app/src/**/*.{ts,tsx}`. This keeps UI state branches explicit instead of burying them in chained render expressions.
 
 ### WASM contract check
 

@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Trash2, X } from "lucide-react";
+import { useLiveQuery } from "@tanstack/react-db";
+import { Plus, TableProperties, Trash2, X } from "lucide-react";
+import QuantityDisplay from "@/components/quantities/quantity-display";
 
 import { FluidCompositionInput } from "@/components/forms/fields/fluid-composition-input";
 import type { FieldApiLike } from "@/components/forms/fields/types";
 import { PropertyList } from "@/components/flow/shared/property-list";
+import { ShapefileEditorDialog } from "@/components/shapefile/shapefile-editor-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -13,11 +16,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useNetworkOptional } from "@/contexts/network-context";
+import { geoCollection } from "@/lib/collections/geo";
 import type { PropertyMetadata } from "@/hooks/use-schema-properties";
-import type {
-  NetworkConfigMetadata,
-  NetworkValue,
-} from "@/lib/api-client";
+import type { NetworkConfigMetadata, NetworkValue } from "@/lib/api-client";
 import {
   applySelectionEditorAuthoredValues,
   getConfigUnitFallback,
@@ -27,7 +29,10 @@ import {
   getSelectionEditorTitle,
   type EditableFlowSelection,
 } from "@/lib/selection-editor";
-import { getDimensionConfig, resolveDimensionKey } from "@/lib/stores/unitPreferencesSlice";
+import {
+  getDimensionConfig,
+  resolveDimensionKey,
+} from "@/lib/stores/unitPreferencesSlice";
 import QuantityInput from "@/components/quantities/quantity-input";
 
 type EditorFieldKind =
@@ -57,7 +62,9 @@ type SelectionEditorOverlayProps = {
   selection?: EditableFlowSelection;
   configMetadata: NetworkConfigMetadata | null;
   onClose: () => void;
-  onSave: (nextNode: ReturnType<typeof applySelectionEditorAuthoredValues>) => Promise<void>;
+  onSave: (
+    nextNode: ReturnType<typeof applySelectionEditorAuthoredValues>,
+  ) => Promise<void>;
 };
 
 export function SelectionEditorOverlay({
@@ -123,7 +130,10 @@ export function SelectionEditorOverlay({
   const kindLabel = getSelectionEditorKindLabel(selection);
   const hasDerivedValues = Object.keys(derivedValues).length > 0;
 
-  const updateField = (key: string, updater: (field: EditorFieldDraft) => EditorFieldDraft) => {
+  const updateField = (
+    key: string,
+    updater: (field: EditorFieldDraft) => EditorFieldDraft,
+  ) => {
     setFields((previous) =>
       previous.map((field) => (field.key === key ? updater(field) : field)),
     );
@@ -156,10 +166,7 @@ export function SelectionEditorOverlay({
       configMetadata,
       newFieldKind,
     );
-    setFields((previous) => [
-      ...previous,
-      nextField,
-    ]);
+    setFields((previous) => [...previous, nextField]);
     setNewFieldName("");
     setNewFieldKind("text");
     setAddError(null);
@@ -196,10 +203,14 @@ export function SelectionEditorOverlay({
     setIsSaving(true);
 
     try {
-      await onSave(applySelectionEditorAuthoredValues(selection, nextAuthoredValues));
+      await onSave(
+        applySelectionEditorAuthoredValues(selection, nextAuthoredValues),
+      );
     } catch (error) {
       setSaveError(
-        error instanceof Error ? error.message : "Failed to apply selection changes.",
+        error instanceof Error
+          ? error.message
+          : "Failed to apply selection changes.",
       );
     } finally {
       setIsSaving(false);
@@ -220,17 +231,12 @@ export function SelectionEditorOverlay({
             <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
               Edit {kindLabel}
             </p>
-            <h2 className="text-lg font-semibold break-words">{title}</h2>
+            <h2 className="text-lg font-semibold wrap-break-word">{title}</h2>
             <p className="mt-1 font-mono text-xs text-muted-foreground break-all">
               {selection.query}
             </p>
           </div>
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            onClick={onClose}
-          >
+          <Button type="button" size="icon" variant="ghost" onClick={onClose}>
             <X className="size-4" />
             <span className="sr-only">Close editor</span>
           </Button>
@@ -241,7 +247,8 @@ export function SelectionEditorOverlay({
             <div className="border-b border-border px-5 py-4">
               <p className="text-sm font-medium">Authored</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Edit the saved values for this selection. Derived values stay read-only.
+                Edit the saved values for this selection. Derived values stay
+                read-only.
               </p>
             </div>
 
@@ -258,7 +265,9 @@ export function SelectionEditorOverlay({
                     field.removable
                       ? () => {
                           setFields((previous) =>
-                            previous.filter((candidate) => candidate.key !== field.key),
+                            previous.filter(
+                              (candidate) => candidate.key !== field.key,
+                            ),
                           );
                           setFieldErrors((previous) => {
                             if (!(field.key in previous)) {
@@ -295,7 +304,9 @@ export function SelectionEditorOverlay({
                   </label>
                   <Select
                     value={newFieldKind}
-                    onValueChange={(value) => setNewFieldKind(value as AddFieldKind)}
+                    onValueChange={(value) =>
+                      setNewFieldKind(value as AddFieldKind)
+                    }
                   >
                     <SelectTrigger className="w-full">
                       <SelectValue />
@@ -327,7 +338,8 @@ export function SelectionEditorOverlay({
             <div className="border-b border-border px-5 py-4">
               <p className="text-sm font-medium">Derived</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                These values come from propagation or runtime shaping and aren&apos;t editable here.
+                These values come from propagation or runtime shaping and
+                aren&apos;t editable here.
               </p>
             </div>
             {hasDerivedValues ? (
@@ -355,11 +367,7 @@ export function SelectionEditorOverlay({
             >
               Close
             </Button>
-            <Button
-              type="button"
-              onClick={handleSave}
-              disabled={isSaving}
-            >
+            <Button type="button" onClick={handleSave} disabled={isSaving}>
               {isSaving ? "Applying..." : "Apply Changes"}
             </Button>
           </div>
@@ -381,7 +389,10 @@ function EditorFieldRow({
   selection: EditableFlowSelection;
   error?: string;
   resetToken: number;
-  onChange: (key: string, updater: (field: EditorFieldDraft) => EditorFieldDraft) => void;
+  onChange: (
+    key: string,
+    updater: (field: EditorFieldDraft) => EditorFieldDraft,
+  ) => void;
   onRemove?: () => void;
 }) {
   const dimensionLabel = useMemo(() => {
@@ -393,9 +404,40 @@ function EditorFieldRow({
     return getDimensionConfig(resolvedDimension).label;
   }, [field.dimension]);
 
+  const { data: geoBlocks = [] } = useLiveQuery(geoCollection);
+  const network = useNetworkOptional();
+  const [shapefileDialogOpen, setShapefileDialogOpen] = useState(false);
+
+  const geoBlock = useMemo(() => {
+    if (
+      field.key !== "route" ||
+      !field.textValue.trim() ||
+      selection.kind !== "block"
+    ) {
+      return null;
+    }
+
+    return (
+      geoBlocks.find(
+        (b) =>
+          b.branchId === selection.node.id &&
+          b.blockIndex === selection.blockIndex,
+      ) ?? null
+    );
+  }, [field.key, field.textValue, geoBlocks, selection]);
+
+  const shapefileDirectoryPath = useMemo(() => {
+    if (!geoBlock || geoBlock.format !== "shapefile" || !network) {
+      return null;
+    }
+    return `${network.networkId}/${field.textValue.trim()}`;
+  }, [geoBlock, network, field.textValue]);
+
   if (field.kind === "composition") {
     const metadata = createEditorMetadata(
-      selection.kind === "block" ? selection.block?.type ?? "Source" : "Source",
+      selection.kind === "block"
+        ? (selection.block?.type ?? "Source")
+        : "Source",
       field.key,
       "object",
     );
@@ -452,7 +494,11 @@ function EditorFieldRow({
       <div className="space-y-1">
         <p className="font-mono text-sm break-all">{field.key}</p>
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          <span>{getEditorFieldKindLabel(field.kind)}</span>
+          <RouteFieldLabel
+            fieldKey={field.key}
+            fieldKind={field.kind}
+            geoBlock={geoBlock}
+          />
           {dimensionLabel ? (
             <span>
               {dimensionLabel}
@@ -465,15 +511,29 @@ function EditorFieldRow({
 
       <div className="space-y-2 min-w-0">
         {field.kind === "text" ? (
-          <Input
-            value={field.textValue}
-            onChange={(event) =>
-              onChange(field.key, (current) => ({
-                ...current,
-                textValue: event.target.value,
-              }))
-            }
-          />
+          <div className="flex items-center gap-2">
+            <Input
+              className="flex-1"
+              value={field.textValue}
+              onChange={(event) =>
+                onChange(field.key, (current) => ({
+                  ...current,
+                  textValue: event.target.value,
+                }))
+              }
+            />
+            {shapefileDirectoryPath ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => setShapefileDialogOpen(true)}
+                title="Edit shapefile"
+              >
+                <TableProperties className="size-4" />
+              </Button>
+            ) : null}
+          </div>
         ) : null}
 
         {field.kind === "number" ? (
@@ -540,17 +600,20 @@ function EditorFieldRow({
 
       <div className="flex justify-end">
         {onRemove ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={onRemove}
-          >
+          <Button type="button" variant="ghost" size="icon" onClick={onRemove}>
             <Trash2 className="size-4" />
             <span className="sr-only">Remove property</span>
           </Button>
         ) : null}
       </div>
+
+      {shapefileDirectoryPath ? (
+        <ShapefileEditorDialog
+          open={shapefileDialogOpen}
+          directoryPath={shapefileDirectoryPath}
+          onOpenChange={setShapefileDialogOpen}
+        />
+      ) : null}
     </div>
   );
 }
@@ -571,20 +634,18 @@ function createEmptyFieldDraft(
   configMetadata: NetworkConfigMetadata | null,
   fallbackKind: AddFieldKind,
 ): EditorFieldDraft {
-  const inferredKind = inferFieldKind(key, undefined, selection, configMetadata);
+  const inferredKind = inferFieldKind(
+    key,
+    undefined,
+    selection,
+    configMetadata,
+  );
   const kind =
     inferredKind === "quantity" || inferredKind === "composition"
       ? inferredKind
       : fallbackKind;
 
-  const initialValue: NetworkValue =
-    kind === "boolean"
-      ? false
-      : kind === "json"
-        ? {}
-        : kind === "composition"
-          ? {}
-          : "";
+  const initialValue = getInitialValueForFieldKind(kind);
 
   return createDraftForKind(key, initialValue, kind, selection, configMetadata);
 }
@@ -596,20 +657,14 @@ function createDraftForKind(
   selection: EditableFlowSelection,
   configMetadata: NetworkConfigMetadata | null,
 ): EditorFieldDraft {
-  const blockType = selection.kind === "block" ? selection.block?.type : undefined;
+  const blockType =
+    selection.kind === "block" ? selection.block?.type : undefined;
   const unitFallback = getConfigUnitFallback(configMetadata, key, blockType);
 
   return {
     key,
     kind,
-    textValue:
-      kind === "json"
-        ? JSON.stringify(value ?? {}, null, 2)
-        : kind === "number" || kind === "quantity" || kind === "text"
-          ? value === undefined || value === null
-            ? ""
-            : String(value)
-          : "",
+    textValue: getDraftTextValue(kind, value),
     booleanValue: typeof value === "boolean" ? value : false,
     compositionValue: value,
     removable: isFieldRemovable(selection, key),
@@ -617,6 +672,30 @@ function createDraftForKind(
     dimension: unitFallback?.dimension,
     defaultUnit: unitFallback?.defaultUnit,
   };
+}
+
+function getInitialValueForFieldKind(kind: EditorFieldKind): NetworkValue {
+  switch (kind) {
+    case "boolean":
+      return false;
+    case "json":
+    case "composition":
+      return {};
+    default:
+      return "";
+  }
+}
+
+function getDraftTextValue(kind: EditorFieldKind, value: NetworkValue): string {
+  if (kind === "json") {
+    return JSON.stringify(value ?? {}, null, 2);
+  }
+
+  if (kind === "number" || kind === "quantity" || kind === "text") {
+    return value == null ? "" : String(value);
+  }
+
+  return "";
 }
 
 function inferFieldKind(
@@ -650,20 +729,14 @@ function inferFieldKind(
     return "number";
   }
 
-  if (
-    value !== null &&
-    value !== undefined &&
-    typeof value === "object"
-  ) {
+  if (value !== null && value !== undefined && typeof value === "object") {
     return "json";
   }
 
   return "text";
 }
 
-function materializeFieldDraft(
-  field: EditorFieldDraft,
-): {
+function materializeFieldDraft(field: EditorFieldDraft): {
   value?: NetworkValue;
   error?: string;
 } {
@@ -687,7 +760,9 @@ function materializeFieldDraft(
 
       if (field.key === "quantity") {
         if (!Number.isInteger(parsed) || parsed < 1) {
-          return { error: "Quantity must be a whole number greater than zero." };
+          return {
+            error: "Quantity must be a whole number greater than zero.",
+          };
         }
       }
 
@@ -727,7 +802,9 @@ function materializeFieldDraft(
           typeof positionValue.x !== "number" ||
           typeof positionValue.y !== "number"
         ) {
-          return { error: "Position must be a JSON object with numeric x and y." };
+          return {
+            error: "Position must be a JSON object with numeric x and y.",
+          };
         }
       }
 
@@ -775,10 +852,7 @@ function getOrderedFieldKeys(
     .filter((key) => !priority.includes(key))
     .sort((left, right) => left.localeCompare(right));
 
-  return [
-    ...priority.filter((key) => keys.includes(key)),
-    ...remaining,
-  ];
+  return [...priority.filter((key) => keys.includes(key)), ...remaining];
 }
 
 function getEditorFieldKindLabel(kind: EditorFieldKind): string {
@@ -795,6 +869,54 @@ function getEditorFieldKindLabel(kind: EditorFieldKind): string {
       return "Quantity";
     case "composition":
       return "Fluid";
+  }
+}
+
+function RouteFieldLabel({
+  fieldKey,
+  fieldKind,
+  geoBlock,
+}: {
+  fieldKey: string;
+  fieldKind: EditorFieldKind;
+  geoBlock: { format: string; routeLength: string | null } | null;
+}) {
+  if (fieldKey !== "route") {
+    return <span>{getEditorFieldKindLabel(fieldKind)}</span>;
+  }
+
+  if (!geoBlock) {
+    return <span>Path to route specifier</span>;
+  }
+
+  return (
+    <span className="inline-flex items-center">
+      {getGeoFormatLabel(geoBlock.format)}
+      {geoBlock.routeLength ? (
+        <>
+          {" ("}
+          <QuantityDisplay dimension="length">
+            {geoBlock.routeLength}
+          </QuantityDisplay>
+          {")"}
+        </>
+      ) : null}
+    </span>
+  );
+}
+
+function getGeoFormatLabel(format: string): string {
+  switch (format) {
+    case "shapefile":
+      return "Shapefile";
+    case "kmz":
+      return "KMZ";
+    case "csv":
+      return "CSV";
+    case "coordinates":
+      return "Coordinates";
+    default:
+      return format;
   }
 }
 

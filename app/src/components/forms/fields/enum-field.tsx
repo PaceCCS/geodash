@@ -40,11 +40,11 @@ export function EnumField({
   const showClearButton = onClear && hasLocalValue;
 
   // Display value priority: form value > stored block value > inherited value
-  const displayValue = hasFormValue
-    ? field.state.value?.toString()
-    : inheritedValue?.value != null
-      ? String(inheritedValue.value)
-      : "";
+  const displayValueSource = hasFormValue
+    ? field.state.value
+    : inheritedValue?.value;
+  const displayValue =
+    displayValueSource == null ? "" : String(displayValueSource);
 
   return (
     <div className={cn("space-y-2", className)}>

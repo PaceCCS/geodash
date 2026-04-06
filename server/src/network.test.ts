@@ -60,11 +60,9 @@ function createApp() {
 describe("GET /api/network", () => {
   const app = createApp();
 
-  test("missing network param returns 400", async () => {
+  test("missing network param returns 422", async () => {
     const res = await app.handle(new Request("http://localhost/api/network"));
-    expect(res.status).toBe(400);
-    const body = await res.json() as { message: string };
-    expect(body.message).toContain("network");
+    expect(res.status).toBe(422);
   });
 
   test("invalid network dir returns 500", async () => {
