@@ -5,7 +5,7 @@
  * serializeNodeToToml) independently of any desktop-bridge or file-system I/O.
  */
 import { describe, test, expect } from "bun:test";
-import * as TOML from "@iarna/toml";
+import TOML from "smol-toml";
 import {
   buildTomlFiles,
   getTomlPathsToDelete,
@@ -18,7 +18,7 @@ import type { NetworkNode } from "@/lib/api-client";
 
 function makeBranchNode(
   id = "branch-1",
-  overrides: Partial<FlowNode> = {}
+  overrides: Partial<FlowNode> = {},
 ): FlowNode {
   return {
     id,
@@ -86,11 +86,7 @@ function makeImageNode(id = "image-1"): FlowNode {
   } as FlowNode;
 }
 
-function makeEdge(
-  source: string,
-  target: string,
-  weight = 1
-): FlowEdge {
+function makeEdge(source: string, target: string, weight = 1): FlowEdge {
   return {
     id: `${source}-${target}`,
     source,
