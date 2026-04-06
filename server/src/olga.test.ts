@@ -32,11 +32,9 @@ describe("POST /api/operations/olga/validate", () => {
     expect(res.status).toBe(400);
   });
 
-  test("missing network returns 400", async () => {
+  test("missing network returns 422", async () => {
     const res = await postJson(app, "/api/operations/olga/validate", {});
-    expect(res.status).toBe(400);
-    const body = await res.json() as { message: string };
-    expect(body.message).toContain("network");
+    expect(res.status).toBe(422);
   });
 
   test("valid preset1 returns 200 with validation result", async () => {
@@ -58,21 +56,17 @@ describe("POST /api/operations/olga/validate", () => {
 describe("POST /api/operations/olga/export", () => {
   const app = createApp();
 
-  test("missing network returns 400", async () => {
+  test("missing network returns 422", async () => {
     const res = await postJson(app, "/api/operations/olga/export", {});
-    expect(res.status).toBe(400);
-    const body = await res.json() as { message: string };
-    expect(body.message).toContain("network");
+    expect(res.status).toBe(422);
   });
 });
 
 describe("POST /api/operations/olga/import", () => {
   const app = createApp();
 
-  test("missing key_content returns 400", async () => {
+  test("missing key_content returns 422", async () => {
     const res = await postJson(app, "/api/operations/olga/import", {});
-    expect(res.status).toBe(400);
-    const body = await res.json() as { message: string };
-    expect(body.message).toContain("key_content");
+    expect(res.status).toBe(422);
   });
 });

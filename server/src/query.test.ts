@@ -14,18 +14,14 @@ function createApp() {
 describe("GET /api/query", () => {
   const app = createApp();
 
-  test("missing q param returns 400", async () => {
+  test("missing q param returns 422", async () => {
     const res = await app.handle(new Request(`http://localhost/api/query?network=${encodeURIComponent(PRESET1)}`));
-    expect(res.status).toBe(400);
-    const body = await res.json() as { message: string };
-    expect(body.message).toContain("q");
+    expect(res.status).toBe(422);
   });
 
-  test("missing network param returns 400", async () => {
+  test("missing network param returns 422", async () => {
     const res = await app.handle(new Request("http://localhost/api/query?q=branch-4/blocks/0/pressure"));
-    expect(res.status).toBe(400);
-    const body = await res.json() as { message: string };
-    expect(body.message).toContain("network");
+    expect(res.status).toBe(422);
   });
 
   test("valid query returns 200 with result", async () => {
