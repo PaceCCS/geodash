@@ -272,7 +272,7 @@ export function useShapefileWatch(autoOpenDirectory?: string | null) {
   // File watcher for external changes.
   useEffect(() => {
     if (watch.phase !== "active") return;
-    const { directoryPath } = watch;
+    const { directoryPath, selectedStemPath } = watch;
 
     const unlisten = onFileChanged((changedPaths) => {
       const relevant = changedPaths.some((p) =>
@@ -284,10 +284,10 @@ export function useShapefileWatch(autoOpenDirectory?: string | null) {
         try {
           if (isDirty) {
             setHasExternalChanges(true);
-            await fetchSummaries(directoryPath, watch.selectedStemPath, true);
+            await fetchSummaries(directoryPath, selectedStemPath, true);
             return;
           }
-          const selected = await fetchSummaries(directoryPath, watch.selectedStemPath);
+          const selected = await fetchSummaries(directoryPath, selectedStemPath);
           if (selected) {
             await loadDocument(selected);
           } else {
