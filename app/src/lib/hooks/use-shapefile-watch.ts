@@ -313,17 +313,22 @@ export function useShapefileWatch(autoOpenDirectory?: string | null) {
 
   const canSave = watch.phase === "active" && draft !== null && isDirty && !isSaving;
 
-  return {
-    watch,
-    docState,
+  const editor = {
+    state: docState,
     draft,
     selectedSummary,
+  };
+
+  const status = {
     isDirty,
     hasExternalChanges,
     isBusy,
     isSaving,
     canSave,
     error,
+  };
+
+  const actions = {
     pickAndOpen,
     openDirectory,
     stopWatching,
@@ -331,5 +336,12 @@ export function useShapefileWatch(autoOpenDirectory?: string | null) {
     selectStem,
     save,
     updateDraft,
+  };
+
+  return {
+    watch,
+    editor,
+    status,
+    actions,
   };
 }
