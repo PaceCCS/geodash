@@ -15,40 +15,41 @@ function Home() {
               Overview
             </p>
             <h2 className="text-3xl font-semibold tracking-tight">
-              Geospatial tooling for editable networks, coordinate transforms,
-              and file-based data workflows.
+              Drag, pan, and zoom a small geodash network, then read the scope
+              and resolution rules below it.
             </h2>
             <p className="text-sm leading-7 text-muted-foreground">
-              geodash brings together flow modelling, shapefile utilities, CRS
-              reprojection, and dimensional analysis so you can move from raw
-              spatial inputs to a navigable pipeline without bouncing between
-              separate tools.
+              The hero now acts like a lightweight sandbox: branch nodes can be
+              repositioned, the canvas can be explored, and the supporting text
+              stays outside the network so the graph itself remains the focus.
             </p>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-3 md:grid-cols-1">
             <div className="rounded-2xl border border-border bg-card p-4">
               <div className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
-                Homepage Hero
+                Scope Hierarchy
               </div>
               <p className="mt-2 text-sm text-foreground">
-                Static flow preview defined entirely in code.
+                Global defaults cascade to groups, then branches, then blocks.
               </p>
             </div>
             <div className="rounded-2xl border border-border bg-card p-4">
               <div className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
-                Network Editing
+                Resolution Rules
               </div>
               <p className="mt-2 text-sm text-foreground">
-                Directory-backed graph editing when you want the full canvas.
+                `ambientTemperature` resolves from group or global, while
+                `pressure` stays block-only.
               </p>
             </div>
             <div className="rounded-2xl border border-border bg-card p-4">
               <div className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
-                Spatial Data
+                Operations
               </div>
               <p className="mt-2 text-sm text-foreground">
-                Shapefile inspection, reprojection, and unit-aware processing.
+                Weighted edges split flow and downstream branches blend the
+                derived totals.
               </p>
             </div>
           </div>
