@@ -14,7 +14,6 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { CircleHelp } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import {
   Tooltip,
   TooltipContent,
@@ -30,12 +29,17 @@ type HeroBlock = {
   type: string;
   detail?: string;
   highlight?: boolean;
+  helpText?: string;
+};
+
+type HeroScopeProperty = {
+  label: string;
+  value: string;
 };
 
 type HeroGroupData = {
   label: string;
-  propertyLabel: string;
-  propertyValue: string;
+  groupProperties?: HeroScopeProperty[];
   helpText?: string;
 };
 
@@ -44,10 +48,7 @@ type HeroBranchData = {
   title: string;
   tone: AccentTone;
   blocks: HeroBlock[];
-  branchProperty?: {
-    label: string;
-    value: string;
-  };
+  branchProperties?: HeroScopeProperty[];
   helpText?: string;
   featured?: boolean;
 };
@@ -93,13 +94,21 @@ const heroNodes: HeroFlowNode[] = [
   {
     id: "group-1",
     type: "heroGroup",
-    position: { x: 360, y: 36 },
-    width: 980,
-    height: 332,
+    position: { x: 360, y: 0 },
+    width: 600,
+    height: 320,
     data: {
       label: "group-1",
-      propertyLabel: "ambientTemperature",
-      propertyValue: "8 C",
+      groupProperties: [
+        {
+          label: "ambientTemperature",
+          value: "8 C",
+        },
+        {
+          label: "length",
+          value: "10 km",
+        },
+      ],
       helpText:
         "Groups are for defining properties that are shared by multiple branches. E.g. ambient temperature",
     },
@@ -107,7 +116,7 @@ const heroNodes: HeroFlowNode[] = [
   {
     id: "branch-1",
     type: "heroBranch",
-    position: { x: 210, y: 64 },
+    position: { x: 40, y: 80 },
     parentId: "group-1",
     extent: "parent",
     sourcePosition: Position.Right,
@@ -127,35 +136,56 @@ const heroNodes: HeroFlowNode[] = [
   {
     id: "branch-4",
     type: "heroBranch",
-    position: { x: 210, y: 202 },
-    parentId: "group-1",
-    extent: "parent",
+    position: { x: 80, y: 120 },
     sourcePosition: Position.Right,
     targetPosition: Position.Left,
     data: {
       branchId: "branch-4",
       title: "Feed B",
       tone: "pine",
-      branchProperty: {
-        label: "diameter",
-        value: "0.8 m",
-      },
+      branchProperties: [
+        {
+          label: "diameter",
+          value: "0.8 m",
+        },
+        {
+          label: "length",
+          value: "5 km",
+        },
+      ],
       blocks: [
         {
           type: "Source",
           detail: "P 15.5 bar | Q 3 kg/s",
-          highlight: true,
+          helpText:
+            "This source defines the local inlet pressure and flow entering Feed B.",
+        },
+        {
+          type: "Pipe",
+          detail: "Q 3 kg/s",
+          helpText:
+            "This pipe gets its length and diameter from the branch scope.",
+        },
+        {
+          type: "Valve",
+          detail: "Q 3 kg/s",
+        },
+        {
+          type: "Pipe",
+          detail: "Q 3 kg/s",
+          helpText:
+            "This pipe gets its length and diameter from the branch scope.",
         },
       ],
       helpText:
-        "This branch contains the selected Source block. Its pressure resolves from block scope, while diameter resolves from branch scope.",
+        "This branch contains the selected Source block. Its pressure resolves from block scope, while diameter and material resolve from branch scope.",
       featured: true,
     },
   },
   {
     id: "branch-2",
     type: "heroBranch",
-    position: { x: 500, y: 106 },
+    position: { x: 300, y: 160 },
     parentId: "group-1",
     extent: "parent",
     sourcePosition: Position.Right,
@@ -166,8 +196,14 @@ const heroNodes: HeroFlowNode[] = [
       tone: "iris",
       blocks: [
         {
+          type: "Valve",
+          detail: "Q 4 kg/s",
+        },
+        {
           type: "Pipe",
-          detail: "split weights 1:3",
+          detail: "Q 4 kg/s",
+          helpText:
+            "This pipe gets its length and ambient temperature from the group scope.",
         },
       ],
       helpText:
@@ -177,9 +213,7 @@ const heroNodes: HeroFlowNode[] = [
   {
     id: "branch-3",
     type: "heroBranch",
-    position: { x: 760, y: 48 },
-    parentId: "group-1",
-    extent: "parent",
+    position: { x: 1000, y: 20 },
     sourcePosition: Position.Right,
     targetPosition: Position.Left,
     data: {
@@ -191,15 +225,21 @@ const heroNodes: HeroFlowNode[] = [
           type: "Pipe",
           detail: "Q 1 kg/s",
         },
+        {
+          type: "Well",
+          detail: "Q 1 kg/s",
+        },
+        {
+          type: "Reservoir",
+          detail: "P 10 bar",
+        },
       ],
     },
   },
   {
     id: "branch-8",
     type: "heroBranch",
-    position: { x: 500, y: 226 },
-    parentId: "group-1",
-    extent: "parent",
+    position: { x: 400, y: 340 },
     sourcePosition: Position.Right,
     targetPosition: Position.Left,
     data: {
@@ -211,15 +251,17 @@ const heroNodes: HeroFlowNode[] = [
           type: "Source",
           detail: "Q 2 kg/s",
         },
+        {
+          type: "Pipe",
+          detail: "Q 2 kg/s",
+        },
       ],
     },
   },
   {
     id: "branch-5",
     type: "heroBranch",
-    position: { x: 760, y: 222 },
-    parentId: "group-1",
-    extent: "parent",
+    position: { x: 1000, y: 270 },
     sourcePosition: Position.Right,
     targetPosition: Position.Left,
     data: {
@@ -230,7 +272,26 @@ const heroNodes: HeroFlowNode[] = [
         {
           type: "Pipe",
           detail: "Q 5 kg/s",
-          highlight: true,
+        },
+        {
+          type: "Valve",
+          detail: "Q 5 kg/s",
+        },
+        {
+          type: "Pipe",
+          detail: "Q 5 kg/s",
+        },
+        {
+          type: "Heater",
+          detail: "Q 5 kg/s",
+        },
+        {
+          type: "Well",
+          detail: "Q 5 kg/s",
+        },
+        {
+          type: "Reservoir",
+          detail: "P 10 bar",
         },
       ],
       helpText:
@@ -307,7 +368,7 @@ const heroEdges: Edge[] = [
     id: "branch-2-branch-3",
     source: "branch-2",
     target: "branch-3",
-    label: "w=1 | 1 kg/s",
+    label: "1 kg/s",
     tone: "foam",
     animated: true,
   }),
@@ -315,7 +376,7 @@ const heroEdges: Edge[] = [
     id: "branch-2-branch-5",
     source: "branch-2",
     target: "branch-5",
-    label: "w=3 | 3 kg/s",
+    label: "3 kg/s",
     tone: "iris",
     animated: true,
   }),
@@ -348,8 +409,9 @@ export function HomeHero() {
               nodeTypes={heroNodeTypes}
               colorMode={colorMode}
               onNodesChange={onNodesChange}
-              fitView
-              fitViewOptions={{ padding: 0.16, minZoom: 0.66 }}
+              // fitView
+              defaultViewport={{ x: -30, y: 20, zoom: 0.9 }}
+              // fitViewOptions={{ padding: 0.16, minZoom: 0.66 }}
               nodesDraggable
               nodesConnectable={false}
               nodesFocusable
@@ -375,9 +437,11 @@ export function HomeHero() {
 }
 
 function HeroGroupNodeView({ data, width, height }: NodeProps<HeroGroupNode>) {
+  const groupProperties = data.groupProperties?.slice(0, 2) ?? [];
+
   return (
     <div
-      className="overflow-hidden rounded-[1.9rem] border border-dashed border-primary/35 bg-card/20 p-4 shadow-[inset_0_1px_0_color-mix(in_oklch,var(--primary)_12%,transparent)] backdrop-blur-[2px]"
+      className="overflow-hidden border border-dashed border-primary/35 bg-card/20 p-3 shadow-[inset_0_1px_0_color-mix(in_oklch,var(--primary)_12%,transparent)] backdrop-blur-[2px]"
       style={{ width: width ?? "100%", height: height ?? "100%" }}
     >
       <div className="flex items-start justify-between gap-3">
@@ -391,9 +455,18 @@ function HeroGroupNodeView({ data, width, height }: NodeProps<HeroGroupNode>) {
           </div>
         </div>
 
-        <div className="rounded-full border border-border/70 bg-background/80 px-2.5 py-1 text-[9px] font-mono text-foreground">
-          {data.propertyLabel} = {data.propertyValue}
-        </div>
+        {groupProperties.length > 0 ? (
+          <div className="flex shrink-0 flex-col items-end gap-1">
+            {groupProperties.map((property) => (
+              <div
+                key={`${data.label}-${property.label}-${property.value}`}
+                className="rounded-full border border-border/70 bg-background/80 px-2.5 py-1 text-[9px] font-mono text-foreground"
+              >
+                {property.label} = {property.value}
+              </div>
+            ))}
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -401,11 +474,12 @@ function HeroGroupNodeView({ data, width, height }: NodeProps<HeroGroupNode>) {
 
 function HeroBranchNodeView({ data }: NodeProps<HeroBranchNode>) {
   const accent = accentStyles[data.tone];
+  const branchProperties = data.branchProperties?.slice(0, 2) ?? [];
 
   return (
     <div
       className={cn(
-        "relative rounded-[1.2rem] border px-3 py-2.5 backdrop-blur-sm",
+        "relative rounded-md border px-3 py-2.5 backdrop-blur-sm",
         data.featured ? "min-w-[184px]" : "min-w-[164px]",
         data.featured && "ring-2 ring-primary/20",
       )}
@@ -445,24 +519,36 @@ function HeroBranchNodeView({ data }: NodeProps<HeroBranchNode>) {
           </div>
         </div>
 
-        {data.branchProperty ? (
-          <div className="rounded-full border border-border/70 bg-background/70 px-1.5 py-0.5 text-[9px] font-mono text-foreground">
-            {data.branchProperty.label} {data.branchProperty.value}
+        {branchProperties.length > 0 ? (
+          <div className="flex shrink-0 flex-col items-end gap-1">
+            {branchProperties.map((property) => (
+              <div
+                key={`${data.branchId}-${property.label}-${property.value}`}
+                className="rounded-full border border-border/70 bg-background/70 px-1.5 py-0.5 text-[9px] font-mono text-foreground"
+              >
+                {property.label} {property.value}
+              </div>
+            ))}
           </div>
         ) : null}
       </div>
 
       <div className="mt-2.5 space-y-1.5">
-        {data.blocks.map((block) => (
+        {data.blocks.map((block, index) => (
           <div
-            key={`${data.branchId}-${block.type}-${block.detail ?? "block"}`}
+            key={`${data.branchId}-${index}-${block.type}-${block.detail ?? "block"}`}
             className={cn(
               "rounded-lg border border-border/60 bg-background/60 px-1 py-1.5 text-[10px]",
               block.highlight && "border-primary/45 bg-background/88",
             )}
           >
             <div className="flex items-center justify-between gap-3">
-              <span className="font-medium text-foreground">{block.type}</span>
+              <div className="flex items-center gap-1.5">
+                <span className="font-medium text-foreground">
+                  {block.type}
+                </span>
+                {block.helpText ? <NodeTooltip text={block.helpText} /> : null}
+              </div>
               {block.detail ? (
                 <span className="font-mono text-[9px] text-muted-foreground">
                   {block.detail}
