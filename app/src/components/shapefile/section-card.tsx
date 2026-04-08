@@ -12,7 +12,7 @@ export function SectionCard({
   icon?: React.ComponentType<{ className?: string }>;
 }) {
   return (
-    <section className="rounded-xl border border-border bg-card">
+    <section className="border-t border-border bg-card">
       <div className="flex flex-col gap-3 border-b border-border px-4 py-4 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-2">

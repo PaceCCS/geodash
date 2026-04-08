@@ -61,28 +61,27 @@ export function ShapefileEditor({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 p-4">
-      <section className="rounded-xl border border-border bg-card p-4">
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h2
-                data-testid="shapefile-document-title"
-                className="text-xl font-semibold"
-              >
-                {draftDocument.name}
-              </h2>
-              {draftDocument.geometryType ? (
-                <Badge variant="outline">{draftDocument.geometryType}</Badge>
-              ) : null}
-            </div>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Edit geometry, DBF fields, and the optional PRJ text. Saves
-              rebuild the full shapefile set from the current draft.
-            </p>
-          </div>
+    <div className="@container mx-auto flex w-full max-w-7xl flex-col">
+      <p className="text-xs text-muted-foreground p-1">
+        Edit geometry, DBF fields, and the optional PRJ text. Saves rebuild the
+        full shapefile set from the current draft.
+      </p>
 
-          <div className="grid gap-2 text-sm text-muted-foreground md:text-right">
+      <section className="bg-card px-2">
+        <div className="flex flex-col gap-4 @lg:flex-row items-center @lg:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2
+              data-testid="shapefile-document-title"
+              className="text-xl font-semibold"
+            >
+              {draftDocument.name}
+            </h2>
+
+            {draftDocument.geometryType ? (
+              <Badge variant="outline">{draftDocument.geometryType}</Badge>
+            ) : null}
+          </div>
+          <div className="flex flex-row gap-1 @lg:gap-2 text-sm text-muted-foreground justify-end">
             <span>{draftDocument.records.length} records</span>
             <span>{draftDocument.fields.length} DBF fields</span>
             <span>
@@ -98,14 +97,19 @@ export function ShapefileEditor({
         <SectionCard
           title="Points"
           description="Edit PointZ geometry and matching DBF row values."
-          action={(
+          action={
             <Button
               variant="outline"
               size="sm"
               onClick={() => {
                 onUpdate((draft) => {
-                  draft.records.push(createPointRecord(draft.records.length + 1));
-                  draft.rows = ensureRowCount(draft.rows, draft.records.length - 1);
+                  draft.records.push(
+                    createPointRecord(draft.records.length + 1),
+                  );
+                  draft.rows = ensureRowCount(
+                    draft.rows,
+                    draft.records.length - 1,
+                  );
                   draft.rows.push(createEmptyRow(draft.fields.length));
                 });
               }}
@@ -113,7 +117,7 @@ export function ShapefileEditor({
               <Plus className="mr-1 h-3 w-3" />
               Add Point
             </Button>
-          )}
+          }
         >
           <PointRecordTable
             document={draftDocument}
@@ -142,7 +146,9 @@ export function ShapefileEditor({
             onCellChange={(rowIndex, fieldIndex, value) => {
               onUpdate((draft) => {
                 draft.rows = ensureRowCount(draft.rows, draft.records.length);
-                const row = [...ensureCellCount(draft.rows[rowIndex], draft.fields.length)];
+                const row = [
+                  ...ensureCellCount(draft.rows[rowIndex], draft.fields.length),
+                ];
                 row[fieldIndex] = value;
                 draft.rows[rowIndex] = row;
               });
@@ -168,7 +174,7 @@ export function ShapefileEditor({
             });
           }}
           placeholder="Paste WKT here or leave blank to omit the PRJ file."
-          className="min-h-48 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          className="min-h-48 w-full border border-input bg-background px-3 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
         />
       </SectionCard>
     </div>
@@ -186,7 +192,7 @@ function AttributesSection({
     <SectionCard
       title="Attributes"
       description="DBF field definitions. Field names are limited to 11 characters."
-      action={(
+      action={
         <Button
           variant="outline"
           size="sm"
@@ -194,27 +200,39 @@ function AttributesSection({
             onUpdate((draft) => {
               const nextField = createFieldDraft(draft.fields.length);
               draft.fields.push(nextField);
-              draft.rows = ensureRowCount(draft.rows, draft.records.length).map((row) => [
-                ...ensureCellCount(row, draft.fields.length - 1),
-                null,
-              ]);
+              draft.rows = ensureRowCount(draft.rows, draft.records.length).map(
+                (row) => [
+                  ...ensureCellCount(row, draft.fields.length - 1),
+                  null,
+                ],
+              );
             });
           }}
         >
           <Plus className="mr-1 h-3 w-3" />
           Add Field
         </Button>
-      )}
+      }
     >
       <div className="overflow-auto">
         <table className="min-w-full border-separate border-spacing-0">
           <thead>
             <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
-              <th className="border-b border-border px-3 py-2 font-medium">Name</th>
-              <th className="border-b border-border px-3 py-2 font-medium">Type</th>
-              <th className="border-b border-border px-3 py-2 font-medium">Length</th>
-              <th className="border-b border-border px-3 py-2 font-medium">Decimals</th>
-              <th className="border-b border-border px-3 py-2 font-medium text-right">Action</th>
+              <th className="border-b border-border px-3 py-2 font-medium">
+                Name
+              </th>
+              <th className="border-b border-border px-3 py-2 font-medium">
+                Type
+              </th>
+              <th className="border-b border-border px-3 py-2 font-medium">
+                Length
+              </th>
+              <th className="border-b border-border px-3 py-2 font-medium">
+                Decimals
+              </th>
+              <th className="border-b border-border px-3 py-2 font-medium text-right">
+                Action
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -282,7 +300,7 @@ function FieldRow({
               });
             });
           }}
-          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none transition-[color,box-shadow]"
+          className="flex h-9 w-full border border-input bg-transparent px-3 text-sm shadow-xs outline-none transition-[color,box-shadow]"
         >
           <option value="C">Character</option>
           <option value="N">Number</option>
@@ -333,11 +351,8 @@ function FieldRow({
           onClick={() => {
             onUpdate((draft) => {
               draft.fields.splice(fieldIndex, 1);
-              draft.rows = ensureRowCount(
-                draft.rows,
-                draft.records.length,
-              ).map((row) =>
-                row.filter((_, cellIndex) => cellIndex !== fieldIndex),
+              draft.rows = ensureRowCount(draft.rows, draft.records.length).map(
+                (row) => row.filter((_, cellIndex) => cellIndex !== fieldIndex),
               );
             });
           }}
@@ -360,13 +375,15 @@ function PolyLineSection({
     <SectionCard
       title="Line Features"
       description="Edit PolyLineZ vertices and per-feature DBF values. Multipart structures remain read-only in this first version."
-      action={(
+      action={
         <Button
           variant="outline"
           size="sm"
           onClick={() => {
             onUpdate((draft) => {
-              draft.records.push(createPolyLineRecord(draft.records.length + 1));
+              draft.records.push(
+                createPolyLineRecord(draft.records.length + 1),
+              );
               draft.rows = ensureRowCount(draft.rows, draft.records.length - 1);
               draft.rows.push(createEmptyRow(draft.fields.length));
             });
@@ -375,7 +392,7 @@ function PolyLineSection({
           <Plus className="mr-1 h-3 w-3" />
           Add Feature
         </Button>
-      )}
+      }
     >
       <div className="space-y-4">
         {draftDocument.records.map((record, recordIndex) => (
@@ -409,14 +426,16 @@ function PolyLineFeature({
   const isMultipart = geometry.parts.length > 1;
 
   return (
-    <div className="rounded-lg border border-border bg-background">
+    <div className="border border-border bg-background">
       <div className="flex flex-col gap-3 border-b border-border px-4 py-4 md:flex-row md:items-start md:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-sm font-semibold">Feature {record.number}</p>
             <Badge variant="secondary">{geometry.points.length} points</Badge>
             {isMultipart ? (
-              <Badge variant="outline">Parts: {geometry.parts.join(", ")}</Badge>
+              <Badge variant="outline">
+                Parts: {geometry.parts.join(", ")}
+              </Badge>
             ) : null}
           </div>
           <p className="mt-2 text-sm text-muted-foreground">
@@ -440,9 +459,9 @@ function PolyLineFeature({
                 if (target.geometry.type !== "PolyLineZ") {
                   return;
                 }
-                const lastPoint =
-                  target.geometry.points[target.geometry.points.length - 1]
-                  ?? { x: 0, y: 0, z: 0, m: 0 };
+                const lastPoint = target.geometry.points[
+                  target.geometry.points.length - 1
+                ] ?? { x: 0, y: 0, z: 0, m: 0 };
                 target.geometry.points.push({ ...lastPoint });
               });
             }}
@@ -500,12 +519,24 @@ function PolyLineFeature({
         <table className="min-w-full border-separate border-spacing-0">
           <thead>
             <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
-              <th className="border-b border-border px-3 py-2 font-medium">Point</th>
-              <th className="border-b border-border px-3 py-2 font-medium">X</th>
-              <th className="border-b border-border px-3 py-2 font-medium">Y</th>
-              <th className="border-b border-border px-3 py-2 font-medium">Z</th>
-              <th className="border-b border-border px-3 py-2 font-medium">M</th>
-              <th className="border-b border-border px-3 py-2 font-medium text-right">Action</th>
+              <th className="border-b border-border px-3 py-2 font-medium">
+                Point
+              </th>
+              <th className="border-b border-border px-3 py-2 font-medium">
+                X
+              </th>
+              <th className="border-b border-border px-3 py-2 font-medium">
+                Y
+              </th>
+              <th className="border-b border-border px-3 py-2 font-medium">
+                Z
+              </th>
+              <th className="border-b border-border px-3 py-2 font-medium">
+                M
+              </th>
+              <th className="border-b border-border px-3 py-2 font-medium text-right">
+                Action
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -541,9 +572,9 @@ function PolyLineFeature({
                       onUpdate((draft) => {
                         const target = draft.records[recordIndex];
                         if (
-                          target.geometry.type !== "PolyLineZ"
-                          || target.geometry.parts.length > 1
-                          || target.geometry.points.length <= 2
+                          target.geometry.type !== "PolyLineZ" ||
+                          target.geometry.parts.length > 1 ||
+                          target.geometry.points.length <= 2
                         ) {
                           return;
                         }
