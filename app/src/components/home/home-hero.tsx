@@ -309,6 +309,7 @@ const heroEdges: Edge[] = [
     target: "branch-3",
     label: "w=1 | 1 kg/s",
     tone: "foam",
+    animated: true,
   }),
   makeFlowEdge({
     id: "branch-2-branch-5",
@@ -417,7 +418,7 @@ function HeroBranchNodeView({ data }: NodeProps<HeroBranchNode>) {
       <Handle
         type="target"
         position={Position.Left}
-        className="!h-3 !w-3 !border-0"
+        className="h-3! w-3! border-0!"
         style={{
           background: accent.color,
           boxShadow: "0 0 0 2px var(--card)",
@@ -426,7 +427,7 @@ function HeroBranchNodeView({ data }: NodeProps<HeroBranchNode>) {
       <Handle
         type="source"
         position={Position.Right}
-        className="!h-3 !w-3 !border-0"
+        className="h-3! w-3! border-0!"
         style={{
           background: accent.color,
           boxShadow: "0 0 0 2px var(--card)",
@@ -456,7 +457,7 @@ function HeroBranchNodeView({ data }: NodeProps<HeroBranchNode>) {
           <div
             key={`${data.branchId}-${block.type}-${block.detail ?? "block"}`}
             className={cn(
-              "rounded-lg border border-border/60 bg-background/60 px-2 py-1.5 text-[10px]",
+              "rounded-lg border border-border/60 bg-background/60 px-1 py-1.5 text-[10px]",
               block.highlight && "border-primary/45 bg-background/88",
             )}
           >
