@@ -542,14 +542,11 @@ function PolyLineFeature({
           <tbody>
             {geometry.points.map((point, pointIndex) => (
               <tr key={`${record.number}-${pointIndex}`}>
-                <td className="border-b border-border px-3 py-3 text-sm text-muted-foreground">
+                <td className="border-b border-border text-sm text-muted-foreground">
                   {pointIndex + 1}
                 </td>
                 {(["x", "y", "z", "m"] as const).map((key) => (
-                  <td
-                    key={key}
-                    className="border-b border-border px-3 py-3 align-top"
-                  >
+                  <td key={key} className="border-b border-border align-top">
                     <NumericInput
                       value={point[key]}
                       onChange={(value) => {
@@ -564,7 +561,7 @@ function PolyLineFeature({
                     />
                   </td>
                 ))}
-                <td className="border-b border-border px-3 py-3 text-right align-top">
+                <td className="border-b border-border text-right align-top">
                   <Button
                     variant="ghost"
                     size="sm"

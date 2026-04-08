@@ -33,7 +33,7 @@ export function DbfCellEditor({
           }
           onChange(event.target.value === "true");
         }}
-        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none transition-[color,box-shadow]"
+        className="flex h-9 w-full border border-input bg-transparent px-3 text-sm shadow-xs outline-none transition-[color,box-shadow]"
       >
         <option value="">Null</option>
         <option value="true">True</option>
@@ -61,7 +61,9 @@ export function DbfCellEditor({
       value={typeof value === "string" ? value : ""}
       placeholder={field.fieldType === "D" ? "YYYYMMDD" : undefined}
       maxLength={field.fieldType === "D" ? 8 : field.length}
-      onChange={(event) => onChange(event.target.value === "" ? null : event.target.value)}
+      onChange={(event) =>
+        onChange(event.target.value === "" ? null : event.target.value)
+      }
     />
   );
 }
