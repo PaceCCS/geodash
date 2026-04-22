@@ -114,6 +114,26 @@ check-openapi:
 check-observability:
     bash scripts/check-observability.sh
 
+# Check local thermodynamic training datasets against recorded hashes
+check-thermo-datasets:
+    cd tools/thermo-models && uv run check_dataset_hashes.py
+
+# Train any thermodynamic model into the default thermo artifact root
+train-thermo-model model version="local":
+    cd tools/thermo-models && uv run train_model.py --model {{model}} --version {{version}}
+
+# Train the full thermodynamic model family into the default thermo artifact root
+train-thermo-model-family version="local":
+    cd tools/thermo-models && uv run train_model.py --model all --version {{version}}
+
+# Compare a trained thermodynamic model against the reference ONNX family
+compare-thermo-model model version="local":
+    cd tools/thermo-models && uv run compare_models.py --model {{model}} --version {{version}}
+
+# Compare the full trained thermodynamic model family against the reference ONNX family
+compare-thermo-model-family version="local":
+    cd tools/thermo-models && uv run compare_models.py --model all --version {{version}}
+
 # Run all checks
 check:
     zig fmt --check core/shapefile/src/ core/network-engine/src/

@@ -1,0 +1,191 @@
+{
+  "artifacts": {
+    "metrics": {
+      "path": "metrics.json",
+      "sha256": "e6b6a0f6bd0f2729d09d37d69973d4e5a2f96681893310478a5d8d403eb0db14"
+    },
+    "onnx": {
+      "path": "model.onnx",
+      "sha256": "fba9b09b49f9c94a7409ad5461122e346666d485fecb20db24102d001f8aadf0"
+    },
+    "runtimeConfig": {
+      "path": "runtime_config.json",
+      "sha256": "c1d12246acde98f0bae6f43d0d4d11bcf161a124af236a43b7a9dc1194448037"
+    },
+    "stateDict": {
+      "path": "model_state_dict.pt",
+      "sha256": "a31466b38c734f6d6b558e347ccc43818776808d184f9a5ab74d31712040e40c"
+    }
+  },
+  "dataset": {
+    "datasetId": "gerg2008_1m",
+    "path": "/Users/jerell/Repos/geodash/tools/thermo-models/datasets/GERG2008_1m.csv",
+    "rowsLoaded": 3685,
+    "sha256": "74096dea04151517f26974a545e36829eb8315009a0f43107b6daece1558b870",
+    "subsetKind": "non_two_phase"
+  },
+  "metrics": {
+    "test": {
+      "normalized_target": {
+        "mae": 0.8396018743515015,
+        "mse": 1.6162912845611572,
+        "r2": -0.6080260276794434,
+        "rmse": 1.2713344503163426
+      },
+      "physical_value": {
+        "mae": 3.676360296524278e-05,
+        "max_absolute_relative_error": 1.2773742922575981,
+        "mean_absolute_relative_error": 0.4948206276955589,
+        "mse": 3.0989101867381657e-09,
+        "r2": -0.6080262108951757,
+        "rmse": 5.5667855956001804e-05
+      }
+    },
+    "train": {
+      "normalized_target": {
+        "mae": 0.833384096622467,
+        "mse": 1.5967711210250854,
+        "r2": -0.6009808778762817,
+        "rmse": 1.263634093013118
+      },
+      "physical_value": {
+        "mae": 3.6491347841384894e-05,
+        "max_absolute_relative_error": 1.3864262891477648,
+        "mean_absolute_relative_error": 0.4983139201725958,
+        "mse": 3.0614841891984313e-09,
+        "r2": -0.6009809730417397,
+        "rmse": 5.5330680360885056e-05
+      }
+    }
+  },
+  "model": {
+    "displayName": "Viscosity (Gas/Liquid)",
+    "featureOrder": [
+      {
+        "feature": "PT",
+        "unit": "MPa"
+      },
+      {
+        "feature": "H",
+        "unit": "kJ/mol"
+      },
+      {
+        "feature": "CO2",
+        "unit": "%"
+      },
+      {
+        "feature": "CO",
+        "unit": "%"
+      },
+      {
+        "feature": "H2",
+        "unit": "%"
+      },
+      {
+        "feature": "N2",
+        "unit": "%"
+      },
+      {
+        "feature": "Ar",
+        "unit": "%"
+      },
+      {
+        "feature": "P2",
+        "unit": "MPa^(1/3)"
+      }
+    ],
+    "hiddenSizes": [
+      20,
+      20
+    ],
+    "modelId": "ph_vis_gas_liquid",
+    "outputTransform": "viscosity",
+    "property": "viscosity_gas_liquid",
+    "propertyUnit": "Pa\u00b7s",
+    "taskKind": "regression",
+    "version": "smoke"
+  },
+  "scaling": {
+    "displayName": "Viscosity (Gas/Liquid)",
+    "featureMeans": [
+      7.615165810391626,
+      -6.181167912153277,
+      92.99508838580844,
+      0.09914535750290811,
+      0.9696220089181852,
+      2.456881611865064,
+      0.49459925591314463,
+      1.8549129580172306
+    ],
+    "featureOrder": [
+      {
+        "feature": "PT",
+        "unit": "MPa"
+      },
+      {
+        "feature": "H",
+        "unit": "kJ/mol"
+      },
+      {
+        "feature": "CO2",
+        "unit": "%"
+      },
+      {
+        "feature": "CO",
+        "unit": "%"
+      },
+      {
+        "feature": "H2",
+        "unit": "%"
+      },
+      {
+        "feature": "N2",
+        "unit": "%"
+      },
+      {
+        "feature": "Ar",
+        "unit": "%"
+      },
+      {
+        "feature": "P2",
+        "unit": "MPa^(1/3)"
+      }
+    ],
+    "featureStdDevs": [
+      4.425793511645141,
+      5.317588501665993,
+      2.1904636130044706,
+      0.05777953701129054,
+      0.5768580745553524,
+      1.4353971875461211,
+      0.28599776430982404,
+      0.48868983572021885
+    ],
+    "modelPath": "model.onnx",
+    "outputStdDev": 0.8417567744137812,
+    "outputTransform": "viscosity",
+    "outputUnit": "Pa\u00b7s",
+    "outputVMean": 5.201852735078318e-05,
+    "outputVMin": 0.24042601740073488,
+    "property": "viscosity_gas_liquid"
+  },
+  "schemaVersion": 1,
+  "training": {
+    "batchSize": 256,
+    "completedAtUtc": "2026-04-22T14:46:40.205617+00:00",
+    "device": "cpu",
+    "epochs": 2,
+    "learningRate": 0.001,
+    "learningRateAfterDecay": 0.0005,
+    "learningRateDecayEpoch": 150,
+    "limitRows": 4096,
+    "lossCurve": [
+      1.8736366575414485,
+      1.6728491891514172
+    ],
+    "seed": 42,
+    "startedAtUtc": "2026-04-22T14:46:39.641761+00:00",
+    "testSize": 0.3,
+    "weightDecay": 0.0
+  }
+}

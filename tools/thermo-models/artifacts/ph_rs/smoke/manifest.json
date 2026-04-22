@@ -1,0 +1,189 @@
+{
+  "artifacts": {
+    "metrics": {
+      "path": "metrics.json",
+      "sha256": "597923267f10b65b7e68b2f79863e21525c1a7d325ba63479b81e37956a86b6d"
+    },
+    "onnx": {
+      "path": "model.onnx",
+      "sha256": "690ba7b5b40ced046961ac01bd256e26b8d14ee9bf66234eb59e5a3801d433c5"
+    },
+    "runtimeConfig": {
+      "path": "runtime_config.json",
+      "sha256": "8014cac380bd86c75bb07de0407057ce04c6229786c84b70dbb658e3b6a407c7"
+    },
+    "stateDict": {
+      "path": "model_state_dict.pt",
+      "sha256": "215aa87248f584b8e58003d44651d42c7a320d6346ff48e290b388c8066cba22"
+    }
+  },
+  "dataset": {
+    "datasetId": "gerg2008_1m",
+    "path": "/Users/jerell/Repos/geodash/tools/thermo-models/datasets/GERG2008_1m.csv",
+    "rowsLoaded": 4096,
+    "sha256": "74096dea04151517f26974a545e36829eb8315009a0f43107b6daece1558b870",
+    "subsetKind": "all"
+  },
+  "metrics": {
+    "test": {
+      "normalized_target": {
+        "mae": 1.0683804750442505,
+        "mse": 1.9112043380737305,
+        "r2": -0.9077240228652954,
+        "rmse": 1.382463141669148
+      },
+      "physical_value": {
+        "mae": 0.5202192737386084,
+        "max_absolute_relative_error": 193408188410.00818,
+        "mean_absolute_relative_error": 22716137041.46962,
+        "mse": 0.45313549005841663,
+        "r2": -0.9077242807556161,
+        "rmse": 0.6731533926664981
+      }
+    },
+    "train": {
+      "normalized_target": {
+        "mae": 1.0711666345596313,
+        "mse": 1.908002495765686,
+        "r2": -0.9101748466491699,
+        "rmse": 1.381304635395714
+      },
+      "physical_value": {
+        "mae": 0.52157588696843,
+        "max_absolute_relative_error": 194658465285.9926,
+        "mean_absolute_relative_error": 23574428869.119507,
+        "mse": 0.4523763490932033,
+        "r2": -0.9101747188070939,
+        "rmse": 0.6725892870788259
+      }
+    }
+  },
+  "model": {
+    "displayName": "Gas Fraction (RS)",
+    "featureOrder": [
+      {
+        "feature": "PT",
+        "unit": "MPa"
+      },
+      {
+        "feature": "H",
+        "unit": "kJ/mol"
+      },
+      {
+        "feature": "CO2",
+        "unit": "%"
+      },
+      {
+        "feature": "CO",
+        "unit": "%"
+      },
+      {
+        "feature": "H2",
+        "unit": "%"
+      },
+      {
+        "feature": "N2",
+        "unit": "%"
+      },
+      {
+        "feature": "Ar",
+        "unit": "%"
+      },
+      {
+        "feature": "P2",
+        "unit": "MPa^(1/3)"
+      }
+    ],
+    "hiddenSizes": [
+      20,
+      20
+    ],
+    "modelId": "ph_rs",
+    "outputTransform": "std_dev_only",
+    "property": "rs",
+    "propertyUnit": "dimensionless",
+    "taskKind": "regression",
+    "version": "smoke"
+  },
+  "scaling": {
+    "displayName": "Gas Fraction (RS)",
+    "featureMeans": [
+      7.443044129054761,
+      -6.723787477281204,
+      92.92264111649807,
+      0.10070023020579003,
+      0.9933395723753051,
+      2.4725002567143353,
+      0.500550485524939,
+      1.8447526479405971
+    ],
+    "featureOrder": [
+      {
+        "feature": "PT",
+        "unit": "MPa"
+      },
+      {
+        "feature": "H",
+        "unit": "kJ/mol"
+      },
+      {
+        "feature": "CO2",
+        "unit": "%"
+      },
+      {
+        "feature": "CO",
+        "unit": "%"
+      },
+      {
+        "feature": "H2",
+        "unit": "%"
+      },
+      {
+        "feature": "N2",
+        "unit": "%"
+      },
+      {
+        "feature": "Ar",
+        "unit": "%"
+      },
+      {
+        "feature": "P2",
+        "unit": "MPa^(1/3)"
+      }
+    ],
+    "featureStdDevs": [
+      4.342889466638019,
+      5.330618806413847,
+      2.210745622019252,
+      0.0579674314910532,
+      0.57506317251743,
+      1.4393989961209592,
+      0.28740603482255367,
+      0.47469581897966556
+    ],
+    "modelPath": "model.onnx",
+    "outputStdDev": 0.48692321567808766,
+    "outputTransform": "std_dev_only",
+    "outputUnit": "dimensionless",
+    "property": "rs"
+  },
+  "schemaVersion": 1,
+  "training": {
+    "batchSize": 256,
+    "completedAtUtc": "2026-04-22T14:46:37.983498+00:00",
+    "device": "cpu",
+    "epochs": 2,
+    "learningRate": 0.001,
+    "learningRateAfterDecay": 0.0005,
+    "learningRateDecayEpoch": 150,
+    "limitRows": 4096,
+    "lossCurve": [
+      2.2434301674365997,
+      2.01896396279335
+    ],
+    "seed": 42,
+    "startedAtUtc": "2026-04-22T14:46:37.488486+00:00",
+    "testSize": 0.3,
+    "weightDecay": 0.0
+  }
+}

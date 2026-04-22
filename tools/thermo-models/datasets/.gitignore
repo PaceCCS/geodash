@@ -1,0 +1,7 @@
+*.csv
+*.csv.gz
+*.tsv
+*.parquet
+!.gitignore
+!README.md
+!manifest.toml

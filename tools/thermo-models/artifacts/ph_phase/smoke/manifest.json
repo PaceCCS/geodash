@@ -1,0 +1,201 @@
+{
+  "artifacts": {
+    "metrics": {
+      "path": "metrics.json",
+      "sha256": "9ca02f8c0bd318a56010436c4d701e9cd032a469e529280ae8bf781f51163681"
+    },
+    "onnx": {
+      "path": "model.onnx",
+      "sha256": "6fd6d43b3ef2dda16b5754ddfbd320c4e0e9bf3a28297b23ac45245ac53e8620"
+    },
+    "runtimeConfig": {
+      "path": "runtime_config.json",
+      "sha256": "e29c976ee4c0da28db6b094370eaec554f1d062fa8f3154b3a6bbe4239fd529d"
+    },
+    "stateDict": {
+      "path": "model_state_dict.pt",
+      "sha256": "ff87c6913bfc84bb75300cdb39520bc389c9a064a85313893f2bfcffd49043aa"
+    }
+  },
+  "dataset": {
+    "datasetId": "gerg2008_1m",
+    "path": "/Users/jerell/Repos/geodash/tools/thermo-models/datasets/GERG2008_1m.csv",
+    "rowsLoaded": 4096,
+    "sha256": "74096dea04151517f26974a545e36829eb8315009a0f43107b6daece1558b870",
+    "subsetKind": "all"
+  },
+  "metrics": {
+    "test": {
+      "accuracy": 0.2780487804878049,
+      "confusionMatrix": [
+        [
+          136,
+          25,
+          144
+        ],
+        [
+          97,
+          18,
+          324
+        ],
+        [
+          1,
+          1,
+          74
+        ]
+      ],
+      "crossEntropy": 1.1207594871520996
+    },
+    "train": {
+      "accuracy": 0.29395604395604397,
+      "confusionMatrix": [
+        [
+          559,
+          137,
+          545
+        ],
+        [
+          430,
+          77,
+          1193
+        ],
+        [
+          8,
+          0,
+          327
+        ]
+      ],
+      "crossEntropy": 1.1154754161834717
+    }
+  },
+  "model": {
+    "displayName": "Phase",
+    "featureOrder": [
+      {
+        "feature": "PT",
+        "unit": "MPa"
+      },
+      {
+        "feature": "H",
+        "unit": "kJ/mol"
+      },
+      {
+        "feature": "CO2",
+        "unit": "%"
+      },
+      {
+        "feature": "CO",
+        "unit": "%"
+      },
+      {
+        "feature": "H2",
+        "unit": "%"
+      },
+      {
+        "feature": "N2",
+        "unit": "%"
+      },
+      {
+        "feature": "Ar",
+        "unit": "%"
+      },
+      {
+        "feature": "P2",
+        "unit": "MPa^(1/3)"
+      }
+    ],
+    "hiddenActivation": "tanh",
+    "hiddenSizes": [
+      5,
+      5
+    ],
+    "modelId": "ph_phase",
+    "outputActivation": "tanh",
+    "outputTransform": "none",
+    "property": "phase",
+    "propertyUnit": "dimensionless",
+    "taskKind": "classification",
+    "version": "smoke"
+  },
+  "scaling": {
+    "displayName": "Phase",
+    "featureMeans": [
+      7.4417040769230764,
+      -6.760853964803277,
+      92.91197102380953,
+      0.10007173168498171,
+      0.9950046587301586,
+      2.493094186507937,
+      0.4997829471916972,
+      1.8459736520006205
+    ],
+    "featureOrder": [
+      {
+        "feature": "PT",
+        "unit": "MPa"
+      },
+      {
+        "feature": "H",
+        "unit": "kJ/mol"
+      },
+      {
+        "feature": "CO2",
+        "unit": "%"
+      },
+      {
+        "feature": "CO",
+        "unit": "%"
+      },
+      {
+        "feature": "H2",
+        "unit": "%"
+      },
+      {
+        "feature": "N2",
+        "unit": "%"
+      },
+      {
+        "feature": "Ar",
+        "unit": "%"
+      },
+      {
+        "feature": "P2",
+        "unit": "MPa^(1/3)"
+      }
+    ],
+    "featureStdDevs": [
+      4.3223114634102435,
+      5.335025715235097,
+      2.2030463695762097,
+      0.05820306615662716,
+      0.5734760586307327,
+      1.4361265682098276,
+      0.28716653274329046,
+      0.4716269109986879
+    ],
+    "modelPath": "model.onnx",
+    "outputTransform": "none",
+    "outputUnit": "dimensionless",
+    "property": "phase"
+  },
+  "schemaVersion": 1,
+  "training": {
+    "batchSize": 256,
+    "completedAtUtc": "2026-04-22T14:52:02.892865+00:00",
+    "device": "cpu",
+    "epochs": 2,
+    "learningRate": 0.001,
+    "learningRateAfterDecay": 0.0005,
+    "learningRateDecayEpoch": 150,
+    "limitRows": 4096,
+    "lossCurve": [
+      1.1693872488462007,
+      1.133470709507282
+    ],
+    "seed": 42,
+    "startedAtUtc": "2026-04-22T14:52:01.137680+00:00",
+    "testSize": 0.2,
+    "testSizeSource": "model_spec",
+    "weightDecay": 0.0
+  }
+}
