@@ -1,0 +1,367 @@
+{
+  "comparisons": [
+    {
+      "candidate": {
+        "dir": "/Users/jerell/Repos/geodash/tools/thermo-models/artifacts/ph_phase/notebook-parity",
+        "metricsVsTruth": {
+          "accuracy": 0.99810791015625,
+          "confusionMatrix": [
+            [
+              6154,
+              1,
+              10
+            ],
+            [
+              2,
+              8513,
+              3
+            ],
+            [
+              13,
+              2,
+              1686
+            ]
+          ],
+          "crossEntropy": 0.24281029994066747
+        },
+        "runtimeConfig": "/Users/jerell/Repos/geodash/tools/thermo-models/artifacts/ph_phase/notebook-parity/runtime_config.json"
+      },
+      "candidateVsReference": {
+        "labelAgreement": 0.9989013671875,
+        "probabilityRmse": 0.010328467597986207
+      },
+      "configChecks": {
+        "featureOrderMatches": true,
+        "outputTransformMatches": true,
+        "outputUnitMatches": true
+      },
+      "dataset": {
+        "datasetId": "gerg2008_1m",
+        "rowsCompared": 16384,
+        "rowsLoaded": 16384,
+        "seed": 42,
+        "sha256": "74096dea04151517f26974a545e36829eb8315009a0f43107b6daece1558b870",
+        "subsetKind": "all"
+      },
+      "model": "ph_phase",
+      "reference": {
+        "metricsVsTruth": {
+          "accuracy": 0.99749755859375,
+          "confusionMatrix": [
+            [
+              6151,
+              1,
+              13
+            ],
+            [
+              7,
+              8510,
+              1
+            ],
+            [
+              14,
+              5,
+              1682
+            ]
+          ],
+          "crossEntropy": 0.2431769444326666
+        },
+        "onnx": "/Users/jerell/Repos/phase-envelope-generator/frontend/public/nn/PH_Phase.onnx"
+      }
+    },
+    {
+      "candidate": {
+        "dir": "/Users/jerell/Repos/geodash/tools/thermo-models/artifacts/ph_ro/notebook-parity",
+        "metricsVsTruth": {
+          "mae": 1.240840510950416,
+          "max_absolute_relative_error": 1.4308947196200712,
+          "mean_absolute_relative_error": 0.011371297548802834,
+          "mse": 6.537590105936687,
+          "r2": 0.9999496529501724,
+          "rmse": 2.5568711555212724
+        },
+        "runtimeConfig": "/Users/jerell/Repos/geodash/tools/thermo-models/artifacts/ph_ro/notebook-parity/runtime_config.json"
+      },
+      "candidateVsReference": {
+        "max_absolute_relative_difference_vs_reference": 15.688746937971004,
+        "mean_absolute_relative_difference_vs_reference": 0.03220040175275909,
+        "valueDelta": {
+          "mae": 10.700066081474423,
+          "mse": 186.4253980230801,
+          "r2": 0.998628841060563,
+          "rmse": 13.653768638111607
+        }
+      },
+      "configChecks": {
+        "featureOrderMatches": true,
+        "outputTransformMatches": true,
+        "outputUnitMatches": true
+      },
+      "dataset": {
+        "datasetId": "gerg2008_1m",
+        "rowsCompared": 16384,
+        "rowsLoaded": 16384,
+        "seed": 42,
+        "sha256": "74096dea04151517f26974a545e36829eb8315009a0f43107b6daece1558b870",
+        "subsetKind": "all"
+      },
+      "model": "ph_ro",
+      "reference": {
+        "metricsVsTruth": {
+          "mae": 11.000650616843549,
+          "max_absolute_relative_error": 0.8726425951823159,
+          "mean_absolute_relative_error": 0.033796736978805565,
+          "mse": 197.60770790472438,
+          "r2": 0.9984781907468988,
+          "rmse": 14.057300875513919
+        },
+        "onnx": "/Users/jerell/Repos/phase-envelope-generator/frontend/public/nn/PH_RO.onnx"
+      }
+    },
+    {
+      "candidate": {
+        "dir": "/Users/jerell/Repos/geodash/tools/thermo-models/artifacts/ph_rs/notebook-parity",
+        "metricsVsTruth": {
+          "mae": 0.002147216166234187,
+          "max_absolute_relative_error": 378023965868.6114,
+          "mean_absolute_relative_error": 616878430.0666461,
+          "mse": 6.988729422775669e-05,
+          "r2": 0.9997045991920926,
+          "rmse": 0.008359862093824078
+        },
+        "runtimeConfig": "/Users/jerell/Repos/geodash/tools/thermo-models/artifacts/ph_rs/notebook-parity/runtime_config.json"
+      },
+      "candidateVsReference": {
+        "max_absolute_relative_difference_vs_reference": 153201.49999929933,
+        "mean_absolute_relative_difference_vs_reference": 24.59097688152789,
+        "valueDelta": {
+          "mae": 0.0022673246283164542,
+          "mse": 4.0671519221207686e-05,
+          "r2": 0.999828050323704,
+          "rmse": 0.006377422615854126
+        }
+      },
+      "configChecks": {
+        "featureOrderMatches": true,
+        "outputTransformMatches": true,
+        "outputUnitMatches": true
+      },
+      "dataset": {
+        "datasetId": "gerg2008_1m",
+        "rowsCompared": 16384,
+        "rowsLoaded": 16384,
+        "seed": 42,
+        "sha256": "74096dea04151517f26974a545e36829eb8315009a0f43107b6daece1558b870",
+        "subsetKind": "all"
+      },
+      "model": "ph_rs",
+      "reference": {
+        "metricsVsTruth": {
+          "mae": 0.0011363111233701827,
+          "max_absolute_relative_error": 714640778550.882,
+          "mean_absolute_relative_error": 181075639.42744774,
+          "mse": 0.00010772745789761594,
+          "r2": 0.9995446557425296,
+          "rmse": 0.010379183874352355
+        },
+        "onnx": "/Users/jerell/Repos/phase-envelope-generator/frontend/public/nn/PH_RS.onnx"
+      }
+    },
+    {
+      "candidate": {
+        "dir": "/Users/jerell/Repos/geodash/tools/thermo-models/artifacts/ph_s/notebook-parity",
+        "metricsVsTruth": {
+          "mae": 0.0534557818342948,
+          "max_absolute_relative_error": 1.065708842158578,
+          "mean_absolute_relative_error": 0.0018469867705292694,
+          "mse": 0.004352002046752686,
+          "r2": 0.9999909824379473,
+          "rmse": 0.06596970552270706
+        },
+        "runtimeConfig": "/Users/jerell/Repos/geodash/tools/thermo-models/artifacts/ph_s/notebook-parity/runtime_config.json"
+      },
+      "candidateVsReference": {
+        "max_absolute_relative_difference_vs_reference": 1.2968701258188624,
+        "mean_absolute_relative_difference_vs_reference": 0.0013643348481668523,
+        "valueDelta": {
+          "mae": 0.04014633874981504,
+          "mse": 0.0022252893533055117,
+          "r2": 0.9999953844145075,
+          "rmse": 0.04717297269947604
+        }
+      },
+      "configChecks": {
+        "featureOrderMatches": true,
+        "outputTransformMatches": true,
+        "outputUnitMatches": true
+      },
+      "dataset": {
+        "datasetId": "gerg2008_1m",
+        "rowsCompared": 16384,
+        "rowsLoaded": 16384,
+        "seed": 42,
+        "sha256": "74096dea04151517f26974a545e36829eb8315009a0f43107b6daece1558b870",
+        "subsetKind": "all"
+      },
+      "model": "ph_s",
+      "reference": {
+        "metricsVsTruth": {
+          "mae": 0.05517605745303235,
+          "max_absolute_relative_error": 1.4496952087163315,
+          "mean_absolute_relative_error": 0.0019846529813513417,
+          "mse": 0.005181967347404304,
+          "r2": 0.9999892627090685,
+          "rmse": 0.07198588297301287
+        },
+        "onnx": "/Users/jerell/Repos/phase-envelope-generator/frontend/public/nn/PH_S.onnx"
+      }
+    },
+    {
+      "candidate": {
+        "dir": "/Users/jerell/Repos/geodash/tools/thermo-models/artifacts/ph_t/notebook-parity",
+        "metricsVsTruth": {
+          "mae": 0.2750630622394785,
+          "max_absolute_relative_error": 0.00738567257549119,
+          "mean_absolute_relative_error": 0.0009585434015993723,
+          "mse": 0.1177188910992652,
+          "r2": 0.999857802590336,
+          "rmse": 0.34310186694226136
+        },
+        "runtimeConfig": "/Users/jerell/Repos/geodash/tools/thermo-models/artifacts/ph_t/notebook-parity/runtime_config.json"
+      },
+      "candidateVsReference": {
+        "max_absolute_relative_difference_vs_reference": 0.006953104920828862,
+        "mean_absolute_relative_difference_vs_reference": 0.0007397405712152088,
+        "valueDelta": {
+          "mae": 0.2166211417969633,
+          "mse": 0.0813798705440739,
+          "r2": 0.9999016320084866,
+          "rmse": 0.285271573319309
+        }
+      },
+      "configChecks": {
+        "featureOrderMatches": true,
+        "outputTransformMatches": true,
+        "outputUnitMatches": true
+      },
+      "dataset": {
+        "datasetId": "gerg2008_1m",
+        "rowsCompared": 16384,
+        "rowsLoaded": 16384,
+        "seed": 42,
+        "sha256": "74096dea04151517f26974a545e36829eb8315009a0f43107b6daece1558b870",
+        "subsetKind": "all"
+      },
+      "model": "ph_t",
+      "reference": {
+        "metricsVsTruth": {
+          "mae": 0.2688035675168223,
+          "max_absolute_relative_error": 0.007735374047722436,
+          "mean_absolute_relative_error": 0.0009337267455680996,
+          "mse": 0.11123948297708289,
+          "r2": 0.9998656293294645,
+          "rmse": 0.3335258355466378
+        },
+        "onnx": "/Users/jerell/Repos/phase-envelope-generator/frontend/public/nn/PH_T.onnx"
+      }
+    },
+    {
+      "candidate": {
+        "dir": "/Users/jerell/Repos/geodash/tools/thermo-models/artifacts/ph_vis_gas_liquid/notebook-parity",
+        "metricsVsTruth": {
+          "mae": 1.2981637262504028e-07,
+          "max_absolute_relative_error": 0.04053946351773568,
+          "mean_absolute_relative_error": 0.002717082221139004,
+          "mse": 4.409002055955706e-14,
+          "r2": 0.9999769216870016,
+          "rmse": 2.0997623808316277e-07
+        },
+        "runtimeConfig": "/Users/jerell/Repos/geodash/tools/thermo-models/artifacts/ph_vis_gas_liquid/notebook-parity/runtime_config.json"
+      },
+      "candidateVsReference": {
+        "max_absolute_relative_difference_vs_reference": 0.016827271414976905,
+        "mean_absolute_relative_difference_vs_reference": 0.002756911744649492,
+        "valueDelta": {
+          "mae": 9.438403462870752e-08,
+          "mse": 1.6153208078966087e-14,
+          "r2": 0.9999915522669642,
+          "rmse": 1.2709527166250554e-07
+        }
+      },
+      "configChecks": {
+        "featureOrderMatches": true,
+        "outputTransformMatches": true,
+        "outputUnitMatches": true
+      },
+      "dataset": {
+        "datasetId": "gerg2008_1m",
+        "rowsCompared": 14683,
+        "rowsLoaded": 14683,
+        "seed": 42,
+        "sha256": "74096dea04151517f26974a545e36829eb8315009a0f43107b6daece1558b870",
+        "subsetKind": "non_two_phase"
+      },
+      "model": "ph_vis_gas_liquid",
+      "reference": {
+        "metricsVsTruth": {
+          "mae": 1.275479580550342e-07,
+          "max_absolute_relative_error": 0.048252255384878394,
+          "mean_absolute_relative_error": 0.002574571638842583,
+          "mse": 4.5738042245542216e-14,
+          "r2": 0.9999760590527861,
+          "rmse": 2.1386454181453787e-07
+        },
+        "onnx": "/Users/jerell/Repos/phase-envelope-generator/frontend/public/nn/PH_VIS_GasLiquid.onnx"
+      }
+    },
+    {
+      "candidate": {
+        "dir": "/Users/jerell/Repos/geodash/tools/thermo-models/artifacts/ph_vis_two_phase/notebook-parity",
+        "metricsVsTruth": {
+          "mae": 5.198767429765933e-07,
+          "max_absolute_relative_error": 2.0755430310151923,
+          "mean_absolute_relative_error": 0.015511751813016516,
+          "mse": 2.8352187480468587e-12,
+          "r2": 0.9982991981306495,
+          "rmse": 1.6838107815449034e-06
+        },
+        "runtimeConfig": "/Users/jerell/Repos/geodash/tools/thermo-models/artifacts/ph_vis_two_phase/notebook-parity/runtime_config.json"
+      },
+      "candidateVsReference": {
+        "max_absolute_relative_difference_vs_reference": 0.8677302351983304,
+        "mean_absolute_relative_difference_vs_reference": 0.10868054834533017,
+        "valueDelta": {
+          "mae": 6.975944516549772e-06,
+          "mse": 1.5742863639409367e-10,
+          "r2": 0.8796169348637654,
+          "rmse": 1.2547056881758911e-05
+        }
+      },
+      "configChecks": {
+        "featureOrderMatches": true,
+        "outputTransformMatches": true,
+        "outputUnitMatches": true
+      },
+      "dataset": {
+        "datasetId": "gerg2008_1m",
+        "rowsCompared": 1701,
+        "rowsLoaded": 1701,
+        "seed": 42,
+        "sha256": "74096dea04151517f26974a545e36829eb8315009a0f43107b6daece1558b870",
+        "subsetKind": "two_phase"
+      },
+      "model": "ph_vis_two_phase",
+      "reference": {
+        "metricsVsTruth": {
+          "mae": 7.162082303247196e-06,
+          "max_absolute_relative_error": 5.859437678321806,
+          "mean_absolute_relative_error": 0.2719526111509293,
+          "mse": 1.673143607763135e-10,
+          "r2": 0.899630821158484,
+          "rmse": 1.2935005248406878e-05
+        },
+        "onnx": "/Users/jerell/Repos/phase-envelope-generator/frontend/public/nn/PH_VIS_TwoPhase.onnx"
+      }
+    }
+  ]
+}

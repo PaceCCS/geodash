@@ -18,7 +18,7 @@ from sklearn.model_selection import train_test_split
 
 from dataset_manifest import DEFAULT_MANIFEST, compute_sha256, get_dataset_entry, verify_dataset_entry
 from model_specs import MODEL_SPECS, ModelSpec
-from networks import FeedForwardNetwork, SoftmaxExportWrapper
+from networks import FeedForwardNetwork
 
 TWO_PHASE_VISCOSITY_WEIGHT_EXPONENT = 1.5759
 
@@ -336,6 +336,10 @@ def train(
     optimizer = build_optimizer(model, learning_rate, weight_decay)
     losses: list[float] = []
 
+    # Determine logging interval: every 10% of epochs, minimum 1
+    log_interval = max(1, epochs // 10)
+    total_batches = (train_inputs.shape[0] + batch_size - 1) // batch_size
+
     for epoch in range(epochs):
         if epoch > learning_rate_decay_epoch:
             optimizer = build_optimizer(model, learning_rate_after_decay, weight_decay)
@@ -362,6 +366,14 @@ def train(
             epoch_batches += 1
 
         losses.append(epoch_loss / max(epoch_batches, 1))
+
+        # Progress logging
+        if epoch % log_interval == 0 or epoch == epochs - 1:
+            pct = (epoch + 1) * 100 // epochs
+            print(
+                f"[{spec.model_id}] epoch {epoch + 1}/{epochs} ({pct}%) "
+                f"avg_loss={losses[-1]:.6e} batch_size={batch_size} batches={total_batches}"
+            )
 
     model.to("cpu")
     return losses
@@ -443,11 +455,7 @@ def export_onnx(
     input_size: int,
 ) -> None:
     dummy_input = torch.zeros(1, input_size, dtype=torch.float32)
-    export_model: torch.nn.Module
-    if spec.task_kind == "classification":
-        export_model = SoftmaxExportWrapper(model)
-    else:
-        export_model = model
+    export_model: torch.nn.Module = model
     export_model.eval()
     torch.onnx.export(
         export_model,

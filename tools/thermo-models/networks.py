@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import torch
 import torch.nn as nn
 
 
@@ -37,13 +36,3 @@ class FeedForwardNetwork(nn.Module):
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         return self.network(inputs)
-
-
-class SoftmaxExportWrapper(nn.Module):
-    def __init__(self, model: nn.Module) -> None:
-        super().__init__()
-        self.model = model
-        self.softmax = nn.Softmax(dim=1)
-
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        return self.softmax(self.model(inputs))

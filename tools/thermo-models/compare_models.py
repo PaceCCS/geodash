@@ -104,6 +104,12 @@ def run_onnx_model(onnx_path: Path, inputs: np.ndarray) -> np.ndarray:
     return np.asarray(outputs[0], dtype=np.float64)
 
 
+def softmax_rows(values: np.ndarray) -> np.ndarray:
+    shifted = values - np.max(values, axis=1, keepdims=True)
+    exponentiated = np.exp(shifted)
+    return exponentiated / np.sum(exponentiated, axis=1, keepdims=True)
+
+
 def sample_frame_rows(row_count: int, sample_count: int, seed: int) -> np.ndarray:
     if sample_count <= 0:
         raise SystemExit("ERROR: --sample-count must be positive")
@@ -174,8 +180,10 @@ def compare_single_model(args: argparse.Namespace, spec: ModelSpec) -> dict[str,
 
     if spec.task_kind == "classification":
         truth = phase_labels(sample)
-        candidate_probabilities = candidate_raw
-        reference_probabilities = reference_raw
+        candidate_scores = candidate_raw
+        reference_scores = reference_raw
+        candidate_probabilities = softmax_rows(candidate_scores)
+        reference_probabilities = softmax_rows(reference_scores)
         comparison["candidate"]["metricsVsTruth"] = classification_metrics(
             truth, candidate_probabilities
         )
@@ -185,8 +193,8 @@ def compare_single_model(args: argparse.Namespace, spec: ModelSpec) -> dict[str,
         comparison["candidateVsReference"] = {
             "labelAgreement": float(
                 np.mean(
-                    np.argmax(candidate_probabilities, axis=1)
-                    == np.argmax(reference_probabilities, axis=1)
+                    np.argmax(candidate_scores, axis=1)
+                    == np.argmax(reference_scores, axis=1)
                 )
             ),
             "probabilityRmse": float(
