@@ -13,3 +13,4 @@ Architectural decision records for geodash. Each documents a non-obvious choice,
 | [007](./007-versioned-thermodynamic-model-registry.md)       | Versioned thermodynamic model registry              | Proposed |
 | [008](./008-gpu-pipe-segment-data-layout.md)                 | GPU pipe segment data layout for route-backed pipes | Proposed |
 | [009](./009-merge-operator-for-downstream-candidate-sets.md) | Merge operator for downstream candidate sets        | Proposed |
+| [010](./010-zarr-as-intermediate-and-output-format.md)       | Zarr as intermediate and output format              | Proposed |
