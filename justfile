@@ -135,7 +135,7 @@ compare-thermo-model-family version="local":
     cd tools/thermo-models && uv run compare_models.py --model all --version {{version}}
 
 # Run all checks
-check:
+check: test-zig check-wasm-freshness
     zig fmt --check core/shapefile/src/ core/network-engine/src/
     cd server && bunx eslint src/
     cd app && bunx eslint src/

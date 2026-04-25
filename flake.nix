@@ -8,7 +8,7 @@
     # Local development can override this input:
     #   nix build path:.#dim-wasm --override-input dim-src path:/Users/you/Repos/dim
     dim-src = {
-      url = "github:PaceCCS/dim/v0.1.0";
+      url = "github:PaceCCS/dim/v0.1.1";
       flake = false;
     };
   };
