@@ -1,0 +1,64 @@
+{
+  "displayName": "Viscosity (Gas/Liquid)",
+  "featureMeans": [
+    7.831234990240317,
+    -6.26984033701674,
+    92.95955711523791,
+    0.09990849071706007,
+    0.9854846351048835,
+    2.4681859135388695,
+    0.49864635023247206,
+    1.8781585337173514
+  ],
+  "featureOrder": [
+    {
+      "feature": "PT",
+      "unit": "MPa"
+    },
+    {
+      "feature": "H",
+      "unit": "kJ/mol"
+    },
+    {
+      "feature": "CO2",
+      "unit": "%"
+    },
+    {
+      "feature": "CO",
+      "unit": "%"
+    },
+    {
+      "feature": "H2",
+      "unit": "%"
+    },
+    {
+      "feature": "N2",
+      "unit": "%"
+    },
+    {
+      "feature": "Ar",
+      "unit": "%"
+    },
+    {
+      "feature": "P2",
+      "unit": "MPa^(1/3)"
+    }
+  ],
+  "featureStdDevs": [
+    4.417525864407196,
+    5.3260172960559,
+    2.166212846062498,
+    0.05771151035157422,
+    0.5769679987728508,
+    1.4446248857011783,
+    0.2885070018429874,
+    0.48089498605349545
+  ],
+  "modelPath": "model.onnx",
+  "outputStdDev": 0.8356850085583448,
+  "outputTransform": "viscosity",
+  "outputUnit": "Pa\u00b7s",
+  "outputVMean": 5.274543587838395e-05,
+  "outputVMin": 0.23524382793251392,
+  "property": "viscosity_gas_liquid"
+}

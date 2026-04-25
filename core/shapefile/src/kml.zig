@@ -4,6 +4,20 @@ const BoundingBox = types.BoundingBox;
 const ZRange = types.ZRange;
 const PolyLineZ = types.PolyLineZ;
 
+fn defaultIo() std.Io {
+    return std.Io.Threaded.global_single_threaded.io();
+}
+
+fn readFileAlloc(allocator: std.mem.Allocator, path: []const u8, limit: usize) ![]u8 {
+    const io = defaultIo();
+    const file = try std.Io.Dir.cwd().openFile(io, path, .{});
+    defer file.close(io);
+
+    var reader_buf: [4096]u8 = undefined;
+    var file_reader = file.reader(io, &reader_buf);
+    return file_reader.interface.allocRemaining(allocator, .limited(limit));
+}
+
 pub const KmlError = error{
     NoCoordinatesFound,
     KmlNotFound,
@@ -32,9 +46,7 @@ pub fn read(allocator: std.mem.Allocator, path: []const u8) !PolyLineZ {
 // ---------------------------------------------------------------------------
 
 fn readKml(allocator: std.mem.Allocator, path: []const u8) !PolyLineZ {
-    const file = try std.fs.cwd().openFile(path, .{});
-    defer file.close();
-    const data = try file.readToEndAlloc(allocator, 10 * 1024 * 1024);
+    const data = try readFileAlloc(allocator, path, 10 * 1024 * 1024);
     defer allocator.free(data);
     return parseKml(allocator, data);
 }
@@ -54,9 +66,9 @@ fn parseKml(allocator: std.mem.Allocator, data: []const u8) !PolyLineZ {
 
 /// Parse whitespace-separated "lon,lat[,alt]" tuples.
 fn parseKmlCoords(allocator: std.mem.Allocator, text: []const u8) !PolyLineZ {
-    var points: std.ArrayListUnmanaged([2]f64) = .{};
+    var points: std.ArrayListUnmanaged([2]f64) = .empty;
     errdefer points.deinit(allocator);
-    var zs: std.ArrayListUnmanaged(f64) = .{};
+    var zs: std.ArrayListUnmanaged(f64) = .empty;
     errdefer zs.deinit(allocator);
 
     var tokens = std.mem.tokenizeAny(u8, text, " \t\r\n");
@@ -85,32 +97,35 @@ fn parseKmlCoords(allocator: std.mem.Allocator, text: []const u8) !PolyLineZ {
 fn readKmz(allocator: std.mem.Allocator, path: []const u8) !PolyLineZ {
     // Extract to a unique temp directory, parse the KML, then clean up.
     var tmp_buf: [128]u8 = undefined;
-    const tmp_path = try std.fmt.bufPrint(&tmp_buf, "/tmp/geodash_kml_{d}", .{std.time.milliTimestamp()});
+    const tmp_path = try std.fmt.bufPrint(&tmp_buf, "/tmp/geodash_kml_{d}", .{std.Io.Timestamp.now(defaultIo(), .real).nanoseconds});
 
-    std.fs.cwd().makeDir(tmp_path) catch |e| if (e != error.PathAlreadyExists) return e;
-    var tmp_dir = try std.fs.cwd().openDir(tmp_path, .{ .iterate = true });
+    const io = defaultIo();
+    std.Io.Dir.cwd().createDir(io, tmp_path, .default_dir) catch |e| if (e != error.PathAlreadyExists) return e;
+    var tmp_dir = try std.Io.Dir.cwd().openDir(io, tmp_path, .{ .iterate = true });
     defer {
-        tmp_dir.close();
-        std.fs.cwd().deleteTree(tmp_path) catch {};
+        tmp_dir.close(io);
+        std.Io.Dir.cwd().deleteTree(io, tmp_path) catch {};
     }
 
     {
-        const file = try std.fs.cwd().openFile(path, .{});
-        defer file.close();
+        const file = try std.Io.Dir.cwd().openFile(io, path, .{});
+        defer file.close(io);
         var reader_buf: [4096]u8 = undefined;
-        var fr = file.reader(&reader_buf);
+        var fr = file.reader(io, &reader_buf);
         try std.zip.extract(tmp_dir, &fr, .{});
     }
 
     // Find the first .kml file in the extracted directory.
     var iter = tmp_dir.iterate();
-    while (try iter.next()) |entry| {
+    while (try iter.next(io)) |entry| {
         if (entry.kind != .file) continue;
         if (!std.mem.endsWith(u8, entry.name, ".kml")) continue;
 
-        const kml_file = try tmp_dir.openFile(entry.name, .{});
-        defer kml_file.close();
-        const kml_data = try kml_file.readToEndAlloc(allocator, 10 * 1024 * 1024);
+        const kml_file = try tmp_dir.openFile(io, entry.name, .{});
+        defer kml_file.close(io);
+        var reader_buf: [4096]u8 = undefined;
+        var kml_reader = kml_file.reader(io, &reader_buf);
+        const kml_data = try kml_reader.interface.allocRemaining(allocator, .limited(10 * 1024 * 1024));
         defer allocator.free(kml_data);
         return parseKml(allocator, kml_data);
     }
@@ -127,9 +142,7 @@ fn readKmz(allocator: std.mem.Allocator, path: []const u8) !PolyLineZ {
 //   "LINESTRING (-2.865 54.074, -2.854 54.092, ...)",Line 1,
 
 fn readCsv(allocator: std.mem.Allocator, path: []const u8) !PolyLineZ {
-    const file = try std.fs.cwd().openFile(path, .{});
-    defer file.close();
-    const data = try file.readToEndAlloc(allocator, 10 * 1024 * 1024);
+    const data = try readFileAlloc(allocator, path, 10 * 1024 * 1024);
     defer allocator.free(data);
     return parseCsv(allocator, data);
 }
@@ -137,7 +150,7 @@ fn readCsv(allocator: std.mem.Allocator, path: []const u8) !PolyLineZ {
 fn parseCsv(allocator: std.mem.Allocator, data: []const u8) !PolyLineZ {
     // Skip the header line.
     const newline = std.mem.indexOfAny(u8, data, "\r\n") orelse return KmlError.NoCoordinatesFound;
-    const body = std.mem.trimLeft(u8, data[newline..], "\r\n");
+    const body = std.mem.trimStart(u8, data[newline..], "\r\n");
 
     // Locate the LINESTRING coordinate block.
     const prefix = "LINESTRING (";
@@ -146,9 +159,9 @@ fn parseCsv(allocator: std.mem.Allocator, data: []const u8) !PolyLineZ {
     const coord_end = std.mem.indexOf(u8, body[coord_start..], ")") orelse return KmlError.InvalidWkt;
     const coord_text = body[coord_start .. coord_start + coord_end];
 
-    var points: std.ArrayListUnmanaged([2]f64) = .{};
+    var points: std.ArrayListUnmanaged([2]f64) = .empty;
     errdefer points.deinit(allocator);
-    var zs: std.ArrayListUnmanaged(f64) = .{};
+    var zs: std.ArrayListUnmanaged(f64) = .empty;
     errdefer zs.deinit(allocator);
 
     // Pairs are "lon lat" separated by ", ".

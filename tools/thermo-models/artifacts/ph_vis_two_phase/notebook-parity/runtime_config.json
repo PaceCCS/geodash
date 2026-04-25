@@ -1,0 +1,64 @@
+{
+  "displayName": "Viscosity (Two-Phase)",
+  "featureMeans": [
+    5.035304113228793,
+    -11.258270455951365,
+    92.44778953770631,
+    0.10117723219729217,
+    1.120037061351715,
+    2.7577162038969596,
+    0.5119449071622773,
+    1.6932589479126439
+  ],
+  "featureOrder": [
+    {
+      "feature": "PT",
+      "unit": "MPa"
+    },
+    {
+      "feature": "H",
+      "unit": "kJ/mol"
+    },
+    {
+      "feature": "CO2",
+      "unit": "%"
+    },
+    {
+      "feature": "CO",
+      "unit": "%"
+    },
+    {
+      "feature": "H2",
+      "unit": "%"
+    },
+    {
+      "feature": "N2",
+      "unit": "%"
+    },
+    {
+      "feature": "Ar",
+      "unit": "%"
+    },
+    {
+      "feature": "P2",
+      "unit": "MPa^(1/3)"
+    }
+  ],
+  "featureStdDevs": [
+    1.594409081011039,
+    2.817119184053455,
+    2.0798182802860246,
+    0.05769858974435685,
+    0.5653996853988509,
+    1.4157534029670082,
+    0.2890111867523221,
+    0.18985373706262712
+  ],
+  "modelPath": "model.onnx",
+  "outputStdDev": 0.5048739636738191,
+  "outputTransform": "viscosity",
+  "outputUnit": "Pa\u00b7s",
+  "outputVMean": 8.043039095821933e-05,
+  "outputVMin": 0.15488156497727484,
+  "property": "viscosity_two_phase"
+}

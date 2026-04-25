@@ -44,6 +44,7 @@ Arrows mean "depends on". Only permitted edges are shown.
 ```
 network-engine ──→ shapefile
 network-engine ──→ dim (external)
+network-engine ──→ thermo-model-registry (planned)
 crs ──→ shapefile
 crs ──→ PROJ (system C library)
 
@@ -70,6 +71,7 @@ electron ──→ dim (via WASM, client-side units)
 | shapefile | `core/shapefile/` | Complete | Yes (via network-engine) | None |
 | crs | `core/crs/` | Complete | No (CLI only) | PROJ 9 (C) |
 | geotiff | `core/geotiff/` | Planned | TBD | None planned |
+| thermo-model-registry | `core/thermo-model-registry/` | Planned | No | None planned |
 | zarr | `core/zarr/` | Planned | TBD | None planned |
 
 ## Server Layers
@@ -124,6 +126,7 @@ Memory protocol: JS allocates via `geodash_alloc`, writes JSON, calls the functi
 | Route geometry & elevation | Shapefile (PointZ/PolyLineZ) | File system |
 | Bathymetric surfaces | GeoTIFF (GEBCO) | File system |
 | Pipe geometry (OLGA) | `.key` text format | Imported/exported via server |
+| Thermodynamic model registry | Manifest + model artifacts | Versioned runtime metadata and ONNX bundles |
 | Thermodynamic property surface | RGBA32Float GPU texture | ONNX inference → IndexedDB cache → Zarr |
 | Steady-state results | Zarr array (inlet_P × inlet_H × KP) | Client-side |
 | Transient simulation results | Zarr array (KP × time) | Python server → served by Elysia |

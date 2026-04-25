@@ -5,6 +5,7 @@ OLGA\ User\ manual.pdf
 zig-out/
 zig-cache/
 .zig-cache/
+zig-pkg/
 
 # Node / Bun
 node_modules/

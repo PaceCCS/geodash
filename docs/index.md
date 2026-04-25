@@ -24,7 +24,7 @@
 
 ## Dependency References
 
-- [Hono](./references/hono.md) — Web framework (server)
+- [Elysia](./references/elysia.md) — Web framework (server)
 - [Effect](./references/effect.md) — Schema validation (server)
 - [PROJ](./references/proj.md) — CRS transforms (Zig, C interop)
 - [smol-toml](./references/smol-toml.md) — TOML parsing (server)

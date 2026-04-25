@@ -1,0 +1,9 @@
+format_version = 1
+
+[datasets.gerg2008_1m]
+path = "GERG2008_1m.csv"
+sha256 = "74096dea04151517f26974a545e36829eb8315009a0f43107b6daece1558b870"
+rows = 1000000
+description = "Shared training dataset for PH thermodynamic property models."
+columns = ["PT", "H", "CO2", "CO", "H2", "N2", "Ar", "RS", "2phase", "ROG", "ROHL"]
+shared_by = ["phase", "rs", "density", "entropy", "temperature", "viscosity-gas-liquid", "viscosity-twophase"]

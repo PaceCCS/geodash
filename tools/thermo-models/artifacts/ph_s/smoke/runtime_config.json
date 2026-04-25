@@ -1,0 +1,62 @@
+{
+  "displayName": "Entropy",
+  "featureMeans": [
+    7.443044129054761,
+    -6.723787477281204,
+    92.92264111649807,
+    0.10070023020579003,
+    0.9933395723753051,
+    2.4725002567143353,
+    0.500550485524939,
+    1.8447526479405971
+  ],
+  "featureOrder": [
+    {
+      "feature": "PT",
+      "unit": "MPa"
+    },
+    {
+      "feature": "H",
+      "unit": "kJ/mol"
+    },
+    {
+      "feature": "CO2",
+      "unit": "%"
+    },
+    {
+      "feature": "CO",
+      "unit": "%"
+    },
+    {
+      "feature": "H2",
+      "unit": "%"
+    },
+    {
+      "feature": "N2",
+      "unit": "%"
+    },
+    {
+      "feature": "Ar",
+      "unit": "%"
+    },
+    {
+      "feature": "P2",
+      "unit": "MPa^(1/3)"
+    }
+  ],
+  "featureStdDevs": [
+    4.342889466638019,
+    5.330618806413847,
+    2.210745622019252,
+    0.0579674314910532,
+    0.57506317251743,
+    1.4393989961209592,
+    0.28740603482255367,
+    0.47469581897966556
+  ],
+  "modelPath": "model.onnx",
+  "outputStdDev": 22.19081447922349,
+  "outputTransform": "std_dev_only",
+  "outputUnit": "J/(kg\u00b7K)",
+  "property": "entropy"
+}

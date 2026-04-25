@@ -111,7 +111,7 @@ pub const Value = union(enum) {
                 return Value{ .table = new_table };
             },
             .array => |a| {
-                var new_arr = Value.Array{};
+                var new_arr = Value.Array.empty;
                 for (a.items) |item| {
                     try new_arr.append(allocator, try item.clone(allocator));
                 }
@@ -312,7 +312,7 @@ pub const Parser = struct {
                 else => return ParseError.DuplicateKey,
             }
         } else {
-            var arr = Value.Array{};
+            var arr = Value.Array.empty;
             try arr.append(self.allocator, Value{ .table = item_table });
             const owned_key = try self.allocator.dupe(u8, final_key);
             errdefer self.allocator.free(owned_key);
@@ -347,7 +347,7 @@ pub const Parser = struct {
     }
 
     fn parseDottedKey(self: *Parser) ParseError!std.ArrayListUnmanaged([]const u8) {
-        var parts = std.ArrayListUnmanaged([]const u8){};
+        var parts = std.ArrayListUnmanaged([]const u8).empty;
         errdefer {
             for (parts.items) |p| self.allocator.free(p);
             parts.deinit(self.allocator);
@@ -477,7 +477,7 @@ pub const Parser = struct {
 
     fn parseQuotedString(self: *Parser) ParseError![]const u8 {
         self.pos += 1; // skip opening '"'
-        var result = std.ArrayListUnmanaged(u8){};
+        var result = std.ArrayListUnmanaged(u8).empty;
         errdefer result.deinit(self.allocator);
 
         while (self.pos < self.source.len) {
@@ -536,7 +536,7 @@ pub const Parser = struct {
         const num_str = self.source[start..self.pos];
 
         if (is_float) {
-            var clean = std.ArrayListUnmanaged(u8){};
+            var clean = std.ArrayListUnmanaged(u8).empty;
             defer clean.deinit(self.allocator);
             for (num_str) |c| {
                 if (c != '_') clean.append(self.allocator, c) catch return ParseError.OutOfMemory;
@@ -544,7 +544,7 @@ pub const Parser = struct {
             const f = std.fmt.parseFloat(f64, clean.items) catch return ParseError.InvalidNumber;
             return Value{ .float = f };
         } else {
-            var clean = std.ArrayListUnmanaged(u8){};
+            var clean = std.ArrayListUnmanaged(u8).empty;
             defer clean.deinit(self.allocator);
             for (num_str) |c| {
                 if (c != '_') clean.append(self.allocator, c) catch return ParseError.OutOfMemory;
@@ -556,7 +556,7 @@ pub const Parser = struct {
 
     fn parseInlineArray(self: *Parser) ParseError!Value {
         self.pos += 1; // skip '['
-        var arr = Value.Array{};
+        var arr = Value.Array.empty;
         errdefer {
             for (arr.items) |*item| {
                 item.deinit(self.allocator);
@@ -684,7 +684,7 @@ const PathStack = struct {
 };
 
 pub fn serialize(allocator: Allocator, value: Value) ![]u8 {
-    var buf = std.ArrayListUnmanaged(u8){};
+    var buf = std.ArrayListUnmanaged(u8).empty;
     errdefer buf.deinit(allocator);
 
     var path = PathStack{};

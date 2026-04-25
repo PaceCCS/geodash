@@ -4,7 +4,7 @@ Scope-based directed graph system with hierarchical property inheritance (Global
 
 ## Modules
 
-```
+```text
 src/
 ├── root.zig             — Public API, re-exports all modules
 ├── toml.zig             — TOML parser (dynamic Value type, supports tables, arrays of tables, dotted keys)
@@ -13,7 +13,7 @@ src/
 ├── query.zig            — Query parser + executor with scope resolution integration
 ├── fluid.zig            — Fluid propagation: topological traversal, junction blending, composition injection
 ├── olga.zig             — OLGA .key parser (→ geodash TOML + optional PolyLineZ shapefile) and writer
-├── wasm.zig             — WASM entry point; JSON-in/JSON-out exports for the Hono server
+├── wasm.zig             — WASM entry point; JSON-in/JSON-out exports for the Elysia server
 └── integration_test.zig — Tests against real dagger preset1 data
 ```
 

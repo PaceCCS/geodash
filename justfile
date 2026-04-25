@@ -16,7 +16,7 @@ test-network-engine:
 test-shapefile:
     cd core/shapefile && zig build test
 
-# Run CRS tool tests
+# Run CRS tool tests (requires nix develop with proj + zig 0.15)
 test-crs:
     cd core/crs && zig build test
 
@@ -114,8 +114,28 @@ check-openapi:
 check-observability:
     bash scripts/check-observability.sh
 
+# Check local thermodynamic training datasets against recorded hashes
+check-thermo-datasets:
+    cd tools/thermo-models && uv run check_dataset_hashes.py
+
+# Train any thermodynamic model into the default thermo artifact root
+train-thermo-model model version="local":
+    cd tools/thermo-models && uv run train_model.py --model {{model}} --version {{version}}
+
+# Train the full thermodynamic model family into the default thermo artifact root
+train-thermo-model-family version="local":
+    cd tools/thermo-models && uv run train_model.py --model all --version {{version}}
+
+# Compare a trained thermodynamic model against the reference ONNX family
+compare-thermo-model model version="local":
+    cd tools/thermo-models && uv run compare_models.py --model {{model}} --version {{version}}
+
+# Compare the full trained thermodynamic model family against the reference ONNX family
+compare-thermo-model-family version="local":
+    cd tools/thermo-models && uv run compare_models.py --model all --version {{version}}
+
 # Run all checks
-check:
+check: test-zig check-wasm-freshness
     zig fmt --check core/shapefile/src/ core/network-engine/src/
     cd server && bunx eslint src/
     cd app && bunx eslint src/

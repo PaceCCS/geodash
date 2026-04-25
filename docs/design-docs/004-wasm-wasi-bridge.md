@@ -6,7 +6,7 @@ Accepted
 
 ## Context
 
-The Hono server needs to call Zig core functions. Options:
+The Elysia server needs to call Zig core functions. Options:
 
 1. Shell out to a Zig CLI binary
 2. Use FFI / native addon (Bun FFI or N-API)
@@ -18,13 +18,14 @@ Compile the network-engine to `wasm32-wasi` and call it in-process via a JSON-in
 
 ## Design
 
-```
+```text
 JS: encode request as JSON → geodash_alloc(len) → write to WASM memory
     → call export(ptr, len, out_ptr_ptr, out_len_ptr) → read JSON output
     → geodash_free(out_ptr, out_len) → geodash_free(in_ptr, in_len)
 ```
 
 The WASM module exports:
+
 - `geodash_alloc` / `geodash_free` — memory management
 - `geodash_query`, `geodash_load_network`, etc. — domain functions
 

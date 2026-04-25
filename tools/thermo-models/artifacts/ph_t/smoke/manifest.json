@@ -1,0 +1,189 @@
+{
+  "artifacts": {
+    "metrics": {
+      "path": "metrics.json",
+      "sha256": "458d2621dca62efffc39312be196814caf3aa5c255cdd59ca3ac84d2fff7cc57"
+    },
+    "onnx": {
+      "path": "model.onnx",
+      "sha256": "2d666b74e12f5245728cd934b01ea945a215bf9b0e0c962a0cbf96ac6825b117"
+    },
+    "runtimeConfig": {
+      "path": "runtime_config.json",
+      "sha256": "04ee7ac4e07012e58e69505f533bbd600c30ab050a5f9ebf1599ce6ba89cffaf"
+    },
+    "stateDict": {
+      "path": "model_state_dict.pt",
+      "sha256": "bbd04e9e9b3fc535b724ad571473c3c8985ae651720ea7f8169091bb8d295c06"
+    }
+  },
+  "dataset": {
+    "datasetId": "gerg2008_1m",
+    "path": "/Users/jerell/Repos/geodash/tools/thermo-models/datasets/GERG2008_1m.csv",
+    "rowsLoaded": 4096,
+    "sha256": "74096dea04151517f26974a545e36829eb8315009a0f43107b6daece1558b870",
+    "subsetKind": "all"
+  },
+  "metrics": {
+    "test": {
+      "normalized_target": {
+        "mae": 10.064432144165039,
+        "mse": 102.3162612915039,
+        "r2": -102.45268249511719,
+        "rmse": 10.115150087443286
+      },
+      "physical_value": {
+        "mae": 287.93659815175107,
+        "max_absolute_relative_error": 1.0001256190909673,
+        "mean_absolute_relative_error": 0.9844094018155105,
+        "mse": 83745.2019277746,
+        "r2": -102.45267922197036,
+        "rmse": 289.38763264482225
+      }
+    },
+    "train": {
+      "normalized_target": {
+        "mae": 10.077536582946777,
+        "mse": 102.6011734008789,
+        "r2": -101.16378021240234,
+        "rmse": 10.12922373140602
+      },
+      "physical_value": {
+        "mae": 288.31152104680683,
+        "max_absolute_relative_error": 1.0014558761802546,
+        "mean_absolute_relative_error": 0.9840966771346493,
+        "mse": 83978.40269790663,
+        "r2": -101.16379237001765,
+        "rmse": 289.79027364269257
+      }
+    }
+  },
+  "model": {
+    "displayName": "Temperature",
+    "featureOrder": [
+      {
+        "feature": "PT",
+        "unit": "MPa"
+      },
+      {
+        "feature": "H",
+        "unit": "kJ/mol"
+      },
+      {
+        "feature": "CO2",
+        "unit": "%"
+      },
+      {
+        "feature": "CO",
+        "unit": "%"
+      },
+      {
+        "feature": "H2",
+        "unit": "%"
+      },
+      {
+        "feature": "N2",
+        "unit": "%"
+      },
+      {
+        "feature": "Ar",
+        "unit": "%"
+      },
+      {
+        "feature": "P2",
+        "unit": "MPa^(1/3)"
+      }
+    ],
+    "hiddenSizes": [
+      20,
+      20
+    ],
+    "modelId": "ph_t",
+    "outputTransform": "std_dev_only",
+    "property": "temperature",
+    "propertyUnit": "K",
+    "taskKind": "regression",
+    "version": "smoke"
+  },
+  "scaling": {
+    "displayName": "Temperature",
+    "featureMeans": [
+      7.443044129054761,
+      -6.723787477281204,
+      92.92264111649807,
+      0.10070023020579003,
+      0.9933395723753051,
+      2.4725002567143353,
+      0.500550485524939,
+      1.8447526479405971
+    ],
+    "featureOrder": [
+      {
+        "feature": "PT",
+        "unit": "MPa"
+      },
+      {
+        "feature": "H",
+        "unit": "kJ/mol"
+      },
+      {
+        "feature": "CO2",
+        "unit": "%"
+      },
+      {
+        "feature": "CO",
+        "unit": "%"
+      },
+      {
+        "feature": "H2",
+        "unit": "%"
+      },
+      {
+        "feature": "N2",
+        "unit": "%"
+      },
+      {
+        "feature": "Ar",
+        "unit": "%"
+      },
+      {
+        "feature": "P2",
+        "unit": "MPa^(1/3)"
+      }
+    ],
+    "featureStdDevs": [
+      4.342889466638019,
+      5.330618806413847,
+      2.210745622019252,
+      0.0579674314910532,
+      0.57506317251743,
+      1.4393989961209592,
+      0.28740603482255367,
+      0.47469581897966556
+    ],
+    "modelPath": "model.onnx",
+    "outputStdDev": 28.609326133944446,
+    "outputTransform": "std_dev_only",
+    "outputUnit": "K",
+    "property": "temperature"
+  },
+  "schemaVersion": 1,
+  "training": {
+    "batchSize": 256,
+    "completedAtUtc": "2026-04-22T14:46:39.380656+00:00",
+    "device": "cpu",
+    "epochs": 2,
+    "learningRate": 0.001,
+    "learningRateAfterDecay": 0.0005,
+    "learningRateDecayEpoch": 150,
+    "limitRows": 4096,
+    "lossCurve": [
+      106.13919258117676,
+      103.84537506103516
+    ],
+    "seed": 42,
+    "startedAtUtc": "2026-04-22T14:46:38.950564+00:00",
+    "testSize": 0.3,
+    "weightDecay": 0.0
+  }
+}

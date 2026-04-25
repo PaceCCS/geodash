@@ -11,6 +11,10 @@ pub const BoundingBox = types.BoundingBox;
 pub const ZRange = types.ZRange;
 pub const PointZ = types.PointZ;
 pub const PolyLineZ = types.PolyLineZ;
+
+fn defaultIo() std.Io {
+    return std.Io.Threaded.global_single_threaded.io();
+}
 pub const Geometry = types.Geometry;
 pub const ShpRecord = types.ShpRecord;
 pub const DbfField = types.DbfField;
@@ -91,7 +95,7 @@ test "writeShapefile round-trip" {
 
     var tmp_dir = std.testing.tmpDir(.{});
     defer tmp_dir.cleanup();
-    const tmp_path = try tmp_dir.dir.realpathAlloc(allocator, ".");
+    const tmp_path = try tmp_dir.dir.realPathFileAlloc(defaultIo(), ".", allocator);
     defer allocator.free(tmp_path);
 
     const stem = try std.fmt.allocPrint(allocator, "{s}/route", .{tmp_path});

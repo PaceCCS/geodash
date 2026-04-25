@@ -2,7 +2,7 @@
 
 pkgs.stdenvNoCC.mkDerivation {
   pname = "dim-wasm";
-  version = "0.1.0";
+  version = "0.1.1";
   src = dimSrc;
 
   nativeBuildInputs = [

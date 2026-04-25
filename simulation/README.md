@@ -1,23 +1,23 @@
 # Transient Simulation Server
 
-External Python service that runs transient pipe flow simulations. It may run on a separate machine from the Hono server.
+External Python service that runs transient pipe flow simulations. It may run on a separate machine from the Elysia server.
 
 ## Role
 
 The simulation server:
 
-- Accepts a pipe network definition and initial/inlet conditions from the Hono server
+- Accepts a pipe network definition and initial/inlet conditions from the Elysia server
 - Runs a time-domain pipe flow simulation (e.g. method of characteristics or finite difference)
 - Writes results incrementally to a Zarr array as each timestep completes
-- Streams each completed timestep to Hono via SSE so the frontend can update in real time
+- Streams each completed timestep to Elysia via SSE so the frontend can update in real time
 
 The geodash codebase defines the interface contract here. The server implementation lives in a separate repository.
 
-## Interface with Hono
+## Interface with Elysia
 
 ### Starting a run
 
-```
+```text
 POST /simulate
 {
   "network": { ... },   // geodash network definition
@@ -28,7 +28,7 @@ POST /simulate
 
 ### SSE stream
 
-```
+```text
 GET /simulate/{run_id}/stream
 → text/event-stream
 
@@ -42,7 +42,7 @@ Each event contains one timestep's values across all KP positions.
 
 ### Zarr output
 
-```
+```text
 GET /runs/{run_id}.zarr/{path}
 ```
 
@@ -52,7 +52,7 @@ Zarr chunks are served with HTTP range request support so `zarr.js` can fetch in
 
 Results are written as a Zarr group with one array per fluid property:
 
-```
+```text
 runs/{run_id}.zarr/
   pressure/       # shape (kp, time), float32
   temperature/    # shape (kp, time), float32

@@ -1,0 +1,190 @@
+{
+  "artifacts": {
+    "metrics": {
+      "path": "metrics.json",
+      "sha256": "aa0c9ac41c24df7d51ac0d669965a4145f2225c447c749fade92caa22b41145b"
+    },
+    "onnx": {
+      "path": "model.onnx",
+      "sha256": "b75cdfcb471254337740f57bae535dc0f79ea7563355330b36128980eb97701c"
+    },
+    "runtimeConfig": {
+      "path": "runtime_config.json",
+      "sha256": "1c1992785368d8692df22124e8cf6383e6db9ce7385b4d96d6b6a9f594b26186"
+    },
+    "stateDict": {
+      "path": "model_state_dict.pt",
+      "sha256": "366d6bf966a1f4c159c484c8fe812f51e3c5f4c954119db529e36c43e14a4dc5"
+    }
+  },
+  "dataset": {
+    "datasetId": "gerg2008_1m",
+    "path": "/Users/jerell/Repos/geodash/tools/thermo-models/datasets/GERG2008_1m.csv",
+    "rowsLoaded": 4096,
+    "sha256": "74096dea04151517f26974a545e36829eb8315009a0f43107b6daece1558b870",
+    "subsetKind": "all"
+  },
+  "metrics": {
+    "test": {
+      "normalized_target": {
+        "mae": 1.1229192018508911,
+        "mse": 2.1643481254577637,
+        "r2": -1.1463088989257812,
+        "rmse": 1.471172364292425
+      },
+      "physical_value": {
+        "mae": 406.12295202960206,
+        "max_absolute_relative_error": 81.93280297049436,
+        "mean_absolute_relative_error": 1.4692868782229824,
+        "mse": 283103.44211983215,
+        "r2": -1.1463088434090536,
+        "rmse": 532.0746584078518
+      }
+    },
+    "train": {
+      "normalized_target": {
+        "mae": 1.1218781471252441,
+        "mse": 2.1435699462890625,
+        "r2": -1.15207839012146,
+        "rmse": 1.464093557901633
+      },
+      "physical_value": {
+        "mae": 405.74643554785035,
+        "max_absolute_relative_error": 55.590078954239324,
+        "mean_absolute_relative_error": 1.4984690293597203,
+        "mse": 280385.5888834172,
+        "r2": -1.152078551297008,
+        "rmse": 529.5144841110744
+      }
+    }
+  },
+  "model": {
+    "displayName": "Density",
+    "featureOrder": [
+      {
+        "feature": "PT",
+        "unit": "MPa"
+      },
+      {
+        "feature": "H",
+        "unit": "kJ/mol"
+      },
+      {
+        "feature": "CO2",
+        "unit": "%"
+      },
+      {
+        "feature": "CO",
+        "unit": "%"
+      },
+      {
+        "feature": "H2",
+        "unit": "%"
+      },
+      {
+        "feature": "N2",
+        "unit": "%"
+      },
+      {
+        "feature": "Ar",
+        "unit": "%"
+      },
+      {
+        "feature": "P2",
+        "unit": "MPa^(1/3)"
+      }
+    ],
+    "hiddenSizes": [
+      20,
+      20
+    ],
+    "modelId": "ph_ro",
+    "outputTransform": "std_dev_then_add",
+    "property": "density",
+    "propertyUnit": "kg/m\u00b3",
+    "taskKind": "regression",
+    "version": "smoke"
+  },
+  "scaling": {
+    "displayName": "Density",
+    "featureMeans": [
+      7.443044129054761,
+      -6.723787477281204,
+      92.92264111649807,
+      0.10070023020579003,
+      0.9933395723753051,
+      2.4725002567143353,
+      0.500550485524939,
+      1.8447526479405971
+    ],
+    "featureOrder": [
+      {
+        "feature": "PT",
+        "unit": "MPa"
+      },
+      {
+        "feature": "H",
+        "unit": "kJ/mol"
+      },
+      {
+        "feature": "CO2",
+        "unit": "%"
+      },
+      {
+        "feature": "CO",
+        "unit": "%"
+      },
+      {
+        "feature": "H2",
+        "unit": "%"
+      },
+      {
+        "feature": "N2",
+        "unit": "%"
+      },
+      {
+        "feature": "Ar",
+        "unit": "%"
+      },
+      {
+        "feature": "P2",
+        "unit": "MPa^(1/3)"
+      }
+    ],
+    "featureStdDevs": [
+      4.342889466638019,
+      5.330618806413847,
+      2.210745622019252,
+      0.0579674314910532,
+      0.57506317251743,
+      1.4393989961209592,
+      0.28740603482255367,
+      0.47469581897966556
+    ],
+    "modelPath": "model.onnx",
+    "outputOffset": 1.7439612142,
+    "outputStdDev": 361.6671192477991,
+    "outputTransform": "std_dev_then_add",
+    "outputUnit": "kg/m\u00b3",
+    "property": "density"
+  },
+  "schemaVersion": 1,
+  "training": {
+    "batchSize": 256,
+    "completedAtUtc": "2026-04-22T14:46:37.227883+00:00",
+    "device": "cpu",
+    "epochs": 2,
+    "learningRate": 0.001,
+    "learningRateAfterDecay": 0.0005,
+    "learningRateDecayEpoch": 150,
+    "limitRows": 4096,
+    "lossCurve": [
+      2.6034720738728843,
+      2.3151811758677163
+    ],
+    "seed": 42,
+    "startedAtUtc": "2026-04-22T14:46:36.662050+00:00",
+    "testSize": 0.3,
+    "weightDecay": 0.0
+  }
+}

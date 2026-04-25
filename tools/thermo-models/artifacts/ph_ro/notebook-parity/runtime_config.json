@@ -1,0 +1,63 @@
+{
+  "displayName": "Density",
+  "featureMeans": [
+    7.543760043771492,
+    -6.79309026569013,
+    92.90487838415626,
+    0.09997760479229256,
+    0.9994033342704775,
+    2.4979639922357033,
+    0.5001317739382485,
+    1.8592161463470926
+  ],
+  "featureOrder": [
+    {
+      "feature": "PT",
+      "unit": "MPa"
+    },
+    {
+      "feature": "H",
+      "unit": "kJ/mol"
+    },
+    {
+      "feature": "CO2",
+      "unit": "%"
+    },
+    {
+      "feature": "CO",
+      "unit": "%"
+    },
+    {
+      "feature": "H2",
+      "unit": "%"
+    },
+    {
+      "feature": "N2",
+      "unit": "%"
+    },
+    {
+      "feature": "Ar",
+      "unit": "%"
+    },
+    {
+      "feature": "P2",
+      "unit": "MPa^(1/3)"
+    }
+  ],
+  "featureStdDevs": [
+    4.298684605890892,
+    5.34376473040228,
+    2.162593257909735,
+    0.057727926793056016,
+    0.5773725002694682,
+    1.4443238526482516,
+    0.28840116432605034,
+    0.46282814976631476
+  ],
+  "modelPath": "model.onnx",
+  "outputOffset": 1.5056807387,
+  "outputStdDev": 360.85226434140066,
+  "outputTransform": "std_dev_then_add",
+  "outputUnit": "kg/m\u00b3",
+  "property": "density"
+}

@@ -108,7 +108,7 @@ pub const Config = struct {
             // general = ["block", "branch", ...]
             if (inh_table.get("general")) |general_val| {
                 if (general_val.getArray()) |arr| {
-                    var levels = std.ArrayListUnmanaged(ScopeLevel){};
+                    var levels = std.ArrayListUnmanaged(ScopeLevel).empty;
                     defer levels.deinit(allocator);
                     for (arr) |item| {
                         if (item.getString()) |s| {
@@ -130,7 +130,7 @@ pub const Config = struct {
 
                     // Simple rule: property = ["block", "branch"]
                     if (entry.value_ptr.getArray()) |arr| {
-                        var levels = std.ArrayListUnmanaged(ScopeLevel){};
+                        var levels = std.ArrayListUnmanaged(ScopeLevel).empty;
                         defer levels.deinit(allocator);
                         for (arr) |item| {
                             if (item.getString()) |s| {

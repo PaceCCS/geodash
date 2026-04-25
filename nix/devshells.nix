@@ -38,6 +38,8 @@ let
       packages = with pkgs; [
         bun
         just
+        python3
+        uv
         zig
       ] ++ extraPackages;
 
@@ -62,7 +64,7 @@ let
       shellHook = ''
         ${sanitizeCFlagsHook}
         echo "Entered geodash ${name} dev shell"
-        echo "Core tools: bun, zig, just, pkg-config, proj"
+        echo "Core tools: bun, zig, just, python3, uv, pkg-config, proj"
         echo "dim WASM: $DIM_WASM_PATH"
         ${extraShellText}
       '';

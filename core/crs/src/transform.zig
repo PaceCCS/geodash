@@ -1,7 +1,5 @@
 const std = @import("std");
-const c = @cImport({
-    @cInclude("proj.h");
-});
+const c = @import("proj_c");
 
 pub const CrsError = error{
     ContextCreationFailed,

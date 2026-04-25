@@ -48,6 +48,7 @@ just dev-server          # Standalone server
 just test-zig            # Zig tests
 just test-server         # Server tests
 just build-dim-wasm      # Refresh pinned dim WASM into app/public/dim
+just check-thermo-datasets  # Verify local thermo CSVs against recorded hashes
 ```
 
 If you are iterating on a local sibling checkout of `dim` instead of the pinned GitHub source:
@@ -55,6 +56,39 @@ If you are iterating on a local sibling checkout of `dim` instead of the pinned 
 ```sh
 just build-dim-wasm-local
 ```
+
+### Thermodynamic Model Data
+
+Local training datasets for thermodynamic models live under [`tools/thermo-models/datasets/`](./tools/thermo-models/datasets/README.md). Large CSVs in that directory are ignored by Git, while the tracked [`manifest.toml`](./tools/thermo-models/datasets/manifest.toml) records the expected SHA-256 for each named dataset. The thermo tooling itself lives in a dedicated [`uv`](https://docs.astral.sh/uv/) project under [`tools/thermo-models/`](./tools/thermo-models/README.md).
+
+Run:
+
+```sh
+just check-thermo-datasets
+```
+
+before training or exporting models so the local dataset matches the recorded manifest.
+
+To train one scripted thermodynamic model artifact bundle:
+
+```sh
+just train-thermo-model ph_ro 0.1.0
+```
+
+To train the current full thermo model family:
+
+```sh
+just train-thermo-model-family 0.1.0
+```
+
+Use the compare helpers to check a trained artifact set against the current `phase-envelope-generator` ONNX family:
+
+```sh
+just compare-thermo-model ph_ro 0.1.0
+just compare-thermo-model-family 0.1.0
+```
+
+or run the underlying `uv` tools directly from `tools/thermo-models/` for custom flags.
 
 ## Workflows
 

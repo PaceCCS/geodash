@@ -2,6 +2,25 @@ const std = @import("std");
 const types = @import("types.zig");
 const ShapefileError = types.ShapefileError;
 
+fn defaultIo() std.Io {
+    return std.Io.Threaded.global_single_threaded.io();
+}
+
+fn readFileAlloc(allocator: std.mem.Allocator, path: []const u8, limit: usize) ![]u8 {
+    const io = defaultIo();
+    const file = try std.Io.Dir.cwd().openFile(io, path, .{});
+    defer file.close(io);
+
+    var reader_buf: [4096]u8 = undefined;
+    var file_reader = file.reader(io, &reader_buf);
+    return file_reader.interface.allocRemaining(allocator, .limited(limit));
+}
+
+fn writeFile(path: []const u8, data: []const u8) !void {
+    const io = defaultIo();
+    try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = data });
+}
+
 pub const ShxRecord = struct {
     /// Byte offset in .shp file divided by 2 (16-bit words from file start).
     offset: u32,
@@ -34,21 +53,21 @@ pub const ShxFile = struct {
 // Endian-aware read helpers (operate on a fixedBufferStream reader)
 // ---------------------------------------------------------------------------
 
-fn readI32Be(reader: anytype) !i32 {
+fn readI32Be(reader: *std.Io.Reader) !i32 {
     var buf: [4]u8 = undefined;
-    try reader.readNoEof(&buf);
+    try reader.readSliceAll(&buf);
     return std.mem.readInt(i32, &buf, .big);
 }
 
-fn readI32Le(reader: anytype) !i32 {
+fn readI32Le(reader: *std.Io.Reader) !i32 {
     var buf: [4]u8 = undefined;
-    try reader.readNoEof(&buf);
+    try reader.readSliceAll(&buf);
     return std.mem.readInt(i32, &buf, .little);
 }
 
-fn readF64Le(reader: anytype) !f64 {
+fn readF64Le(reader: *std.Io.Reader) !f64 {
     var buf: [8]u8 = undefined;
-    try reader.readNoEof(&buf);
+    try reader.readSliceAll(&buf);
     return @bitCast(std.mem.readInt(u64, &buf, .little));
 }
 
@@ -80,42 +99,38 @@ fn appendF64Le(buf: *std.ArrayListUnmanaged(u8), allocator: std.mem.Allocator, v
 
 /// Read a .shx file. Caller owns result; call result.deinit(allocator).
 pub fn read(allocator: std.mem.Allocator, path: []const u8) !ShxFile {
-    const file = try std.fs.cwd().openFile(path, .{});
-    defer file.close();
-
     // Read entire file into memory; max 64 MiB.
-    const data = try file.readToEndAlloc(allocator, 64 * 1024 * 1024);
+    const data = try readFileAlloc(allocator, path, 64 * 1024 * 1024);
     defer allocator.free(data);
 
-    var stream = std.io.fixedBufferStream(data);
-    const reader = stream.reader();
+    var reader: std.Io.Reader = .fixed(data);
 
     // --- header (100 bytes) ---
-    const file_code = try readI32Be(reader);
+    const file_code = try readI32Be(&reader);
     if (file_code != 9994) return ShapefileError.InvalidFileCode;
 
     // skip unused[5] (5 × i32 big = 20 bytes)
     var skip: [20]u8 = undefined;
-    try reader.readNoEof(&skip);
+    try reader.readSliceAll(&skip);
 
-    const file_length_words = try readI32Be(reader); // total file length in 16-bit words
+    const file_length_words = try readI32Be(&reader); // total file length in 16-bit words
     const file_length_bytes: u64 = @as(u64, @intCast(file_length_words)) * 2;
 
-    const version = try readI32Le(reader);
+    const version = try readI32Le(&reader);
     if (version != 1000) return ShapefileError.InvalidVersion;
 
-    const shape_type = try readI32Le(reader);
+    const shape_type = try readI32Le(&reader);
 
     const header = ShxHeader{
         .shape_type = shape_type,
-        .bbox_x_min = try readF64Le(reader),
-        .bbox_y_min = try readF64Le(reader),
-        .bbox_x_max = try readF64Le(reader),
-        .bbox_y_max = try readF64Le(reader),
-        .z_min = try readF64Le(reader),
-        .z_max = try readF64Le(reader),
-        .m_min = try readF64Le(reader),
-        .m_max = try readF64Le(reader),
+        .bbox_x_min = try readF64Le(&reader),
+        .bbox_y_min = try readF64Le(&reader),
+        .bbox_x_max = try readF64Le(&reader),
+        .bbox_y_max = try readF64Le(&reader),
+        .z_min = try readF64Le(&reader),
+        .z_max = try readF64Le(&reader),
+        .m_min = try readF64Le(&reader),
+        .m_max = try readF64Le(&reader),
     };
 
     // Each record is 8 bytes; data section starts at byte 100.
@@ -126,8 +141,8 @@ pub fn read(allocator: std.mem.Allocator, path: []const u8) !ShxFile {
     errdefer allocator.free(records);
 
     for (records) |*rec| {
-        const offset_words = try readI32Be(reader);
-        const length_words = try readI32Be(reader);
+        const offset_words = try readI32Be(&reader);
+        const length_words = try readI32Be(&reader);
         rec.* = .{
             .offset = @intCast(offset_words),
             .length = @intCast(length_words),
@@ -143,7 +158,7 @@ pub fn write(
     header: ShxHeader,
     records: []const ShxRecord,
 ) !void {
-    var buf: std.ArrayListUnmanaged(u8) = .{};
+    var buf: std.ArrayListUnmanaged(u8) = .empty;
     defer buf.deinit(std.heap.page_allocator);
     const alloc = std.heap.page_allocator;
 
@@ -176,9 +191,7 @@ pub fn write(
         try appendI32Be(&buf, alloc, @intCast(rec.length));
     }
 
-    const out = try std.fs.cwd().createFile(path, .{});
-    defer out.close();
-    try out.writeAll(buf.items);
+    try writeFile(path, buf.items);
 }
 
 // ---------------------------------------------------------------------------
@@ -189,7 +202,7 @@ test "shx round-trip" {
     const allocator = std.testing.allocator;
 
     // Build a minimal in-memory .shx
-    var buf: std.ArrayListUnmanaged(u8) = .{};
+    var buf: std.ArrayListUnmanaged(u8) = .empty;
     defer buf.deinit(allocator);
 
     // header
@@ -209,29 +222,28 @@ test "shx round-trip" {
     try appendI32Be(&buf, allocator, 18);
 
     // Parse from in-memory buffer
-    var stream = std.io.fixedBufferStream(buf.items);
-    const reader = stream.reader();
+    var reader: std.Io.Reader = .fixed(buf.items);
 
-    const file_code = try readI32Be(reader);
+    const file_code = try readI32Be(&reader);
     try std.testing.expectEqual(@as(i32, 9994), file_code);
 
     var skip: [20]u8 = undefined;
-    try reader.readNoEof(&skip);
+    try reader.readSliceAll(&skip);
 
-    const file_length_words = try readI32Be(reader);
+    const file_length_words = try readI32Be(&reader);
     try std.testing.expectEqual(@as(i32, 58), file_length_words);
 
-    const version = try readI32Le(reader);
+    const version = try readI32Le(&reader);
     try std.testing.expectEqual(@as(i32, 1000), version);
 
-    _ = try readI32Le(reader); // shape type
+    _ = try readI32Le(&reader); // shape type
     var skip2: [64]u8 = undefined;
-    try reader.readNoEof(&skip2);
+    try reader.readSliceAll(&skip2);
 
-    const off0 = try readI32Be(reader);
-    const len0 = try readI32Be(reader);
-    const off1 = try readI32Be(reader);
-    const len1 = try readI32Be(reader);
+    const off0 = try readI32Be(&reader);
+    const len0 = try readI32Be(&reader);
+    const off1 = try readI32Be(&reader);
+    const len1 = try readI32Be(&reader);
 
     try std.testing.expectEqual(@as(i32, 50), off0);
     try std.testing.expectEqual(@as(i32, 18), len0);

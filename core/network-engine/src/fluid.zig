@@ -214,7 +214,7 @@ pub fn propagate(
     // Kahn's queue: branch IDs with in_degree 0.
     // We use a simple slice-of-index approach: append to the list,
     // advance head to process in order.
-    var queue = std.ArrayListUnmanaged([]const u8){};
+    var queue = std.ArrayListUnmanaged([]const u8).empty;
     defer queue.deinit(allocator);
 
     // Working copy of in_degree so we can decrement without touching the original.
