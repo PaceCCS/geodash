@@ -9,6 +9,10 @@ const scope_mod = @import("scope.zig");
 const query_mod = @import("query.zig");
 const Value = toml.Value;
 
+fn defaultIo() std.Io {
+    return std.Io.Threaded.global_single_threaded.io();
+}
+
 /// Load all .toml files from the test-data/preset1 directory into memory
 fn loadPreset1Files(allocator: std.mem.Allocator) !std.StringArrayHashMapUnmanaged([]const u8) {
     var files = std.StringArrayHashMapUnmanaged([]const u8){};
@@ -22,18 +26,19 @@ fn loadPreset1Files(allocator: std.mem.Allocator) !std.StringArrayHashMapUnmanag
     }
 
     const dir_path = "test-data/preset1";
-    var dir = std.fs.cwd().openDir(dir_path, .{ .iterate = true }) catch |e| {
+    const io = defaultIo();
+    var dir = std.Io.Dir.cwd().openDir(io, dir_path, .{ .iterate = true }) catch |e| {
         std.debug.print("Failed to open {s}: {}\n", .{ dir_path, e });
         return files;
     };
-    defer dir.close();
+    defer dir.close(io);
 
     var dir_iter = dir.iterate();
-    while (try dir_iter.next()) |entry| {
+    while (try dir_iter.next(io)) |entry| {
         if (entry.kind != .file) continue;
         if (!std.mem.endsWith(u8, entry.name, ".toml")) continue;
 
-        const content = try dir.readFileAlloc(allocator, entry.name, 1024 * 1024);
+        const content = try dir.readFileAlloc(io, entry.name, allocator, .limited(1024 * 1024));
         const name = try allocator.dupe(u8, entry.name);
         try files.put(allocator, name, content);
     }

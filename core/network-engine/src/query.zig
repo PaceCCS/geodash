@@ -55,7 +55,7 @@ pub const QueryParseError = error{
 };
 
 pub fn parseQuery(allocator: Allocator, input: []const u8) QueryParseError!Query {
-    var query = Query{ .segments = .{} };
+    var query = Query{ .segments = .empty };
     errdefer query.segments.deinit(allocator);
 
     // Split off query params (?scope=...)
@@ -173,7 +173,7 @@ fn parseParams(allocator: Allocator, params_str: []const u8) QueryParseError!Que
             const value = param[eq_pos + 1 ..];
 
             if (std.mem.eql(u8, key, "scope")) {
-                var levels = std.ArrayListUnmanaged(scope_mod.ScopeLevel){};
+                var levels = std.ArrayListUnmanaged(scope_mod.ScopeLevel).empty;
                 var scope_iter = std.mem.splitScalar(u8, value, ',');
                 while (scope_iter.next()) |s| {
                     if (scope_mod.ScopeLevel.fromString(s)) |level| {
@@ -268,7 +268,7 @@ pub const QueryExecutor = struct {
                     const end = @min(r.end orelse (arr.len -| 1), arr.len -| 1);
                     if (start > end or start >= arr.len) return QueryError.IndexOutOfRange;
 
-                    var result_arr = Value.Array{};
+                    var result_arr = Value.Array.empty;
                     for (arr[start .. end + 1]) |item| {
                         try result_arr.append(self.allocator, try item.clone(self.allocator));
                     }
@@ -276,7 +276,7 @@ pub const QueryExecutor = struct {
                 },
                 .filter => |f| blk: {
                     const arr = current.getArray() orelse return QueryError.InvalidType;
-                    var result_arr = Value.Array{};
+                    var result_arr = Value.Array.empty;
 
                     for (arr) |item| {
                         if (self.matchesFilter(item, f)) {
@@ -329,7 +329,7 @@ pub const QueryExecutor = struct {
         // Branch-specific: blocks and outgoing
         switch (node.*) {
             .branch => |branch| {
-                var blocks_arr = Value.Array{};
+                var blocks_arr = Value.Array.empty;
                 for (branch.blocks.items) |block| {
                     var block_table = Value.Table{};
                     try block_table.put(self.allocator, try self.allocator.dupe(u8, "type"), Value{ .string = try self.allocator.dupe(u8, block.type_name) });
@@ -346,7 +346,7 @@ pub const QueryExecutor = struct {
                 try table.put(self.allocator, try self.allocator.dupe(u8, "blocks"), Value{ .array = blocks_arr });
 
                 if (branch.outgoing.items.len > 0) {
-                    var outgoing_arr = Value.Array{};
+                    var outgoing_arr = Value.Array.empty;
                     for (branch.outgoing.items) |out| {
                         var out_table = Value.Table{};
                         try out_table.put(self.allocator, try self.allocator.dupe(u8, "target"), Value{ .string = try self.allocator.dupe(u8, out.target) });

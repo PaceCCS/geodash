@@ -34,8 +34,8 @@ pub const NodeBase = struct {
 
 pub const BranchNode = struct {
     base: NodeBase,
-    blocks: std.ArrayListUnmanaged(Block) = .{},
-    outgoing: std.ArrayListUnmanaged(Outgoing) = .{},
+    blocks: std.ArrayListUnmanaged(Block) = .empty,
+    outgoing: std.ArrayListUnmanaged(Outgoing) = .empty,
 };
 
 pub const GroupNode = struct {
@@ -87,8 +87,8 @@ pub const Edge = struct {
 pub const Network = struct {
     id: []const u8 = "",
     label: []const u8 = "",
-    nodes: std.ArrayListUnmanaged(NodeData) = .{},
-    edges: std.ArrayListUnmanaged(Edge) = .{},
+    nodes: std.ArrayListUnmanaged(NodeData) = .empty,
+    edges: std.ArrayListUnmanaged(Edge) = .empty,
 
     pub fn findNode(self: *const Network, node_id: []const u8) ?*const NodeData {
         for (self.nodes.items) |*node| {
@@ -196,8 +196,8 @@ pub const ValidationIssue = struct {
 };
 
 pub const ValidationResult = struct {
-    errors: std.ArrayListUnmanaged(ValidationIssue) = .{},
-    warnings: std.ArrayListUnmanaged(ValidationIssue) = .{},
+    errors: std.ArrayListUnmanaged(ValidationIssue) = .empty,
+    warnings: std.ArrayListUnmanaged(ValidationIssue) = .empty,
     allocator: Allocator,
 
     pub fn init(allocator: Allocator) ValidationResult {

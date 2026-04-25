@@ -908,7 +908,7 @@ fn geometryTypeName(geometry: shapefile.Geometry) []const u8 {
 
 fn dbfFieldNameSlice(name: [11]u8) []const u8 {
     const end = std.mem.indexOfScalar(u8, name[0..], 0) orelse name.len;
-    return std.mem.trimRight(u8, name[0..end], " ");
+    return std.mem.trimEnd(u8, name[0..end], " ");
 }
 
 fn writeEditablePointJson(point: shapefile.PointZ, buf: *Buf, a: Allocator) !void {

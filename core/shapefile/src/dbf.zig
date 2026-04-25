@@ -4,6 +4,25 @@ const ShapefileError = types.ShapefileError;
 const DbfField = types.DbfField;
 const DbfValue = types.DbfValue;
 
+fn defaultIo() std.Io {
+    return std.Io.Threaded.global_single_threaded.io();
+}
+
+fn readFileAlloc(allocator: std.mem.Allocator, path: []const u8, limit: usize) ![]u8 {
+    const io = defaultIo();
+    const file = try std.Io.Dir.cwd().openFile(io, path, .{});
+    defer file.close(io);
+
+    var reader_buf: [4096]u8 = undefined;
+    var file_reader = file.reader(io, &reader_buf);
+    return file_reader.interface.allocRemaining(allocator, .limited(limit));
+}
+
+fn writeFile(path: []const u8, data: []const u8) !void {
+    const io = defaultIo();
+    try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = data });
+}
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -52,19 +71,19 @@ pub const DbfFile = struct {
 // Read helpers (operate on a fixedBufferStream reader)
 // ---------------------------------------------------------------------------
 
-fn readU8(reader: anytype) !u8 {
-    return reader.readByte();
+fn readU8(reader: *std.Io.Reader) !u8 {
+    return (try reader.takeArray(1))[0];
 }
 
-fn readU16Le(reader: anytype) !u16 {
+fn readU16Le(reader: *std.Io.Reader) !u16 {
     var buf: [2]u8 = undefined;
-    try reader.readNoEof(&buf);
+    try reader.readSliceAll(&buf);
     return std.mem.readInt(u16, &buf, .little);
 }
 
-fn readU32Le(reader: anytype) !u32 {
+fn readU32Le(reader: *std.Io.Reader) !u32 {
     var buf: [4]u8 = undefined;
-    try reader.readNoEof(&buf);
+    try reader.readSliceAll(&buf);
     return std.mem.readInt(u32, &buf, .little);
 }
 
@@ -93,49 +112,48 @@ fn appendU32Le(buf: *std.ArrayListUnmanaged(u8), allocator: std.mem.Allocator, v
 // ---------------------------------------------------------------------------
 
 fn readFromData(allocator: std.mem.Allocator, data: []const u8) !DbfFile {
-    var stream = std.io.fixedBufferStream(data);
-    const reader = stream.reader();
+    var reader: std.Io.Reader = .fixed(data);
 
     // --- Main header (32 bytes) ---
-    const version = try readU8(reader);
+    const version = try readU8(&reader);
     // Accept dBASE III (0x03) and dBASE III with memo (0x83); also tolerate
     // other variants whose low 3 bits equal 3.
     if (version & 0x07 != 3) return ShapefileError.InvalidDbfHeader;
 
     // last update: YY MM DD (3 bytes)
     var _update: [3]u8 = undefined;
-    try reader.readNoEof(&_update);
+    try reader.readSliceAll(&_update);
 
-    const record_count = try readU32Le(reader);
-    const header_size = try readU16Le(reader);
-    const record_size = try readU16Le(reader);
+    const record_count = try readU32Le(&reader);
+    const header_size = try readU16Le(&reader);
+    const record_size = try readU16Le(&reader);
 
     // reserved (20 bytes)
     var _reserved: [20]u8 = undefined;
-    try reader.readNoEof(&_reserved);
+    try reader.readSliceAll(&_reserved);
 
     // --- Field descriptors (32 bytes each, terminated by 0x0D) ---
     const max_fields = (header_size -| DBF_HEADER_SIZE) / DBF_FIELD_DESCRIPTOR_SIZE;
-    var fields: std.ArrayListUnmanaged(DbfField) = .{};
+    var fields: std.ArrayListUnmanaged(DbfField) = .empty;
     errdefer fields.deinit(allocator);
 
     for (0..max_fields) |_| {
-        const first = try readU8(reader);
+        const first = try readU8(&reader);
         if (first == DBF_FIELD_TERMINATOR) break;
 
         var name: [11]u8 = undefined;
         name[0] = first;
-        try reader.readNoEof(name[1..]);
+        try reader.readSliceAll(name[1..]);
 
-        const field_type = try readU8(reader);
+        const field_type = try readU8(&reader);
         // 4 bytes reserved
         var _res: [4]u8 = undefined;
-        try reader.readNoEof(&_res);
-        const field_length = try readU8(reader);
-        const decimal_count = try readU8(reader);
+        try reader.readSliceAll(&_res);
+        const field_length = try readU8(&reader);
+        const decimal_count = try readU8(&reader);
         // 14 bytes remaining in descriptor
         var _rest: [14]u8 = undefined;
-        try reader.readNoEof(&_rest);
+        try reader.readSliceAll(&_rest);
 
         try fields.append(allocator, DbfField{
             .name = name,
@@ -156,7 +174,7 @@ fn readFromData(allocator: std.mem.Allocator, data: []const u8) !DbfFile {
     };
 
     // Seek past the header to the start of records.
-    try stream.seekTo(header_size);
+    reader.seek = header_size;
 
     // --- Records ---
     const records = try allocator.alloc([]DbfValue, record_count);
@@ -174,7 +192,7 @@ fn readFromData(allocator: std.mem.Allocator, data: []const u8) !DbfFile {
     }
 
     for (records) |*row| {
-        const deletion_flag = try readU8(reader);
+        const deletion_flag = try readU8(&reader);
 
         const row_values = try allocator.alloc(DbfValue, fields_slice.len);
         errdefer allocator.free(row_values);
@@ -182,7 +200,7 @@ fn readFromData(allocator: std.mem.Allocator, data: []const u8) !DbfFile {
         for (fields_slice, row_values) |field, *val| {
             const raw = try allocator.alloc(u8, field.length);
             defer allocator.free(raw);
-            try reader.readNoEof(raw);
+            try reader.readSliceAll(raw);
 
             if (deletion_flag == DBF_RECORD_DELETED) {
                 val.* = .{ .null = {} };
@@ -191,7 +209,7 @@ fn readFromData(allocator: std.mem.Allocator, data: []const u8) !DbfFile {
 
             val.* = switch (field.field_type) {
                 'C' => blk: {
-                    const trimmed = std.mem.trimRight(u8, raw, " ");
+                    const trimmed = std.mem.trimEnd(u8, raw, " ");
                     const s = try allocator.dupe(u8, trimmed);
                     break :blk .{ .string = s };
                 },
@@ -229,11 +247,8 @@ fn readFromData(allocator: std.mem.Allocator, data: []const u8) !DbfFile {
 
 /// Parse a .dbf file. Caller owns the result; call result.deinit(allocator).
 pub fn read(allocator: std.mem.Allocator, path: []const u8) !DbfFile {
-    const file = try std.fs.cwd().openFile(path, .{});
-    defer file.close();
-
     // Read whole file into memory (max 256 MiB).
-    const data = try file.readToEndAlloc(allocator, 256 * 1024 * 1024);
+    const data = try readFileAlloc(allocator, path, 256 * 1024 * 1024);
     defer allocator.free(data);
 
     return readFromData(allocator, data);
@@ -256,7 +271,7 @@ pub fn write(
     fields: []const DbfField,
     rows: []const []const DbfValue,
 ) !void {
-    var buf: std.ArrayListUnmanaged(u8) = .{};
+    var buf: std.ArrayListUnmanaged(u8) = .empty;
     defer buf.deinit(allocator);
 
     // Compute sizes
@@ -318,9 +333,7 @@ pub fn write(
         }
     }
 
-    const out = try std.fs.cwd().createFile(path, .{});
-    defer out.close();
-    try out.writeAll(buf.items);
+    try writeFile(path, buf.items);
 }
 
 /// Build .dbf bytes in memory (no file I/O — for WASM). Caller must free.
@@ -329,7 +342,7 @@ pub fn buildBytes(
     fields: []const DbfField,
     rows: []const []const DbfValue,
 ) ![]u8 {
-    var buf: std.ArrayListUnmanaged(u8) = .{};
+    var buf: std.ArrayListUnmanaged(u8) = .empty;
     errdefer buf.deinit(allocator);
 
     var record_size: u16 = 1;
@@ -398,7 +411,7 @@ test "dbf read synthetic" {
     const allocator = std.testing.allocator;
 
     // Build a minimal in-memory DBF with 1 field (C, len 5) and 2 records.
-    var buf: std.ArrayListUnmanaged(u8) = .{};
+    var buf: std.ArrayListUnmanaged(u8) = .empty;
     defer buf.deinit(allocator);
 
     // Header (32 bytes)
@@ -436,15 +449,13 @@ test "dbf read synthetic" {
     var tmp_dir = std.testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    const tmp_path = try tmp_dir.dir.realpathAlloc(allocator, ".");
+    const tmp_path = try tmp_dir.dir.realPathFileAlloc(defaultIo(), ".", allocator);
     defer allocator.free(tmp_path);
 
     const dbf_path = try std.fmt.allocPrint(allocator, "{s}/test.dbf", .{tmp_path});
     defer allocator.free(dbf_path);
 
-    const out_file = try std.fs.cwd().createFile(dbf_path, .{});
-    try out_file.writeAll(buf.items);
-    out_file.close();
+    try writeFile(dbf_path, buf.items);
 
     const result = try read(allocator, dbf_path);
     defer result.deinit(allocator);

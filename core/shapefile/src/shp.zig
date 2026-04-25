@@ -8,25 +8,44 @@ const PolyLineZ = types.PolyLineZ;
 const Geometry = types.Geometry;
 const ShpRecord = types.ShpRecord;
 
+fn defaultIo() std.Io {
+    return std.Io.Threaded.global_single_threaded.io();
+}
+
+fn readFileAlloc(allocator: std.mem.Allocator, path: []const u8, limit: usize) ![]u8 {
+    const io = defaultIo();
+    const file = try std.Io.Dir.cwd().openFile(io, path, .{});
+    defer file.close(io);
+
+    var reader_buf: [4096]u8 = undefined;
+    var file_reader = file.reader(io, &reader_buf);
+    return file_reader.interface.allocRemaining(allocator, .limited(limit));
+}
+
+fn writeFile(path: []const u8, data: []const u8) !void {
+    const io = defaultIo();
+    try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = data });
+}
+
 // ---------------------------------------------------------------------------
 // Endian-aware read helpers (operate on a fixedBufferStream reader)
 // ---------------------------------------------------------------------------
 
-pub fn readI32Be(reader: anytype) !i32 {
+pub fn readI32Be(reader: *std.Io.Reader) !i32 {
     var buf: [4]u8 = undefined;
-    try reader.readNoEof(&buf);
+    try reader.readSliceAll(&buf);
     return std.mem.readInt(i32, &buf, .big);
 }
 
-pub fn readI32Le(reader: anytype) !i32 {
+pub fn readI32Le(reader: *std.Io.Reader) !i32 {
     var buf: [4]u8 = undefined;
-    try reader.readNoEof(&buf);
+    try reader.readSliceAll(&buf);
     return std.mem.readInt(i32, &buf, .little);
 }
 
-pub fn readF64Le(reader: anytype) !f64 {
+pub fn readF64Le(reader: *std.Io.Reader) !f64 {
     var buf: [8]u8 = undefined;
-    try reader.readNoEof(&buf);
+    try reader.readSliceAll(&buf);
     return @bitCast(std.mem.readInt(u64, &buf, .little));
 }
 
@@ -64,12 +83,12 @@ pub const ShpHeader = struct {
     m_range: ZRange,
 };
 
-fn readHeader(reader: anytype) !ShpHeader {
+fn readHeader(reader: *std.Io.Reader) !ShpHeader {
     const file_code = try readI32Be(reader);
     if (file_code != 9994) return ShapefileError.InvalidFileCode;
 
     var skip: [20]u8 = undefined;
-    try reader.readNoEof(&skip);
+    try reader.readSliceAll(&skip);
 
     const file_length_words = try readI32Be(reader);
     const version = try readI32Le(reader);
@@ -117,7 +136,7 @@ fn appendHeader(buf: *std.ArrayListUnmanaged(u8), allocator: std.mem.Allocator, 
 // PointZ (shape type 11)  — content: 4 (type) + 32 (xyzm) = 36 bytes = 18 words
 // ---------------------------------------------------------------------------
 
-fn readPointZ(reader: anytype) !PointZ {
+fn readPointZ(reader: *std.Io.Reader) !PointZ {
     return PointZ{
         .x = try readF64Le(reader),
         .y = try readF64Le(reader),
@@ -138,7 +157,7 @@ fn appendPointZContent(buf: *std.ArrayListUnmanaged(u8), allocator: std.mem.Allo
 // PolyLineZ (shape type 13)
 // ---------------------------------------------------------------------------
 
-fn readPolyLineZ(allocator: std.mem.Allocator, reader: anytype) !PolyLineZ {
+fn readPolyLineZ(allocator: std.mem.Allocator, reader: *std.Io.Reader) !PolyLineZ {
     const bbox = BoundingBox{
         .min_x = try readF64Le(reader),
         .min_y = try readF64Le(reader),
@@ -191,19 +210,15 @@ fn readPolyLineZ(allocator: std.mem.Allocator, reader: anytype) !PolyLineZ {
 /// Caller owns the returned slice. Free PolyLineZ sub-slices with
 /// geometry.poly_line_z.deinit(allocator) before freeing the slice.
 pub fn read(allocator: std.mem.Allocator, path: []const u8) ![]ShpRecord {
-    const file = try std.fs.cwd().openFile(path, .{});
-    defer file.close();
-
     // Read whole file into memory (max 512 MiB).
-    const data = try file.readToEndAlloc(allocator, 512 * 1024 * 1024);
+    const data = try readFileAlloc(allocator, path, 512 * 1024 * 1024);
     defer allocator.free(data);
 
-    var stream = std.io.fixedBufferStream(data);
-    const reader = stream.reader();
+    var reader: std.Io.Reader = .fixed(data);
 
-    _ = try readHeader(reader);
+    _ = try readHeader(&reader);
 
-    var records: std.ArrayListUnmanaged(ShpRecord) = .{};
+    var records: std.ArrayListUnmanaged(ShpRecord) = .empty;
     errdefer {
         for (records.items) |rec| {
             if (rec.geometry == .poly_line_z) rec.geometry.poly_line_z.deinit(allocator);
@@ -214,20 +229,20 @@ pub fn read(allocator: std.mem.Allocator, path: []const u8) ![]ShpRecord {
     while (true) {
         // Record header: 8 bytes, big-endian
         var rec_num_buf: [4]u8 = undefined;
-        const n = reader.readAll(&rec_num_buf) catch break;
+        const n = reader.readSliceShort(&rec_num_buf) catch break;
         if (n < 4) break;
         const record_number: u32 = @intCast(std.mem.readInt(i32, &rec_num_buf, .big));
 
         // content length in 16-bit words (not used directly here)
         var content_len_buf: [4]u8 = undefined;
-        try reader.readNoEof(&content_len_buf);
+        try reader.readSliceAll(&content_len_buf);
 
         // Shape type (little-endian, first 4 bytes of content)
-        const shape_type = try readI32Le(reader);
+        const shape_type = try readI32Le(&reader);
 
         const geometry: Geometry = switch (shape_type) {
-            11 => .{ .point_z = try readPointZ(reader) },
-            13 => .{ .poly_line_z = try readPolyLineZ(allocator, reader) },
+            11 => .{ .point_z = try readPointZ(&reader) },
+            13 => .{ .poly_line_z = try readPolyLineZ(allocator, &reader) },
             else => return ShapefileError.UnsupportedShapeType,
         };
 
@@ -242,12 +257,11 @@ pub fn read(allocator: std.mem.Allocator, path: []const u8) ![]ShpRecord {
 
 /// Parse records from raw .shp bytes (no file I/O — for WASM).
 pub fn readFromBytes(allocator: std.mem.Allocator, data: []const u8) ![]ShpRecord {
-    var stream = std.io.fixedBufferStream(data);
-    const reader = stream.reader();
+    var reader: std.Io.Reader = .fixed(data);
 
-    _ = try readHeader(reader);
+    _ = try readHeader(&reader);
 
-    var records: std.ArrayListUnmanaged(ShpRecord) = .{};
+    var records: std.ArrayListUnmanaged(ShpRecord) = .empty;
     errdefer {
         for (records.items) |rec| {
             if (rec.geometry == .poly_line_z) rec.geometry.poly_line_z.deinit(allocator);
@@ -257,18 +271,18 @@ pub fn readFromBytes(allocator: std.mem.Allocator, data: []const u8) ![]ShpRecor
 
     while (true) {
         var rec_num_buf: [4]u8 = undefined;
-        const n = reader.readAll(&rec_num_buf) catch break;
+        const n = reader.readSliceShort(&rec_num_buf) catch break;
         if (n < 4) break;
         const record_number: u32 = @intCast(std.mem.readInt(i32, &rec_num_buf, .big));
 
         var content_len_buf: [4]u8 = undefined;
-        try reader.readNoEof(&content_len_buf);
+        try reader.readSliceAll(&content_len_buf);
 
-        const shape_type = try readI32Le(reader);
+        const shape_type = try readI32Le(&reader);
 
         const geometry: Geometry = switch (shape_type) {
-            11 => .{ .point_z = try readPointZ(reader) },
-            13 => .{ .poly_line_z = try readPolyLineZ(allocator, reader) },
+            11 => .{ .point_z = try readPointZ(&reader) },
+            13 => .{ .poly_line_z = try readPolyLineZ(allocator, &reader) },
             else => return ShapefileError.UnsupportedShapeType,
         };
 
@@ -296,12 +310,12 @@ pub fn buildSHPBytes(allocator: std.mem.Allocator, records: []const ShpRecord) !
         }
     }
 
-    var shx_offsets: std.ArrayListUnmanaged(i32) = .{};
+    var shx_offsets: std.ArrayListUnmanaged(i32) = .empty;
     defer shx_offsets.deinit(allocator);
-    var shx_lengths: std.ArrayListUnmanaged(i32) = .{};
+    var shx_lengths: std.ArrayListUnmanaged(i32) = .empty;
     defer shx_lengths.deinit(allocator);
 
-    var shp_buf: std.ArrayListUnmanaged(u8) = .{};
+    var shp_buf: std.ArrayListUnmanaged(u8) = .empty;
     errdefer shp_buf.deinit(allocator);
 
     try shp_buf.appendNTimes(allocator, 0, 100);
@@ -384,7 +398,7 @@ pub fn buildSHPBytes(allocator: std.mem.Allocator, records: []const ShpRecord) !
         .z_range = ZRange{ .min = z_min, .max = z_max },
         .m_range = ZRange{ .min = 0, .max = 0 },
     };
-    var hdr_buf: std.ArrayListUnmanaged(u8) = .{};
+    var hdr_buf: std.ArrayListUnmanaged(u8) = .empty;
     defer hdr_buf.deinit(allocator);
     try appendHeader(&hdr_buf, allocator, hdr);
     @memcpy(shp_buf.items[0..100], hdr_buf.items[0..100]);
@@ -403,9 +417,9 @@ pub fn buildSHXBytes(allocator: std.mem.Allocator, records: []const ShpRecord) !
         if (global_shape_type == 0) global_shape_type = st;
     }
 
-    var shx_offsets: std.ArrayListUnmanaged(i32) = .{};
+    var shx_offsets: std.ArrayListUnmanaged(i32) = .empty;
     defer shx_offsets.deinit(allocator);
-    var shx_lengths: std.ArrayListUnmanaged(i32) = .{};
+    var shx_lengths: std.ArrayListUnmanaged(i32) = .empty;
     defer shx_lengths.deinit(allocator);
 
     // Compute offsets/lengths by simulating the shp layout
@@ -426,7 +440,7 @@ pub fn buildSHXBytes(allocator: std.mem.Allocator, records: []const ShpRecord) !
         shp_offset += 4 + content_words; // 4 words (8 bytes) header + content
     }
 
-    var shx_buf: std.ArrayListUnmanaged(u8) = .{};
+    var shx_buf: std.ArrayListUnmanaged(u8) = .empty;
     errdefer shx_buf.deinit(allocator);
 
     const shx_words: i32 = @intCast((100 + records.len * 8) >> 1);
@@ -450,16 +464,12 @@ pub fn buildSHXBytes(allocator: std.mem.Allocator, records: []const ShpRecord) !
 
 /// Read and return the raw WKT string from a .prj file. Caller owns the slice.
 pub fn readPrj(allocator: std.mem.Allocator, path: []const u8) ![]u8 {
-    const file = try std.fs.cwd().openFile(path, .{});
-    defer file.close();
-    return file.readToEndAlloc(allocator, 64 * 1024);
+    return readFileAlloc(allocator, path, 64 * 1024);
 }
 
 /// Write a WKT string to a .prj file.
 pub fn writePrj(path: []const u8, wkt: []const u8) !void {
-    const file = try std.fs.cwd().createFile(path, .{});
-    defer file.close();
-    try file.writeAll(wkt);
+    try writeFile(path, wkt);
 }
 
 // ---------------------------------------------------------------------------
@@ -489,13 +499,13 @@ pub fn write(
     }
 
     // shx index entries collected during writing
-    var shx_offsets: std.ArrayListUnmanaged(i32) = .{};
+    var shx_offsets: std.ArrayListUnmanaged(i32) = .empty;
     defer shx_offsets.deinit(allocator);
-    var shx_lengths: std.ArrayListUnmanaged(i32) = .{};
+    var shx_lengths: std.ArrayListUnmanaged(i32) = .empty;
     defer shx_lengths.deinit(allocator);
 
     // Build .shp in memory
-    var shp_buf: std.ArrayListUnmanaged(u8) = .{};
+    var shp_buf: std.ArrayListUnmanaged(u8) = .empty;
     defer shp_buf.deinit(allocator);
 
     // Reserve 100 bytes for header (will be patched later)
@@ -582,19 +592,17 @@ pub fn write(
         .m_range = ZRange{ .min = 0, .max = 0 },
     };
     // Write header into a temp buffer and copy to start of shp_buf
-    var hdr_buf: std.ArrayListUnmanaged(u8) = .{};
+    var hdr_buf: std.ArrayListUnmanaged(u8) = .empty;
     defer hdr_buf.deinit(allocator);
     try appendHeader(&hdr_buf, allocator, hdr);
     @memcpy(shp_buf.items[0..100], hdr_buf.items[0..100]);
 
     // Write .shp
-    const shp_file = try std.fs.cwd().createFile(shp_path, .{});
-    defer shp_file.close();
-    try shp_file.writeAll(shp_buf.items);
+    try writeFile(shp_path, shp_buf.items);
 
     // Write .shx if requested
     if (shx_path) |sx| {
-        var shx_buf: std.ArrayListUnmanaged(u8) = .{};
+        var shx_buf: std.ArrayListUnmanaged(u8) = .empty;
         defer shx_buf.deinit(allocator);
 
         const shx_words: i32 = @intCast((100 + records.len * 8) >> 1);
@@ -612,9 +620,7 @@ pub fn write(
             try appendI32Be(&shx_buf, allocator, len);
         }
 
-        const shx_file = try std.fs.cwd().createFile(sx, .{});
-        defer shx_file.close();
-        try shx_file.writeAll(shx_buf.items);
+        try writeFile(sx, shx_buf.items);
     }
 }
 
@@ -626,7 +632,7 @@ test "shp round-trip PointZ" {
     const allocator = std.testing.allocator;
 
     // Build a minimal in-memory .shp with two PointZ records.
-    var buf: std.ArrayListUnmanaged(u8) = .{};
+    var buf: std.ArrayListUnmanaged(u8) = .empty;
     defer buf.deinit(allocator);
 
     // Header
@@ -650,20 +656,19 @@ test "shp round-trip PointZ" {
     try appendPointZContent(&buf, allocator, PointZ{ .x = 491600.0, .y = 5918600.0, .z = 11.0, .m = 0.0 });
 
     // Parse
-    var stream = std.io.fixedBufferStream(buf.items);
-    const r = stream.reader();
+    var r: std.Io.Reader = .fixed(buf.items);
 
-    const hdr = try readHeader(r);
+    const hdr = try readHeader(&r);
     try std.testing.expectEqual(@as(i32, 11), hdr.shape_type);
 
     // Record 1
     var rec_num_buf: [4]u8 = undefined;
-    _ = try r.readAll(&rec_num_buf);
+    _ = try r.readSliceShort(&rec_num_buf);
     const rn1 = std.mem.readInt(i32, &rec_num_buf, .big);
     var content_len_buf: [4]u8 = undefined;
-    try r.readNoEof(&content_len_buf);
-    const st1 = try readI32Le(r);
-    const p1 = try readPointZ(r);
+    try r.readSliceAll(&content_len_buf);
+    const st1 = try readI32Le(&r);
+    const p1 = try readPointZ(&r);
 
     try std.testing.expectEqual(@as(i32, 1), rn1);
     try std.testing.expectEqual(@as(i32, 11), st1);
@@ -677,7 +682,7 @@ test "prj round-trip" {
 
     var tmp_dir = std.testing.tmpDir(.{});
     defer tmp_dir.cleanup();
-    const tmp_path = try tmp_dir.dir.realpathAlloc(allocator, ".");
+    const tmp_path = try tmp_dir.dir.realPathFileAlloc(defaultIo(), ".", allocator);
     defer allocator.free(tmp_path);
 
     const prj_path = try std.fmt.allocPrint(allocator, "{s}/test.prj", .{tmp_path});
