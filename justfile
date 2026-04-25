@@ -20,8 +20,8 @@ test-shapefile:
 test-crs:
     cd core/crs && zig build test
 
-# Run all Zig tests (matching CI: network-engine + shapefile only)
-test-zig: test-network-engine test-shapefile
+# Run all Zig tests
+test-zig: test-network-engine test-shapefile test-crs
 
 # Run server tests
 test-server:
