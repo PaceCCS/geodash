@@ -28,14 +28,10 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
-    exe.linkLibC();
-    exe.linkSystemLibrary("proj");
     b.installArtifact(exe);
 
     // Module tests (transform.zig tests run via root.zig)
     const mod_tests = b.addTest(.{ .root_module = transform_mod });
-    mod_tests.linkLibC();
-    mod_tests.linkSystemLibrary("proj");
 
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&b.addRunArtifact(mod_tests).step);

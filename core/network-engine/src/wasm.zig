@@ -318,7 +318,7 @@ fn runQuery(input: []const u8) ![]u8 {
     const result = try executor.execute(&q);
 
     // Serialize the result into a wasm_alloc buffer that outlives the arena.
-    var out_buf: Buf = .{};
+    var out_buf: Buf = .empty;
     errdefer out_buf.deinit(wasm_alloc);
     try writeValueJson(&result, &out_buf, wasm_alloc);
     return out_buf.toOwnedSlice(wasm_alloc);
@@ -370,7 +370,7 @@ fn runLoadNetwork(input: []const u8) ![]u8 {
         config_storage = try scope_mod.Config.loadFromToml(a, config_value.table);
     }
 
-    var out_buf: Buf = .{};
+    var out_buf: Buf = .empty;
     errdefer out_buf.deinit(wasm_alloc);
 
     try bufAppendSlice(&out_buf, wasm_alloc, "{\"id\":");
@@ -589,7 +589,7 @@ fn runOlgaImport(input: []const u8) ![]u8 {
     var parsed = try olga_mod.parseKey(wasm_alloc, key_content, root_loc, &validation);
     defer parsed.deinit(wasm_alloc);
 
-    var out_buf: Buf = .{};
+    var out_buf: Buf = .empty;
     errdefer out_buf.deinit(wasm_alloc);
 
     try bufAppendSlice(&out_buf, wasm_alloc, "{\"files\":{");
@@ -715,7 +715,7 @@ fn runOlgaExport(input: []const u8) ![]u8 {
     const key_content = try olga_mod.writeKey(wasm_alloc, &network, route_segs, &validation);
     defer wasm_alloc.free(key_content);
 
-    var out_buf: Buf = .{};
+    var out_buf: Buf = .empty;
     errdefer out_buf.deinit(wasm_alloc);
 
     try bufAppendSlice(&out_buf, wasm_alloc, "{\"key_content\":\"");
@@ -779,7 +779,7 @@ fn runComputeRouteKp(input: []const u8) ![]u8 {
     const segs = try olga_mod.computeRouteSegmentsFromShp(wasm_alloc, shp_bytes);
     defer wasm_alloc.free(segs);
 
-    var out_buf: Buf = .{};
+    var out_buf: Buf = .empty;
     errdefer out_buf.deinit(wasm_alloc);
 
     try bufAppendSlice(&out_buf, wasm_alloc, "{\"segments\":[");
@@ -883,7 +883,7 @@ fn runCreateRoute(input: []const u8) ![]u8 {
     defer wasm_alloc.free(dbf_b64);
     _ = enc.encode(dbf_b64, dbf_bytes);
 
-    var out_buf: Buf = .{};
+    var out_buf: Buf = .empty;
     errdefer out_buf.deinit(wasm_alloc);
 
     try bufAppendSlice(&out_buf, wasm_alloc, "{\"shp_b64\":\"");
@@ -1250,7 +1250,7 @@ fn runReadShapefile(input: []const u8) ![]u8 {
         else => return error.InvalidInput,
     } else null;
 
-    var out_buf: Buf = .{};
+    var out_buf: Buf = .empty;
     errdefer out_buf.deinit(wasm_alloc);
 
     try bufAppendSlice(&out_buf, wasm_alloc, "{\"geometryType\":");
@@ -1407,7 +1407,7 @@ fn runBuildShapefile(input: []const u8) ![]u8 {
     const dbf_b64 = try encodeBase64Alloc(a, dbf_bytes);
     const prj_b64 = if (prj) |wkt| try encodeBase64Alloc(a, wkt) else null;
 
-    var out_buf: Buf = .{};
+    var out_buf: Buf = .empty;
     errdefer out_buf.deinit(wasm_alloc);
 
     try bufAppendSlice(&out_buf, wasm_alloc, "{\"shp_b64\":\"");

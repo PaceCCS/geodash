@@ -16,12 +16,12 @@ test-network-engine:
 test-shapefile:
     cd core/shapefile && zig build test
 
-# Run CRS tool tests
+# Run CRS tool tests (requires nix develop with proj + zig 0.15)
 test-crs:
     cd core/crs && zig build test
 
-# Run all Zig tests
-test-zig: test-network-engine test-shapefile test-crs
+# Run all Zig tests (matching CI: network-engine + shapefile only)
+test-zig: test-network-engine test-shapefile
 
 # Run server tests
 test-server:
