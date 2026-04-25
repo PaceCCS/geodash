@@ -48,6 +48,12 @@ Last updated: 2026-03-30
 | ------ | ----- | ----- | ------------------------------ |
 | —      | F     | 0     | Not started. Placeholder only. |
 
+### thermo-model-registry
+
+| Module | Grade | Tests | Notes                          |
+| ------ | ----- | ----- | ------------------------------ |
+| —      | F     | 0     | Planned. Placeholder only.     |
+
 ### zarr
 
 | Module | Grade | Tests | Notes                          |
