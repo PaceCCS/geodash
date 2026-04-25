@@ -1,5 +1,5 @@
 const std = @import("std");
-const c = @import("proj_c");
+const proj = @import("proj_c");
 
 pub const CrsError = error{
     ContextCreationFailed,
@@ -9,21 +9,21 @@ pub const CrsError = error{
 };
 
 pub const Transform = struct {
-    ctx: *c.PJ_CONTEXT,
-    pj: *c.PJ,
+    ctx: *proj.PJ_CONTEXT,
+    pj: *proj.PJ,
 
     /// source_crs / target_crs: any PROJ-understood null-terminated string
     /// (EPSG code, PROJ string, or WKT). Axis order is always easting/northing
     /// (proj_normalize_for_visualization is called internally).
     pub fn create(source_crs: [*:0]const u8, target_crs: [*:0]const u8) CrsError!Transform {
-        const ctx = c.proj_context_create() orelse return CrsError.ContextCreationFailed;
-        errdefer _ = c.proj_context_destroy(ctx);
+        const ctx = proj.proj_context_create() orelse return CrsError.ContextCreationFailed;
+        errdefer _ = proj.proj_context_destroy(ctx);
 
-        const raw = c.proj_create_crs_to_crs(ctx, source_crs, target_crs, null) orelse
+        const raw = proj.proj_create_crs_to_crs(ctx, source_crs, target_crs, null) orelse
             return CrsError.TransformCreationFailed;
-        defer _ = c.proj_destroy(raw);
+        defer _ = proj.proj_destroy(raw);
 
-        const pj = c.proj_normalize_for_visualization(ctx, raw) orelse
+        const pj = proj.proj_normalize_for_visualization(ctx, raw) orelse
             return CrsError.NormalizationFailed;
 
         return Transform{ .ctx = ctx, .pj = pj };
@@ -32,29 +32,29 @@ pub const Transform = struct {
     /// Forward: source CRS → target CRS. Returns [x, y, z].
     /// Returns CrsError.TransformFailed if PROJ signals an error.
     pub fn forward(self: Transform, x: f64, y: f64, z: f64) CrsError![3]f64 {
-        return trans(self.pj, c.PJ_FWD, x, y, z);
+        return trans(self.pj, proj.PJ_FWD, x, y, z);
     }
 
     /// Inverse: target CRS → source CRS. Returns [x, y, z].
     /// Returns CrsError.TransformFailed if PROJ signals an error.
     pub fn inverse(self: Transform, x: f64, y: f64, z: f64) CrsError![3]f64 {
-        return trans(self.pj, c.PJ_INV, x, y, z);
+        return trans(self.pj, proj.PJ_INV, x, y, z);
     }
 
     pub fn deinit(self: Transform) void {
-        _ = c.proj_destroy(self.pj);
-        _ = c.proj_context_destroy(self.ctx);
+        _ = proj.proj_destroy(self.pj);
+        _ = proj.proj_context_destroy(self.ctx);
     }
 };
 
 // proj_trans (pass-by-value PJ_COORD) has an ABI bug on ARM64/Apple Silicon:
 // the 32-byte struct is not correctly passed/returned. Use proj_trans_generic
 // with separate x/y/z arrays instead — it operates on pointers and is reliable.
-fn trans(pj: *c.PJ, direction: c.PJ_DIRECTION, x: f64, y: f64, z: f64) CrsError![3]f64 {
+fn trans(pj: *proj.PJ, direction: proj.PJ_DIRECTION, x: f64, y: f64, z: f64) CrsError![3]f64 {
     var ox = [1]f64{x};
     var oy = [1]f64{y};
     var oz = [1]f64{z};
-    const n = c.proj_trans_generic(
+    const n = proj.proj_trans_generic(
         pj, direction,
         &ox, @sizeOf(f64), 1,
         &oy, @sizeOf(f64), 1,

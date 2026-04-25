@@ -41,9 +41,7 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(exe);
 
-    const mod_tests = b.addTest(.{
-        .root_module = transform_mod,
-    });
+    const mod_tests = b.addTest(.{ .root_module = transform_mod });
 
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&b.addRunArtifact(mod_tests).step);
