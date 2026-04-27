@@ -1,7 +1,8 @@
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
-import { dirname, extname, join, resolve } from "node:path";
+import { dirname, extname, isAbsolute, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promises as fs, type Stats } from "node:fs";
+import { homedir } from "node:os";
 import net from "node:net";
 import { spawn, type ChildProcess } from "node:child_process";
 import chokidar, { type FSWatcher } from "chokidar";
@@ -27,6 +28,15 @@ let mainWindow: BrowserWindow | null = null;
 let backendProcess: ChildProcess | null = null;
 let watcher: FSWatcher | null = null;
 const recentOwnWrites = new Map<string, number>();
+
+type DirectoryBrowseResult = {
+  path: string;
+  parentPath: string | null;
+  entries: Array<{
+    name: string;
+    path: string;
+  }>;
+};
 
 function pruneOwnWrites(now = Date.now()): void {
   for (const [path, timestamp] of recentOwnWrites.entries()) {
@@ -204,6 +214,45 @@ function hasAllowedExtension(filePath: string, extensions: string[]): boolean {
 
 function isIgnoredWatchDirectoryName(name: string): boolean {
   return name === "node_modules" || name === ".git";
+}
+
+function resolveBrowsePath(inputPath?: string): string {
+  const trimmedPath = inputPath?.trim();
+  if (!trimmedPath || trimmedPath === "~") {
+    return homedir();
+  }
+
+  if (trimmedPath.startsWith(`~${sep}`)) {
+    return resolve(homedir(), trimmedPath.slice(2));
+  }
+
+  return isAbsolute(trimmedPath) ? resolve(trimmedPath) : resolve(homedir(), trimmedPath);
+}
+
+async function browseDirectory(inputPath?: string): Promise<DirectoryBrowseResult> {
+  const directoryPath = resolveBrowsePath(inputPath);
+  const stats = await fs.stat(directoryPath);
+
+  if (!stats.isDirectory()) {
+    throw new Error("Path is not a directory.");
+  }
+
+  const entries = await fs.readdir(directoryPath, { withFileTypes: true });
+  const directories = entries
+    .filter((entry) => entry.isDirectory() && !isIgnoredWatchDirectoryName(entry.name))
+    .map((entry) => ({
+      name: entry.name,
+      path: join(directoryPath, entry.name),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const parentPath = resolve(directoryPath, "..");
+
+  return {
+    path: directoryPath,
+    parentPath: parentPath === directoryPath ? null : parentPath,
+    entries: directories,
+  };
 }
 
 async function assertWatchableDirectory(
@@ -408,6 +457,10 @@ function registerIpcHandlers(): void {
     }
 
     return result.filePaths[0] ?? null;
+  });
+
+  ipcMain.handle("desktop:browse-directory", async (_event, directoryPath?: string) => {
+    return browseDirectory(directoryPath);
   });
 
   ipcMain.handle("desktop:read-network-directory", async (_event, directoryPath: string) => {

@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   EyeOff,
   FolderOpen,
@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 
 import { HeaderSlot } from "@/components/header-slot";
+import { DirectoryBrowserDialog } from "@/components/directory-browser-dialog";
 import { ShapefileEditor } from "@/components/shapefile/shapefile-editor";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,7 @@ function ShapefileWatchPage() {
       : null;
 
   const { watch, editor, status, actions } = useShapefileWatch(directoryQuery);
+  const [isDirectoryBrowserOpen, setIsDirectoryBrowserOpen] = useState(false);
 
   const displayDirectoryPath =
     watch.phase === "active" ? watch.directoryPath.replace(/^\/+/, "") : null;
@@ -101,7 +103,7 @@ function ShapefileWatchPage() {
             label: "Change Shapefile Directory",
               run: (dialog) => {
                 dialog.close();
-                void actions.pickAndOpen();
+                setIsDirectoryBrowserOpen(true);
               },
             group: "Shapefile",
             icon: <FolderOpen />,
@@ -145,7 +147,7 @@ function ShapefileWatchPage() {
             label: "Select Shapefile Directory",
               run: (dialog) => {
                 dialog.close();
-                void actions.pickAndOpen();
+                setIsDirectoryBrowserOpen(true);
               },
             group: "Shapefile",
             icon: <FolderOpen />,
@@ -204,13 +206,28 @@ function ShapefileWatchPage() {
         ) : (
           <div className="flex w-full items-center justify-between px-2">
             <span className="text-sm font-medium">Watch Shapefile Directory</span>
-            <Button size="sm" onClick={actions.pickAndOpen} disabled={status.isBusy}>
+            <Button
+              size="sm"
+              onClick={() => setIsDirectoryBrowserOpen(true)}
+              disabled={status.isBusy}
+            >
               <FolderOpen className="mr-1 h-3 w-3" />
               Select Directory
             </Button>
           </div>
         )}
       </HeaderSlot>
+
+      <DirectoryBrowserDialog
+        open={isDirectoryBrowserOpen}
+        title="Select Shapefile Directory"
+        description="Browse to a folder containing .shp sidecars. Large folders are rejected before watching starts."
+        initialPath={watch.phase === "active" ? watch.directoryPath : null}
+        confirmLabel="Watch Directory"
+        onOpenChange={setIsDirectoryBrowserOpen}
+        onSelect={actions.openDirectory}
+        onNativePick={actions.pickAndOpen}
+      />
 
       {watch.phase === "active" ? (
         <div className="flex min-h-0 flex-1 flex-col">
@@ -251,7 +268,11 @@ function ShapefileWatchPage() {
                 You'll be able to browse `.shp` stems and save edits back to disk.
               </p>
             </div>
-            <Button size="lg" onClick={actions.pickAndOpen} disabled={status.isBusy}>
+            <Button
+              size="lg"
+              onClick={() => setIsDirectoryBrowserOpen(true)}
+              disabled={status.isBusy}
+            >
               <FolderOpen className="mr-2 h-4 w-4" />
               Select Directory
             </Button>

@@ -4,6 +4,7 @@ import { useLiveQuery } from "@tanstack/react-db";
 import { FolderOpen, EyeOff, Save } from "lucide-react";
 
 import { SelectionEditorOverlay } from "@/components/flow/editor/selection-editor-overlay";
+import { DirectoryBrowserDialog } from "@/components/directory-browser-dialog";
 import { FlowNetwork } from "@/components/flow/flow-network";
 import {
   nodesCollection,
@@ -67,6 +68,7 @@ function WatchPage() {
   } = useFileWatcher();
   const hydrated = useHydrated();
   const [isBusy, setIsBusy] = useState(false);
+  const [isDirectoryBrowserOpen, setIsDirectoryBrowserOpen] = useState(false);
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
   const selectedQuery = search.selected;
@@ -107,9 +109,7 @@ function WatchPage() {
     [navigate],
   );
 
-  const handleSelectDirectory = async () => {
-    const path = await pickNetworkDirectory();
-    if (!path) return;
+  const openDirectory = async (path: string) => {
     setIsBusy(true);
     try {
       await enableWatchMode(path);
@@ -118,6 +118,15 @@ function WatchPage() {
     } finally {
       setIsBusy(false);
     }
+  };
+
+  const handleSelectDirectory = () => {
+    setIsDirectoryBrowserOpen(true);
+  };
+
+  const handleNativeSelectDirectory = async () => {
+    const path = await pickNetworkDirectory();
+    if (path) await openDirectory(path);
   };
 
   const handleStopWatching = async () => {
@@ -223,6 +232,17 @@ function WatchPage() {
           </div>
         )}
       </HeaderSlot>
+
+      <DirectoryBrowserDialog
+        open={isDirectoryBrowserOpen}
+        title="Select Network Directory"
+        description="Browse to the folder containing your TOML network files. Large folders are rejected before watching starts."
+        initialPath={watchMode.directoryPath}
+        confirmLabel="Watch Directory"
+        onOpenChange={setIsDirectoryBrowserOpen}
+        onSelect={openDirectory}
+        onNativePick={handleNativeSelectDirectory}
+      />
 
       {watchMode.enabled && watchMode.directoryPath ? (
         <div className="flex-1 min-h-0">

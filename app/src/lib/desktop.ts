@@ -3,6 +3,15 @@ export type NetworkFile = {
   content: string;
 };
 
+export type DirectoryBrowseResult = {
+  path: string;
+  parentPath: string | null;
+  entries: Array<{
+    name: string;
+    path: string;
+  }>;
+};
+
 type FileChangedListener = (paths: string[]) => void;
 
 type DesktopApi = {
@@ -10,6 +19,7 @@ type DesktopApi = {
   stopLocalServer: () => Promise<void>;
   pickNetworkDirectory: () => Promise<string | null>;
   pickShapefileDirectory: () => Promise<string | null>;
+  browseDirectory: (path?: string) => Promise<DirectoryBrowseResult>;
   readNetworkDirectory: (path: string) => Promise<NetworkFile[]>;
   writeNetworkFile: (path: string, content: string) => Promise<void>;
   deleteNetworkFile: (path: string) => Promise<void>;
@@ -52,6 +62,10 @@ export async function pickNetworkDirectory(): Promise<string | null> {
 
 export async function pickShapefileDirectory(): Promise<string | null> {
   return getDesktopApi().pickShapefileDirectory();
+}
+
+export async function browseDirectory(path?: string): Promise<DirectoryBrowseResult> {
+  return getDesktopApi().browseDirectory(path);
 }
 
 export async function readNetworkDirectory(path: string): Promise<NetworkFile[]> {
