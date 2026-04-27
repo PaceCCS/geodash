@@ -16,6 +16,10 @@ const rendererDevUrl = process.env.ELECTRON_RENDERER_URL ?? "http://127.0.0.1:30
 const rendererProdPath = join(appRoot, "dist", "client", "index.html");
 const backendPort = 3001;
 const OWN_WRITE_IGNORE_WINDOW_MS = 1500;
+const MAX_WATCH_DIRECTORIES = 200;
+const MAX_WATCH_FILES = 2_000;
+const MAX_RELEVANT_WATCH_FILES = 500;
+const WATCH_PREFLIGHT_CONCURRENCY = 8;
 const shouldOpenDevTools =
   !app.isPackaged && process.env.GEODASH_DISABLE_DEVTOOLS !== "1";
 
@@ -198,13 +202,83 @@ function hasAllowedExtension(filePath: string, extensions: string[]): boolean {
   return extensions.includes(extname(filePath).toLowerCase());
 }
 
+function isIgnoredWatchDirectoryName(name: string): boolean {
+  return name === "node_modules" || name === ".git";
+}
+
+async function assertWatchableDirectory(
+  directoryPath: string,
+  extensions: string[],
+): Promise<void> {
+  const rootStats = await fs.stat(directoryPath);
+  if (!rootStats.isDirectory()) {
+    throw new Error("Select a directory to watch.");
+  }
+
+  const pendingDirectories = [directoryPath];
+  let directoryCount = 0;
+  let fileCount = 0;
+  let relevantFileCount = 0;
+
+  while (pendingDirectories.length > 0) {
+    const batch = pendingDirectories.splice(0, WATCH_PREFLIGHT_CONCURRENCY);
+    const results = await Promise.all(
+      batch.map(async (currentDirectory) => ({
+        currentDirectory,
+        entries: await fs.readdir(currentDirectory, { withFileTypes: true }),
+      })),
+    );
+
+    for (const { currentDirectory, entries } of results) {
+      directoryCount += 1;
+      if (directoryCount > MAX_WATCH_DIRECTORIES) {
+        throw new Error(
+          `Directory is too large to watch safely (${MAX_WATCH_DIRECTORIES}+ folders). Choose a smaller data folder.`,
+        );
+      }
+
+      for (const entry of entries) {
+        if (isIgnoredWatchDirectoryName(entry.name)) {
+          continue;
+        }
+
+        const entryPath = join(currentDirectory, entry.name);
+        if (entry.isDirectory()) {
+          pendingDirectories.push(entryPath);
+          continue;
+        }
+
+        if (!entry.isFile()) {
+          continue;
+        }
+
+        fileCount += 1;
+        if (fileCount > MAX_WATCH_FILES) {
+          throw new Error(
+            `Directory is too large to watch safely (${MAX_WATCH_FILES}+ files). Choose a smaller data folder.`,
+          );
+        }
+
+        if (hasAllowedExtension(entryPath, extensions)) {
+          relevantFileCount += 1;
+          if (relevantFileCount > MAX_RELEVANT_WATCH_FILES) {
+            throw new Error(
+              `Directory contains too many watchable files (${MAX_RELEVANT_WATCH_FILES}+). Choose a smaller data folder.`,
+            );
+          }
+        }
+      }
+    }
+  }
+}
+
 function shouldIgnoreWatchedPath(
   watchedPath: string,
   extensions: string[],
   stats?: Stats,
 ): boolean {
   if (stats?.isDirectory()) {
-    return false;
+    return isIgnoredWatchDirectoryName(watchedPath.split(/[\\/]/).at(-1) ?? "");
   }
 
   if (stats?.isFile()) {
@@ -220,6 +294,7 @@ async function startWatchingDirectory(
 ): Promise<void> {
   await stopWatchingDirectory();
   const watchedExtensions = normalizeWatchedExtensions(extensions);
+  await assertWatchableDirectory(directoryPath, watchedExtensions);
 
   const nextWatcher = chokidar.watch(directoryPath, {
     ignoreInitial: true,
