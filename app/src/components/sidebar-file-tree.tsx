@@ -1,4 +1,7 @@
-import { prepareFileTreeInput, type FileTreePreparedInput } from "@pierre/trees";
+import {
+  prepareFileTreeInput,
+  type FileTreePreparedInput,
+} from "@pierre/trees";
 import { FileTree, useFileTree } from "@pierre/trees/react";
 import type { CSSProperties } from "react";
 import { useEffect, useRef, useState } from "react";
@@ -28,7 +31,8 @@ async function loadTreePaths(directoryPath: string): Promise<{
   shapefileDirectories: string[];
   truncated: boolean;
 }> {
-  const { paths, shapefileDirectories, truncated } = await readFileTree(directoryPath);
+  const { paths, shapefileDirectories, truncated } =
+    await readFileTree(directoryPath);
   return {
     paths,
     preparedInput: prepareFileTreeInput(paths, {
@@ -117,30 +121,32 @@ export function SidebarFileTree({ directoryPath }: SidebarFileTreeProps) {
       <FileTree
         model={model}
         className="min-h-0 flex-1 text-sm"
-        style={{
-          height: "100%",
-          backgroundColor: "var(--sidebar)",
-          color: "var(--sidebar-foreground)",
-          borderColor: "var(--sidebar-border)",
-          "--trees-theme-sidebar-bg": "var(--sidebar)",
-          "--trees-theme-sidebar-fg": "var(--sidebar-foreground)",
-          "--trees-theme-sidebar-header-fg": "var(--muted-foreground)",
-          "--trees-theme-sidebar-border": "var(--sidebar-border)",
-          "--trees-theme-list-hover-bg":
-            "color-mix(in oklab, var(--sidebar-accent) 70%, transparent)",
-          "--trees-theme-list-active-selection-bg": "var(--sidebar-accent)",
-          "--trees-theme-list-active-selection-fg":
-            "var(--sidebar-accent-foreground)",
-          "--trees-theme-focus-ring": "var(--sidebar-ring)",
-          "--trees-theme-input-bg": "var(--background)",
-          "--trees-theme-input-border": "var(--border)",
-          "--trees-theme-scrollbar-thumb": "var(--muted-foreground)",
-          "--trees-file-icon-color": "var(--muted-foreground)",
-          "--trees-theme-git-added-fg": "var(--rose-pine-foam)",
-          "--trees-theme-git-modified-fg": "var(--rose-pine-rose)",
-          "--trees-theme-git-renamed-fg": "var(--rose-pine-pine)",
-          "--trees-theme-git-deleted-fg": "var(--rose-pine-love)",
-        } as CSSProperties}
+        style={
+          {
+            height: "100%",
+            backgroundColor: "var(--sidebar)",
+            color: "var(--sidebar-foreground)",
+            borderColor: "var(--sidebar-border)",
+            "--trees-theme-sidebar-bg": "var(--sidebar)",
+            "--trees-theme-sidebar-fg": "var(--sidebar-foreground)",
+            "--trees-theme-sidebar-header-fg": "var(--muted-foreground)",
+            "--trees-theme-sidebar-border": "var(--sidebar-border)",
+            "--trees-theme-list-hover-bg":
+              "color-mix(in oklab, var(--sidebar-accent) 70%, transparent)",
+            "--trees-theme-list-active-selection-bg": "var(--sidebar-accent)",
+            "--trees-theme-list-active-selection-fg":
+              "var(--sidebar-accent-foreground)",
+            "--trees-theme-focus-ring": "var(--sidebar-ring)",
+            "--trees-theme-input-bg": "var(--background)",
+            "--trees-theme-input-border": "var(--border)",
+            "--trees-theme-scrollbar-thumb": "var(--muted-foreground)",
+            "--trees-file-icon-color": "var(--muted-foreground)",
+            "--trees-theme-git-added-fg": "var(--rose-pine-foam)",
+            "--trees-theme-git-modified-fg": "var(--rose-pine-rose)",
+            "--trees-theme-git-renamed-fg": "var(--rose-pine-pine)",
+            "--trees-theme-git-deleted-fg": "var(--rose-pine-love)",
+          } as CSSProperties
+        }
       />
       {state.status === "ready" && state.truncated ? (
         <div className="border-t border-sidebar-border px-2 py-2 text-xs text-sidebar-foreground/60">
