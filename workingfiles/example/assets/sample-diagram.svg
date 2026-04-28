@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180" role="img" aria-labelledby="title desc">
+  <title id="title">Sample network diagram</title>
+  <desc id="desc">Simple placeholder asset used by network asset route tests.</desc>
+  <rect width="320" height="180" rx="16" fill="#f2efe8" />
+  <path d="M64 92h72m48 0h72" stroke="#31748f" stroke-width="8" stroke-linecap="round" />
+  <circle cx="56" cy="92" r="18" fill="#9ccfd8" stroke="#31748f" stroke-width="4" />
+  <circle cx="160" cy="92" r="24" fill="#ebbcba" stroke="#b4637a" stroke-width="4" />
+  <circle cx="264" cy="92" r="18" fill="#c4a7e7" stroke="#907aa9" stroke-width="4" />
+  <text x="160" y="150" text-anchor="middle" fill="#575279" font-family="sans-serif" font-size="18">Example asset</text>
+</svg>
