@@ -117,6 +117,7 @@ function FileSystemBrowserDialog({
   onCreate,
   onNativePick,
 }: FileSystemBrowserDialogProps) {
+  const settingsHydrated = useAppSettings((state) => state.hasHydrated);
   const preferredDirectory = useAppSettings((state) => state.preferredDirectory);
   const recordDirectorySelection = useAppSettings(
     (state) => state.recordDirectorySelection,
@@ -179,6 +180,8 @@ function FileSystemBrowserDialog({
 
   useEffect(() => {
     if (!open) return;
+    if (!initialPath && !settingsHydrated) return;
+
     const nextInitialPath = initialPath || preferredDirectory;
     const nextQuery = nextInitialPath
       ? ensureTrailingPathSeparator(nextInitialPath)
@@ -186,7 +189,7 @@ function FileSystemBrowserDialog({
     setQuery(nextQuery);
     const nextDirectoryQuery = splitBrowseQuery(nextQuery).directoryQuery;
     void loadDirectory(nextDirectoryQuery, false);
-  }, [initialPath, loadDirectory, open, preferredDirectory]);
+  }, [initialPath, loadDirectory, open, preferredDirectory, settingsHydrated]);
 
   useEffect(() => {
     if (!open || directoryQuery === requestedDirectoryRef.current) return;
@@ -245,6 +248,8 @@ function FileSystemBrowserDialog({
   };
 
   const handleNativePick = async () => {
+    if (!initialPath && !settingsHydrated) return;
+
     setError(null);
     try {
       const pickedPath = onNativePick

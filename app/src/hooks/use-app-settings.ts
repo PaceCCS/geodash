@@ -2,8 +2,10 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 type AppSettingsState = {
+  hasHydrated: boolean;
   preferredDirectory: string;
   useLastSelectionParent: boolean;
+  setHasHydrated: (hydrated: boolean) => void;
   setPreferredDirectory: (path: string) => void;
   setUseLastSelectionParent: (enabled: boolean) => void;
   recordDirectorySelection: (path: string) => void;
@@ -11,6 +13,7 @@ type AppSettingsState = {
 };
 
 const defaultSettings = {
+  hasHydrated: false,
   preferredDirectory: "",
   useLastSelectionParent: false,
 };
@@ -33,6 +36,7 @@ export const useAppSettings = create<AppSettingsState>()(
   persist(
     (set, get) => ({
       ...defaultSettings,
+      setHasHydrated: (hydrated) => set({ hasHydrated: hydrated }),
       setPreferredDirectory: (path) => set({ preferredDirectory: path }),
       setUseLastSelectionParent: (enabled) =>
         set({ useLastSelectionParent: enabled }),
@@ -40,10 +44,14 @@ export const useAppSettings = create<AppSettingsState>()(
         if (!get().useLastSelectionParent) return;
         set({ preferredDirectory: getParentPath(path) });
       },
-      resetSettings: () => set(defaultSettings),
+      resetSettings: () =>
+        set((state) => ({ ...defaultSettings, hasHydrated: state.hasHydrated })),
     }),
     {
       name: "app-settings",
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
       partialize: (state) => ({
         preferredDirectory: state.preferredDirectory,
         useLastSelectionParent: state.useLastSelectionParent,
