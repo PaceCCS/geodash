@@ -3,14 +3,19 @@ export type NetworkFile = {
   content: string;
 };
 
-export type DirectoryBrowseResult = {
+export type BrowseMode = "directory" | "file";
+
+export type FileSystemBrowseResult = {
   path: string;
   parentPath: string | null;
   entries: Array<{
     name: string;
     path: string;
+    type: BrowseMode;
   }>;
 };
+
+export type DirectoryBrowseResult = FileSystemBrowseResult;
 
 type FileChangedListener = (paths: string[]) => void;
 
@@ -19,7 +24,7 @@ type DesktopApi = {
   stopLocalServer: () => Promise<void>;
   pickNetworkDirectory: () => Promise<string | null>;
   pickShapefileDirectory: () => Promise<string | null>;
-  browseDirectory: (path?: string) => Promise<DirectoryBrowseResult>;
+  browseDirectory: (path?: string, mode?: BrowseMode) => Promise<FileSystemBrowseResult>;
   createDirectory: (path: string) => Promise<DirectoryBrowseResult>;
   openDirectory: (path: string) => Promise<void>;
   readNetworkDirectory: (path: string) => Promise<NetworkFile[]>;
@@ -66,8 +71,11 @@ export async function pickShapefileDirectory(): Promise<string | null> {
   return getDesktopApi().pickShapefileDirectory();
 }
 
-export async function browseDirectory(path?: string): Promise<DirectoryBrowseResult> {
-  return getDesktopApi().browseDirectory(path);
+export async function browseDirectory(
+  path?: string,
+  mode?: BrowseMode,
+): Promise<FileSystemBrowseResult> {
+  return getDesktopApi().browseDirectory(path, mode);
 }
 
 export async function createDirectory(path: string): Promise<DirectoryBrowseResult> {

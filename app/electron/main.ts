@@ -493,9 +493,12 @@ function registerIpcHandlers(): void {
     return result.filePaths[0] ?? null;
   });
 
-  ipcMain.handle("desktop:browse-directory", async (_event, directoryPath?: string) => {
-    return browseDirectory(directoryPath);
-  });
+  ipcMain.handle(
+    "desktop:browse-directory",
+    async (_event, directoryPath?: string, mode?: BrowseMode) => {
+      return browseFileSystem(directoryPath, mode);
+    },
+  );
 
   ipcMain.handle("desktop:create-directory", async (_event, directoryPath: string) => {
     return createDirectory(directoryPath);

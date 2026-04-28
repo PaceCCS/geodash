@@ -224,6 +224,7 @@ function ShapefileWatchPage() {
         description="Browse to a folder containing .shp sidecars. Large folders are rejected before watching starts."
         initialPath={watch.phase === "active" ? watch.directoryPath : null}
         confirmLabel="Watch Directory"
+        allowCreate
         onOpenChange={setIsDirectoryBrowserOpen}
         onSelect={actions.openDirectory}
         onNativePick={actions.pickAndOpen}

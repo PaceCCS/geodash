@@ -261,9 +261,10 @@ function WatchPage() {
         description="Browse to the folder containing your TOML network files. Large folders are rejected before watching starts."
         initialPath={watchMode.directoryPath}
         confirmLabel="Watch Directory"
+        allowCreate
         onOpenChange={setIsDirectoryBrowserOpen}
         onSelect={openDirectory}
-        onCreatedDirectory={initializeCreatedNetworkDirectory}
+        onCreate={initializeCreatedNetworkDirectory}
         onNativePick={handleNativeSelectDirectory}
       />
 

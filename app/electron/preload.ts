@@ -10,17 +10,17 @@ const desktopApi = {
     ipcRenderer.invoke("desktop:pick-network-directory") as Promise<string | null>,
   pickShapefileDirectory: () =>
     ipcRenderer.invoke("desktop:pick-shapefile-directory") as Promise<string | null>,
-  browseDirectory: (path?: string) =>
-    ipcRenderer.invoke("desktop:browse-directory", path) as Promise<{
+  browseDirectory: (path?: string, mode?: "directory" | "file") =>
+    ipcRenderer.invoke("desktop:browse-directory", path, mode) as Promise<{
       path: string;
       parentPath: string | null;
-      entries: Array<{ name: string; path: string }>;
+      entries: Array<{ name: string; path: string; type: "directory" | "file" }>;
     }>,
   createDirectory: (path: string) =>
     ipcRenderer.invoke("desktop:create-directory", path) as Promise<{
       path: string;
       parentPath: string | null;
-      entries: Array<{ name: string; path: string }>;
+      entries: Array<{ name: string; path: string; type: "directory" | "file" }>;
     }>,
   openDirectory: (path: string) =>
     ipcRenderer.invoke("desktop:open-directory", path) as Promise<void>,

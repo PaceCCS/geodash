@@ -5,6 +5,7 @@ import {
   Folder,
   FolderOpen,
   RefreshCcw,
+  File,
 } from "lucide-react";
 
 import {
@@ -21,25 +22,42 @@ import {
   browseDirectory,
   createDirectory,
   openDirectory,
-  type DirectoryBrowseResult,
+  type BrowseMode,
+  type FileSystemBrowseResult,
 } from "@/lib/desktop";
 import { cn } from "@/lib/utils";
 
 const PATH_SEPARATOR = "/";
 
-type DirectoryBrowserDialogProps = {
+export type FileSystemBrowserDialogProps = {
   open: boolean;
+  mode?: BrowseMode;
   title: string;
   description: string;
   confirmLabel?: string;
+  allowCreate?: boolean;
+  createTitle?: string;
+  createLabel?: string;
+  nativePickerLabel?: string;
+  openInFileManagerLabel?: string;
   initialPath?: string | null;
   onOpenChange: (open: boolean) => void;
   onSelect: (path: string) => void | Promise<void>;
-  onCreatedDirectory?: (path: string) => void | Promise<void>;
+  onCreate?: (path: string) => void | Promise<void>;
   onNativePick?: () => void | Promise<void>;
 };
 
-type DirectoryEntry = DirectoryBrowseResult["entries"][number];
+export type DirectoryBrowserDialogProps = Omit<
+  FileSystemBrowserDialogProps,
+  "mode"
+>;
+
+export type FileBrowserDialogProps = Omit<
+  FileSystemBrowserDialogProps,
+  "mode" | "allowCreate" | "onCreate" | "createTitle" | "createLabel"
+>;
+
+type BrowserEntry = FileSystemBrowseResult["entries"][number];
 
 function hasTrailingPathSeparator(path: string): boolean {
   return path.endsWith("/") || path.endsWith("\\");
@@ -78,29 +96,44 @@ function splitBrowseQuery(query: string): {
 }
 
 export function DirectoryBrowserDialog({
+  mode = "directory",
+  ...props
+}: DirectoryBrowserDialogProps & { mode?: BrowseMode }) {
+  return <FileSystemBrowserDialog mode={mode} {...props} />;
+}
+
+export function FileBrowserDialog(props: FileBrowserDialogProps) {
+  return <FileSystemBrowserDialog mode="file" {...props} />;
+}
+
+function FileSystemBrowserDialog({
   open,
+  mode = "directory",
   title,
   description,
   confirmLabel = "Use Directory",
+  allowCreate = false,
+  createTitle = "Create a new directory?",
+  createLabel = "Create Folder",
+  nativePickerLabel = "Native Picker",
+  openInFileManagerLabel = "Open in Finder",
   initialPath,
   onOpenChange,
   onSelect,
-  onCreatedDirectory,
+  onCreate,
   onNativePick,
-}: DirectoryBrowserDialogProps) {
+}: FileSystemBrowserDialogProps) {
   const [query, setQuery] = useState(
     initialPath ? ensureTrailingPathSeparator(initialPath) : "",
   );
   const [highlightedIndex, setHighlightedIndex] = useState(0);
-  const [result, setResult] = useState<DirectoryBrowseResult | null>(null);
+  const [result, setResult] = useState<FileSystemBrowseResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [missingPath, setMissingPath] = useState<string | null>(null);
   const requestedDirectoryRef = useRef<string | undefined>(undefined);
 
   const currentPath = result?.path ?? query.trim();
-  const canSelect = Boolean(result?.path) && !isLoading && !missingPath;
-  const canCreate = Boolean(missingPath) && !isLoading;
   const { directoryQuery, filter } = useMemo(
     () => splitBrowseQuery(query),
     [query],
@@ -113,6 +146,10 @@ export function DirectoryBrowserDialog({
       entry.name.toLowerCase().includes(normalizedFilter),
     );
   }, [filter, result]);
+  const selectedEntry = visibleEntries[highlightedIndex] ?? null;
+  const selectedPath = mode === "file" ? selectedEntry?.path : result?.path;
+  const canSelect = Boolean(selectedPath) && !isLoading && !missingPath;
+  const canCreate = allowCreate && Boolean(missingPath) && !isLoading;
 
   const loadDirectory = useCallback(
     async (path?: string, updateQuery = true) => {
@@ -123,14 +160,14 @@ export function DirectoryBrowserDialog({
       setError(null);
       setMissingPath(null);
       try {
-        const nextResult = await browseDirectory(path);
+        const nextResult = await browseDirectory(path, mode);
         setResult(nextResult);
         if (updateQuery || !path) {
           setQuery(ensureTrailingPathSeparator(nextResult.path));
         }
         setHighlightedIndex(0);
       } catch (err) {
-        setMissingPath(path ?? null);
+        setMissingPath(allowCreate ? path ?? null : null);
         const message = err instanceof Error ? err.message : String(err);
         if (!message.includes("ENOENT")) {
           setError(message);
@@ -139,7 +176,7 @@ export function DirectoryBrowserDialog({
         setIsLoading(false);
       }
     },
-    [],
+    [allowCreate, mode],
   );
 
   useEffect(() => {
@@ -167,7 +204,8 @@ export function DirectoryBrowserDialog({
     if (!canSelect) return;
     setError(null);
     try {
-      await onSelect(currentPath);
+      if (!selectedPath) return;
+      await onSelect(selectedPath);
       onOpenChange(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -184,7 +222,7 @@ export function DirectoryBrowserDialog({
       setQuery(ensureTrailingPathSeparator(nextResult.path));
       setMissingPath(null);
       setHighlightedIndex(0);
-      await onCreatedDirectory?.(nextResult.path);
+      await onCreate?.(nextResult.path);
       await onSelect(nextResult.path);
       onOpenChange(false);
     } catch (err) {
@@ -252,7 +290,12 @@ export function DirectoryBrowserDialog({
 
     if (event.key === "Enter" && visibleEntries[highlightedIndex]) {
       event.preventDefault();
-      void loadDirectory(visibleEntries[highlightedIndex].path);
+      const entry = visibleEntries[highlightedIndex];
+      if (entry.type === "file") {
+        void onSelect(entry.path).then(() => onOpenChange(false));
+      } else {
+        void loadDirectory(entry.path);
+      }
       return;
     }
 
@@ -290,7 +333,11 @@ export function DirectoryBrowserDialog({
             onKeyDown={handleBrowserKeyDown}
             onSubmit={() => {
               const highlightedEntry = visibleEntries[highlightedIndex];
-              void loadDirectory(highlightedEntry?.path ?? query);
+              if (highlightedEntry?.type === "file") {
+                void onSelect(highlightedEntry.path).then(() => onOpenChange(false));
+              } else {
+                void loadDirectory(highlightedEntry?.path ?? query);
+              }
             }}
           />
 
@@ -300,6 +347,8 @@ export function DirectoryBrowserDialog({
             <CreateDirectoryConfirmation
               path={missingPath}
               canCreate={canCreate}
+              title={createTitle}
+              createLabel={createLabel}
               onCancel={handleCancelCreateDirectory}
               onCreate={handleCreateDirectory}
               onKeyDown={handleBrowserKeyDown}
@@ -312,10 +361,18 @@ export function DirectoryBrowserDialog({
               highlightedIndex={highlightedIndex}
               isLoading={isLoading}
               isFiltered={filter.trim().length > 0}
+              mode={mode}
+              openInFileManagerLabel={openInFileManagerLabel}
               onOpenInFileManager={handleOpenInFileManager}
               onParent={() => void loadDirectory(result?.parentPath ?? undefined)}
               onEntryHover={setHighlightedIndex}
-              onEntryOpen={(path) => void loadDirectory(path)}
+              onEntryOpen={(entry) => {
+                if (entry.type === "file") {
+                  void onSelect(entry.path).then(() => onOpenChange(false));
+                } else {
+                  void loadDirectory(entry.path);
+                }
+              }}
               onKeyDown={handleBrowserKeyDown}
             />
           )}
@@ -325,6 +382,7 @@ export function DirectoryBrowserDialog({
           confirmLabel={confirmLabel}
           canSelect={canSelect}
           showNativePicker={Boolean(onNativePick)}
+          nativePickerLabel={nativePickerLabel}
           onNativePick={handleNativePick}
           onSelect={handleSubmit}
         />
@@ -382,12 +440,16 @@ function DirectoryBrowserError({ message }: { message: string | null }) {
 function CreateDirectoryConfirmation({
   path,
   canCreate,
+  title,
+  createLabel,
   onCancel,
   onCreate,
   onKeyDown,
 }: {
   path: string;
   canCreate: boolean;
+  title: string;
+  createLabel: string;
   onCancel: () => void;
   onCreate: () => void;
   onKeyDown: (event: React.KeyboardEvent) => void;
@@ -399,7 +461,7 @@ function CreateDirectoryConfirmation({
       onKeyDown={onKeyDown}
     >
       <Folder className="h-12 w-12 text-muted-foreground" />
-      <h3 className="mt-4 text-lg font-semibold">Create a new directory?</h3>
+      <h3 className="mt-4 text-lg font-semibold">{title}</h3>
       <p className="mt-2 max-w-lg break-all text-sm text-muted-foreground">
         {path}
       </p>
@@ -412,7 +474,7 @@ function CreateDirectoryConfirmation({
         </div>
         <div className="flex flex-col items-center gap-2">
           <Button type="button" onClick={onCreate} disabled={!canCreate}>
-            Create Folder
+            {createLabel}
           </Button>
           <ShortcutKey>Enter</ShortcutKey>
         </div>
@@ -428,6 +490,8 @@ function DirectoryListPanel({
   highlightedIndex,
   isLoading,
   isFiltered,
+  mode,
+  openInFileManagerLabel,
   onOpenInFileManager,
   onParent,
   onEntryHover,
@@ -436,14 +500,16 @@ function DirectoryListPanel({
 }: {
   currentPath: string | null;
   parentPath: string | null;
-  entries: DirectoryEntry[];
+  entries: BrowserEntry[];
   highlightedIndex: number;
   isLoading: boolean;
   isFiltered: boolean;
+  mode: BrowseMode;
+  openInFileManagerLabel: string;
   onOpenInFileManager: () => void;
   onParent: () => void;
   onEntryHover: (index: number) => void;
-  onEntryOpen: (path: string) => void;
+  onEntryOpen: (entry: BrowserEntry) => void;
   onKeyDown: (event: React.KeyboardEvent) => void;
 }) {
   return (
@@ -452,6 +518,7 @@ function DirectoryListPanel({
         currentPath={currentPath}
         parentPath={parentPath}
         isLoading={isLoading}
+        openInFileManagerLabel={openInFileManagerLabel}
         onOpenInFileManager={onOpenInFileManager}
         onParent={onParent}
       />
@@ -459,11 +526,12 @@ function DirectoryListPanel({
         entries={entries}
         highlightedIndex={highlightedIndex}
         isLoading={isLoading}
+        mode={mode}
         onEntryHover={onEntryHover}
         onEntryOpen={onEntryOpen}
         onKeyDown={onKeyDown}
       />
-      <DirectoryListCount count={entries.length} isFiltered={isFiltered} />
+      <DirectoryListCount count={entries.length} isFiltered={isFiltered} mode={mode} />
     </div>
   );
 }
@@ -472,12 +540,14 @@ function DirectoryListHeader({
   currentPath,
   parentPath,
   isLoading,
+  openInFileManagerLabel,
   onOpenInFileManager,
   onParent,
 }: {
   currentPath: string | null;
   parentPath: string | null;
   isLoading: boolean;
+  openInFileManagerLabel: string;
   onOpenInFileManager: () => void;
   onParent: () => void;
 }) {
@@ -495,7 +565,7 @@ function DirectoryListHeader({
           onClick={onOpenInFileManager}
         >
           <ExternalLink className="mr-1 h-3 w-3" />
-          Open in Finder
+          {openInFileManagerLabel}
         </Button>
         <Button
           type="button"
@@ -516,31 +586,34 @@ function DirectoryListBody({
   entries,
   highlightedIndex,
   isLoading,
+  mode,
   onEntryHover,
   onEntryOpen,
   onKeyDown,
 }: {
-  entries: DirectoryEntry[];
+  entries: BrowserEntry[];
   highlightedIndex: number;
   isLoading: boolean;
+  mode: BrowseMode;
   onEntryHover: (index: number) => void;
-  onEntryOpen: (path: string) => void;
+  onEntryOpen: (entry: BrowserEntry) => void;
   onKeyDown: (event: React.KeyboardEvent) => void;
 }) {
   let content: React.ReactNode = null;
 
   if (entries.length > 0) {
     content = entries.map((entry, index) => (
-      <DirectoryListItem
+        <DirectoryListItem
         key={entry.path}
         entry={entry}
-        isHighlighted={index === highlightedIndex}
-        onHover={() => onEntryHover(index)}
-        onOpen={() => onEntryOpen(entry.path)}
-      />
+            isHighlighted={index === highlightedIndex}
+            mode={mode}
+            onHover={() => onEntryHover(index)}
+            onOpen={() => onEntryOpen(entry)}
+          />
     ));
   } else if (!isLoading) {
-    content = <DirectoryListEmpty />;
+    content = <DirectoryListEmpty mode={mode} />;
   }
 
   return (
@@ -554,11 +627,13 @@ function DirectoryListBody({
 function DirectoryListItem({
   entry,
   isHighlighted,
+  mode,
   onHover,
   onOpen,
 }: {
-  entry: DirectoryEntry;
+  entry: BrowserEntry;
   isHighlighted: boolean;
+  mode: BrowseMode;
   onHover: () => void;
   onOpen: () => void;
 }) {
@@ -572,16 +647,23 @@ function DirectoryListItem({
       onMouseEnter={onHover}
       onClick={onOpen}
     >
-      <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
+      {entry.type === "directory" ? (
+        <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
+      ) : (
+        <File className="h-4 w-4 shrink-0 text-muted-foreground" />
+      )}
       <span className="truncate">{entry.name}</span>
+      {mode === "file" && entry.type === "directory" ? (
+        <span className="ml-auto text-xs text-muted-foreground">Browse</span>
+      ) : null}
     </button>
   );
 }
 
-function DirectoryListEmpty() {
+function DirectoryListEmpty({ mode }: { mode: BrowseMode }) {
   return (
     <div className="px-3 py-8 text-center text-sm text-muted-foreground">
-      No subdirectories found.
+      {mode === "file" ? "No files or subdirectories found." : "No subdirectories found."}
     </div>
   );
 }
@@ -597,13 +679,23 @@ function DirectoryListLoading() {
 function DirectoryListCount({
   count,
   isFiltered,
+  mode,
 }: {
   count: number;
   isFiltered: boolean;
+  mode: BrowseMode;
 }) {
+  let suffix = "ies";
+  if (mode === "file") {
+    suffix = count === 1 ? "" : "s";
+  } else if (count === 1) {
+    suffix = "y";
+  }
+  const label = mode === "file" ? "item" : "director";
+
   return (
     <div className="border-t border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-      {count} director{count === 1 ? "y" : "ies"}
+      {count} {label}{plural}
       {isFiltered ? " match" : ""}
     </div>
   );
@@ -613,12 +705,14 @@ function DirectoryBrowserFooter({
   confirmLabel,
   canSelect,
   showNativePicker,
+  nativePickerLabel,
   onNativePick,
   onSelect,
 }: {
   confirmLabel: string;
   canSelect: boolean;
   showNativePicker: boolean;
+  nativePickerLabel: string;
   onNativePick: () => void;
   onSelect: () => void;
 }) {
@@ -636,7 +730,7 @@ function DirectoryBrowserFooter({
       {showNativePicker ? (
         <Button type="button" variant="outline" onClick={onNativePick}>
           <FolderOpen className="mr-1 h-3 w-3" />
-          Native Picker
+          {nativePickerLabel}
         </Button>
       ) : null}
       <Button type="button" onClick={onSelect} disabled={!canSelect}>
