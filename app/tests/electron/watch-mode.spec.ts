@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { _electron as electron } from "playwright";
-import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
+import { cp, mkdtemp, readFile, rm, unlink, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -76,8 +76,24 @@ test("shows selected network directory files in the left sidebar tree", async ()
     await expect(fileTree).toHaveAttribute("data-loaded-paths", /assets\//);
     await expect(fileTree).toHaveAttribute(
       "data-loaded-paths",
-      /assets\/sample-diagram\.svg/,
+      /assets\/spirit\/KP_Points_1m\.shp/,
     );
+
+    const transientFile = join(watchDirectory, "transient-sidebar-file.txt");
+    await writeFile(transientFile, "temporary");
+    await expect(fileTree).toHaveAttribute(
+      "data-loaded-paths",
+      /transient-sidebar-file\.txt/,
+    );
+
+    await unlink(transientFile);
+    await expect(fileTree).not.toHaveAttribute(
+      "data-loaded-paths",
+      /transient-sidebar-file\.txt/,
+    );
+
+    await writeFile(join(watchDirectory, ".DS_Store"), "ignored");
+    await expect(fileTree).not.toHaveAttribute("data-loaded-paths", /\.DS_Store/);
   } finally {
     await electronApp.close();
     await rm(watchDirectory, { recursive: true, force: true });
