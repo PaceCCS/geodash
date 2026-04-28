@@ -24,7 +24,10 @@ type DesktopApi = {
   stopLocalServer: () => Promise<void>;
   pickNetworkDirectory: () => Promise<string | null>;
   pickShapefileDirectory: () => Promise<string | null>;
-  pickFileSystemPath: (mode?: BrowseMode) => Promise<string | null>;
+  pickFileSystemPath: (
+    mode?: BrowseMode,
+    defaultPath?: string,
+  ) => Promise<string | null>;
   browseDirectory: (path?: string, mode?: BrowseMode) => Promise<FileSystemBrowseResult>;
   createDirectory: (path: string) => Promise<DirectoryBrowseResult>;
   openDirectory: (path: string) => Promise<void>;
@@ -74,8 +77,9 @@ export async function pickShapefileDirectory(): Promise<string | null> {
 
 export async function pickFileSystemPath(
   mode: BrowseMode = "directory",
+  defaultPath?: string,
 ): Promise<string | null> {
-  return getDesktopApi().pickFileSystemPath(mode);
+  return getDesktopApi().pickFileSystemPath(mode, defaultPath);
 }
 
 export async function browseDirectory(

@@ -493,16 +493,23 @@ function registerIpcHandlers(): void {
     return result.filePaths[0] ?? null;
   });
 
-  ipcMain.handle("desktop:pick-file-system-path", async (_event, mode?: BrowseMode) => {
+  ipcMain.handle("desktop:pick-file-system-path", async (_event, mode?: BrowseMode, defaultPath?: string) => {
+    const testDirectory = process.env.GEODASH_TEST_PICK_DIRECTORY;
+    if (testDirectory) {
+      return testDirectory;
+    }
+
     const browseMode = mode ?? "directory";
     const result = mainWindow
       ? await dialog.showOpenDialog(mainWindow, {
           properties: [browseMode === "file" ? "openFile" : "openDirectory"],
           title: browseMode === "file" ? "Select File" : "Select Directory",
+          defaultPath: defaultPath || undefined,
         })
       : await dialog.showOpenDialog({
           properties: [browseMode === "file" ? "openFile" : "openDirectory"],
           title: browseMode === "file" ? "Select File" : "Select Directory",
+          defaultPath: defaultPath || undefined,
         });
 
     if (result.canceled) {

@@ -9,10 +9,16 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ShapefilesWatchRouteImport } from './routes/shapefiles/watch'
 import { Route as NetworkWatchRouteImport } from './routes/network/watch'
 
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -31,36 +37,47 @@ const NetworkWatchRoute = NetworkWatchRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/settings': typeof SettingsRoute
   '/network/watch': typeof NetworkWatchRoute
   '/shapefiles/watch': typeof ShapefilesWatchRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/settings': typeof SettingsRoute
   '/network/watch': typeof NetworkWatchRoute
   '/shapefiles/watch': typeof ShapefilesWatchRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/settings': typeof SettingsRoute
   '/network/watch': typeof NetworkWatchRoute
   '/shapefiles/watch': typeof ShapefilesWatchRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/network/watch' | '/shapefiles/watch'
+  fullPaths: '/' | '/settings' | '/network/watch' | '/shapefiles/watch'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/network/watch' | '/shapefiles/watch'
-  id: '__root__' | '/' | '/network/watch' | '/shapefiles/watch'
+  to: '/' | '/settings' | '/network/watch' | '/shapefiles/watch'
+  id: '__root__' | '/' | '/settings' | '/network/watch' | '/shapefiles/watch'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  SettingsRoute: typeof SettingsRoute
   NetworkWatchRoute: typeof NetworkWatchRoute
   ShapefilesWatchRoute: typeof ShapefilesWatchRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -87,6 +104,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  SettingsRoute: SettingsRoute,
   NetworkWatchRoute: NetworkWatchRoute,
   ShapefilesWatchRoute: ShapefilesWatchRoute,
 }

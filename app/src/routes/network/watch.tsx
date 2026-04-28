@@ -15,7 +15,7 @@ import {
 } from "@/lib/collections/flow";
 import { refreshGeoCollection } from "@/lib/collections/geo";
 import { useFileWatcher } from "@/lib/hooks/use-file-watcher";
-import { pickNetworkDirectory, writeNetworkFile } from "@/lib/desktop";
+import { writeNetworkFile } from "@/lib/desktop";
 import { NetworkProvider } from "@/contexts/network-context";
 import { Button } from "@/components/ui/button";
 import { appendActivityLogEntries } from "@/contexts/activity-log-context";
@@ -93,7 +93,6 @@ function WatchPage() {
   const navigate = Route.useNavigate();
   const selectedQuery = search.selected;
   const isEditorOpen = search.edit === "1";
-  const displayDirectoryPath = watchMode.directoryPath?.replace(/^\/+/, "") ?? null;
   const directoryQuery = search.directory;
 
   const handleSelectedQueryChange = useCallback(
@@ -145,11 +144,6 @@ function WatchPage() {
   const handleSelectDirectory = useCallback(() => {
     setIsDirectoryBrowserOpen(true);
   }, []);
-
-  const handleNativeSelectDirectory = async () => {
-    const path = await pickNetworkDirectory();
-    if (path) await openDirectory(path);
-  };
 
   const initializeCreatedNetworkDirectory = async (path: string) => {
     await writeNetworkFile(`${path}/config.toml`, DEFAULT_NETWORK_CONFIG);
@@ -245,22 +239,17 @@ function WatchPage() {
     <div className="flex flex-col h-full w-full min-h-0">
       <HeaderSlot>
         {watchMode.enabled ? (
-          <div className="flex items-center justify-between w-full px-2 gap-3">
+          <div className="flex w-full items-center justify-end px-2">
             <div className="flex min-w-0 items-center gap-2">
               {networkLabel ? (
                 <>
-                  <span className="max-w-64 shrink-0 truncate text-sm font-medium">
+                  <span className="max-w-64 truncate text-sm font-medium">
                     {networkLabel}
                   </span>
-                  <span className="text-xs text-muted-foreground">/</span>
+                  <span className="text-xs text-muted-foreground">•</span>
                 </>
               ) : null}
-              <span className="text-sm truncate text-muted-foreground">
-                {displayDirectoryPath}
-              </span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="text-xs text-muted-foreground mr-2">
+              <span className="shrink-0 text-xs text-muted-foreground">
                 <Save className="inline w-3 h-3 mr-1" />
                 Auto-saving
               </span>
@@ -283,7 +272,6 @@ function WatchPage() {
         onOpenChange={setIsDirectoryBrowserOpen}
         onSelect={openDirectory}
         onCreate={initializeCreatedNetworkDirectory}
-        onNativePick={handleNativeSelectDirectory}
       />
 
       {watchMode.enabled && watchMode.directoryPath ? (

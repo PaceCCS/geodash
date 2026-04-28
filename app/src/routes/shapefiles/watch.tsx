@@ -54,8 +54,6 @@ function ShapefileWatchPage() {
     });
   }, [actions.stopWatching, navigate]);
 
-  const displayDirectoryPath =
-    watch.phase === "active" ? watch.directoryPath.replace(/^\/+/, "") : null;
   let mainContent = (
     <div className="flex flex-1 items-center justify-center px-6">
       <div className="max-w-md text-center">
@@ -180,21 +178,14 @@ function ShapefileWatchPage() {
     <div className="flex h-full min-h-0 w-full flex-col bg-background">
       <HeaderSlot>
         {watch.phase === "active" ? (
-          <div className="flex w-full items-center justify-between gap-3 px-2">
+          <div className="flex w-full items-center justify-end px-2">
             <div className="flex min-w-0 items-center gap-2">
-              {editor.draft ? (
-                <>
-                  <span className="max-w-64 shrink-0 truncate text-sm font-medium">
-                    {editor.draft.name}
-                  </span>
-                  <span className="text-xs text-muted-foreground">/</span>
-                </>
-              ) : null}
-              <span className="truncate text-sm text-muted-foreground">
-                {displayDirectoryPath}
+              <span className="max-w-64 truncate text-sm font-medium">
+                {editor.draft?.name ?? "Shapefile"}
               </span>
-            </div>
-            <div className="flex items-center gap-2">
+              {status.isDirty || status.hasExternalChanges ? (
+                <span className="text-xs text-muted-foreground">•</span>
+              ) : null}
               {status.isDirty ? <Badge variant="secondary">Unsaved</Badge> : null}
               {status.hasExternalChanges ? (
                 <Badge variant="destructive">Changed on disk</Badge>
@@ -217,7 +208,6 @@ function ShapefileWatchPage() {
         allowCreate
         onOpenChange={setIsDirectoryBrowserOpen}
         onSelect={actions.openDirectory}
-        onNativePick={actions.pickAndOpen}
       />
 
       {watch.phase === "active" ? (

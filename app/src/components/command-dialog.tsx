@@ -1,6 +1,10 @@
 "use client";
 
 import {
+  useNavigate,
+  useRouterState,
+} from "@tanstack/react-router";
+import {
   FilePlus,
   Search,
   Settings,
@@ -29,6 +33,8 @@ import { useSidebar } from "@/components/ui/sidebar";
 import { useRightSidebar } from "@/contexts/right-sidebar-context";
 
 export function GlobalCommandDialog() {
+  const navigate = useNavigate();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { open: leftOpen, toggleSidebar: toggleLeft } = useSidebar();
   const { open: rightOpen, toggle: toggleRight } = useRightSidebar();
 
@@ -63,11 +69,11 @@ export function GlobalCommandDialog() {
       id: "settings",
       label: "Settings",
       run: (dialog: DialogAPI) => {
-        console.log("Settings");
+        void navigate({ to: "/settings" });
         dialog.close();
       },
       shortcut: "Mod+S",
-      group: "Settings",
+      group: "Edit",
       icon: <Settings />,
     },
     {
@@ -92,7 +98,7 @@ export function GlobalCommandDialog() {
       group: "View",
       icon: rightOpen ? <PanelRightClose /> : <PanelRightOpen />,
     },
-  ]);
+  ].filter((command) => command.id !== "settings" || pathname !== "/settings"));
 
   const groups = Array.from(
     commands.reduce<Map<string | undefined, typeof commands>>((map, cmd) => {

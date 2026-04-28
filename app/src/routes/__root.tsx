@@ -185,7 +185,7 @@ function AppMenubar() {
   const { commands, runCommand } = useCommands(fileCommands);
   const menuGroups = useMemo(
     () =>
-      ["File", "View", "Run"]
+      ["File", "Edit", "View", "Run"]
         .map((group) => ({
           group,
           commands: commands.filter((command) => command.group === group),

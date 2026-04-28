@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useAppSettings } from "@/hooks/use-app-settings";
 import {
   browseDirectory,
   createDirectory,
@@ -116,8 +117,13 @@ function FileSystemBrowserDialog({
   onCreate,
   onNativePick,
 }: FileSystemBrowserDialogProps) {
+  const preferredDirectory = useAppSettings((state) => state.preferredDirectory);
+  const recordDirectorySelection = useAppSettings(
+    (state) => state.recordDirectorySelection,
+  );
+  const initialBrowserPath = initialPath || preferredDirectory || null;
   const [query, setQuery] = useState(
-    initialPath ? ensureTrailingPathSeparator(initialPath) : "",
+    initialBrowserPath ? ensureTrailingPathSeparator(initialBrowserPath) : "",
   );
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [result, setResult] = useState<FileSystemBrowseResult | null>(null);
@@ -173,13 +179,14 @@ function FileSystemBrowserDialog({
 
   useEffect(() => {
     if (!open) return;
-    const nextQuery = initialPath
-      ? ensureTrailingPathSeparator(initialPath)
+    const nextInitialPath = initialPath || preferredDirectory;
+    const nextQuery = nextInitialPath
+      ? ensureTrailingPathSeparator(nextInitialPath)
       : "";
     setQuery(nextQuery);
     const nextDirectoryQuery = splitBrowseQuery(nextQuery).directoryQuery;
     void loadDirectory(nextDirectoryQuery, false);
-  }, [initialPath, loadDirectory, open]);
+  }, [initialPath, loadDirectory, open, preferredDirectory]);
 
   useEffect(() => {
     if (!open || directoryQuery === requestedDirectoryRef.current) return;
@@ -193,6 +200,9 @@ function FileSystemBrowserDialog({
   }, [visibleEntries.length]);
 
   const handleSelectPath = async (path: string) => {
+    if (mode === "directory") {
+      recordDirectorySelection(path);
+    }
     await onSelect(path);
     onOpenChange(false);
   };
@@ -219,6 +229,7 @@ function FileSystemBrowserDialog({
       setMissingPath(null);
       setHighlightedIndex(0);
       await onCreate?.(nextResult.path);
+      recordDirectorySelection(nextResult.path);
       await onSelect(nextResult.path);
       onOpenChange(false);
     } catch (err) {
@@ -238,7 +249,7 @@ function FileSystemBrowserDialog({
     try {
       const pickedPath = onNativePick
         ? await onNativePick()
-        : await pickFileSystemPath(mode);
+        : await pickFileSystemPath(mode, preferredDirectory || undefined);
       if (typeof pickedPath === "string") {
         await handleSelectPath(pickedPath);
         return;

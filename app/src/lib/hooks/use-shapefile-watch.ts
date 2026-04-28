@@ -130,7 +130,10 @@ export function useShapefileWatch(autoOpenDirectory?: string | null) {
 
   const pickAndOpen = useCallback(async () => {
     const path = await pickShapefileDirectory();
-    if (path) await openDirectory(path);
+    if (path) {
+      await openDirectory(path);
+    }
+    return path;
   }, [openDirectory]);
 
   const stopWatching = useCallback(async () => {
