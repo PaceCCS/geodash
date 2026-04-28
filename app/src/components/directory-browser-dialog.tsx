@@ -337,7 +337,6 @@ function FileSystemBrowserDialog({
         <div className="space-y-4 px-5 py-4">
           <DirectoryPathForm
             query={query}
-            isLoading={isLoading}
             onQueryChange={setQuery}
             onKeyDown={handleBrowserKeyDown}
             onSubmit={() => {
@@ -404,13 +403,11 @@ function FileSystemBrowserDialog({
 
 function DirectoryPathForm({
   query,
-  isLoading,
   onQueryChange,
   onKeyDown,
   onSubmit,
 }: {
   query: string;
-  isLoading: boolean;
   onQueryChange: (query: string) => void;
   onKeyDown: (event: React.KeyboardEvent) => void;
   onSubmit: () => void;

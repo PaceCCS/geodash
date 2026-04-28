@@ -1,12 +1,13 @@
 "use client";
 
 import { useDim } from "@/lib/dim/use-dim";
+import { formatEvalResult } from "@/lib/dim/dim";
 import { usePreferredUnit } from "@/hooks/use-property-display";
 import { DimensionKey } from "@/lib/stores/unitPreferencesSlice";
 
 /** Common props shared by both variants */
 interface BaseProps {
-  /** The expression to display (e.g., "100 bar", "25 °C") */
+  /** The expression to display (e.g., "100 bar", "25 degC") */
   children: string;
   /** Number of decimal places for display (default: 3) */
   precision?: number;
@@ -14,7 +15,7 @@ interface BaseProps {
 
 /** Props when using an explicit unit */
 interface WithExplicitUnit extends BaseProps {
-  /** Explicit unit to convert to (e.g., "bar", "°C") */
+  /** Explicit unit to convert to (e.g., "bar", "degC") */
   unit: string;
   dimension?: never;
 }
@@ -60,16 +61,23 @@ export default function QuantityDisplay({
   }
 
   if (status === "success") {
+    const result = results[0];
+    if (!result) {
+      return null;
+    }
+
+    if (result.kind !== "quantity") {
+      return <span>{formatEvalResult(result)}</span>;
+    }
+
     if (precision !== undefined) {
-      const [value, resultUnit] = results[0].split(" ");
-      const roundedValue = Number(value).toFixed(precision);
       return (
         <span>
-          {roundedValue} {resultUnit}
+          {result.value.toFixed(precision)} {result.unit}
         </span>
       );
     }
-    return <span>{results[0]}</span>;
+    return <span>{formatEvalResult(result)}</span>;
   }
 
   // Loading state - show nothing or the expression

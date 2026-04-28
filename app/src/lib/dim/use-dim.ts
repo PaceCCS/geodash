@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { evalDim } from "./dim";
+import { evalStructured, type DimEvalResult } from "./dim";
 import { useDimReady } from "./use-dim-ready";
 
 type SuccessResponse = {
   status: "success";
-  results: string[];
+  results: DimEvalResult[];
   error: undefined;
 };
 
@@ -42,7 +42,7 @@ export function useDim(expressions: string[], options?: Options): DimResponse {
   const [status, setStatus] = useState<DimResponse["status"]>(
     ready ? "idle" : "loading"
   );
-  const [results, setResults] = useState<string[]>([]);
+  const [results, setResults] = useState<DimEvalResult[]>([]);
   const [error, setError] = useState<Error | undefined>(undefined);
   const expressionsKey = JSON.stringify(expressions);
 
@@ -52,10 +52,10 @@ export function useDim(expressions: string[], options?: Options): DimResponse {
       setStatus("loading");
       setResults([]);
       try {
-        const newResults: string[] = [];
+        const newResults: DimEvalResult[] = [];
         const exprs: string[] = JSON.parse(expressionsKey);
         for (const expression of exprs) {
-          const out = evalDim(expression);
+          const out = evalStructured(expression);
           newResults.push(out);
         }
         setResults(newResults);

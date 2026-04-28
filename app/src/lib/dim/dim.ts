@@ -72,12 +72,14 @@ type DimExports = {
   ) => number;
 };
 
-type DimRational = {
+// Source-of-truth TypeScript wrapper shipped alongside the release WASM bundle.
+
+export type DimRational = {
   num: number;
   den: number;
 };
 
-type DimDimension = {
+export type DimDimension = {
   L: DimRational;
   M: DimRational;
   T: DimRational;
@@ -104,6 +106,12 @@ export type DimEvalResult =
   | { kind: "string"; value: string }
   | DimQuantityResult
   | { kind: "nil" };
+
+export type DimInitOptions = {
+  wasmBytes?: ArrayBuffer | ArrayBufferView;
+  wasmUrl?: string | URL;
+  fetchOptions?: RequestInit;
+};
 
 type DimRuntime = DimExports & {
   ctx: number;
@@ -222,11 +230,58 @@ export function subscribeDimReady(
   };
 }
 
-async function findWasmBytes(): Promise<ArrayBuffer> {
+function toArrayBuffer(value: ArrayBuffer | ArrayBufferView): ArrayBuffer {
+  if (value instanceof ArrayBuffer) {
+    return value;
+  }
+
+  return value.buffer.slice(
+    value.byteOffset,
+    value.byteOffset + value.byteLength,
+  ) as ArrayBuffer;
+}
+
+async function responseToArrayBuffer(
+  response: Response,
+  source: string,
+): Promise<ArrayBuffer> {
+  if (!response.ok) {
+    throw new Error(
+      `Failed to load dim_wasm.wasm from ${source}: ${response.status} ${response.statusText}`,
+    );
+  }
+
+  return response.arrayBuffer();
+}
+
+async function fetchWasmUrl(
+  url: string | URL,
+  fetchOptions: RequestInit | undefined,
+): Promise<ArrayBuffer> {
+  const response = await fetch(url, {
+    cache: "no-cache",
+    ...fetchOptions,
+  });
+  return responseToArrayBuffer(response, String(url));
+}
+
+async function findWasmBytes(
+  options: DimInitOptions = {},
+): Promise<ArrayBuffer> {
+  if (options.wasmBytes) {
+    return toArrayBuffer(options.wasmBytes);
+  }
+
+  if (options.wasmUrl) {
+    return fetchWasmUrl(options.wasmUrl, options.fetchOptions);
+  }
+
   const isNode =
     typeof process !== "undefined" &&
     process.versions != null &&
     process.versions.node != null;
+
+  const moduleUrl = new URL("./dim_wasm.wasm", import.meta.url);
 
   if (isNode) {
     const { readFile } = await import("node:fs/promises");
@@ -235,17 +290,14 @@ async function findWasmBytes(): Promise<ArrayBuffer> {
     const { fileURLToPath } = await import("node:url");
     const __filename = fileURLToPath(import.meta.url);
     const thisDir = dirname(__filename);
-    const envWasmPath = process.env.DIM_WASM_PATH;
-    const envWasmDir = process.env.DIM_WASM_DIR;
 
     const candidates = [
-      envWasmPath,
-      envWasmDir ? join(envWasmDir, "dim_wasm.wasm") : null,
+      fileURLToPath(moduleUrl),
       join(thisDir, "dim_wasm.wasm"),
       join(thisDir, "..", "..", "..", "public", "dim", "dim_wasm.wasm"),
       join(process.cwd(), "dim", "wasm", "dim_wasm.wasm"),
       join(process.cwd(), "public", "dim", "dim_wasm.wasm"),
-    ].filter((candidate): candidate is string => !!candidate);
+    ].filter((candidate, index, list) => list.indexOf(candidate) === index);
 
     const wasmPath = candidates.find((p) => existsSync(p));
     if (!wasmPath) {
@@ -257,15 +309,74 @@ async function findWasmBytes(): Promise<ArrayBuffer> {
     const buf = await readFile(wasmPath);
     return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
   } else {
-    const res = await fetch("/dim/dim_wasm.wasm", { cache: "no-cache" });
-    return res.arrayBuffer();
+    const sources: Array<string | URL> = [moduleUrl, "/dim/dim_wasm.wasm"];
+    const failures: string[] = [];
+
+    for (const source of sources) {
+      try {
+        return await fetchWasmUrl(source, options.fetchOptions);
+      } catch (error) {
+        failures.push(
+          error instanceof Error ? error.message : `Failed to load ${source}`,
+        );
+      }
+    }
+
+    throw new Error(failures.join("\n"));
   }
 }
 
-export async function initDim(): Promise<void> {
+export async function initDim(options: DimInitOptions = {}): Promise<void> {
   if (!initPromise) {
     emitReady(false);
-    initPromise = initializeDimRuntime().catch((error) => {
+    initPromise = (async () => {
+      const bytes = await findWasmBytes(options);
+
+      let currentMemory: WebAssembly.Memory | null = null;
+      const { instance } = await WebAssembly.instantiate(
+        bytes,
+        createWasiImports(() => currentMemory),
+      );
+      const exports = instance.exports as unknown as DimExports;
+      currentMemory = exports.memory;
+      const required: Array<keyof DimExports> = [
+        "memory",
+        "dim_alloc",
+        "dim_free",
+        "dim_ffi_reset",
+        "dim_ctx_new",
+        "dim_ctx_free",
+        "dim_ctx_define",
+        "dim_ctx_clear",
+        "dim_ctx_clear_all",
+        "dim_ctx_eval",
+        "dim_ctx_convert_expr",
+        "dim_ctx_convert_value",
+        "dim_ctx_is_compatible",
+        "dim_ctx_same_dimension",
+        "dim_ctx_batch_convert_exprs",
+        "dim_ctx_batch_convert_values",
+      ];
+
+      for (const name of required) {
+        if (!(name in exports)) {
+          throw new Error(`dim wasm exports mismatch: missing ${String(name)}`);
+        }
+      }
+
+      const ctx = toPtr(exports.dim_ctx_new());
+      if (!ctx) {
+        throw new Error("dim_ctx_new failed");
+      }
+
+      runtime = {
+        ...exports,
+        ctx,
+        enc: new TextEncoder(),
+        dec: new TextDecoder(),
+      };
+      emitReady(true);
+    })().catch((error) => {
       if (runtime) {
         runtime.dim_ctx_free(runtime.ctx);
       }
@@ -278,63 +389,14 @@ export async function initDim(): Promise<void> {
   return initPromise;
 }
 
-async function initializeDimRuntime(): Promise<void> {
-  const bytes = await findWasmBytes();
-
-  let currentMemory: WebAssembly.Memory | null = null;
-  const { instance } = await WebAssembly.instantiate(
-    bytes,
-    createWasiImports(() => currentMemory),
-  );
-  const exports = instance.exports as unknown as DimExports;
-  currentMemory = exports.memory;
-  const required: Array<keyof DimExports> = [
-    "memory",
-    "dim_alloc",
-    "dim_free",
-    "dim_ffi_reset",
-    "dim_ctx_new",
-    "dim_ctx_free",
-    "dim_ctx_define",
-    "dim_ctx_clear",
-    "dim_ctx_clear_all",
-    "dim_ctx_eval",
-    "dim_ctx_convert_expr",
-    "dim_ctx_convert_value",
-    "dim_ctx_is_compatible",
-    "dim_ctx_same_dimension",
-    "dim_ctx_batch_convert_exprs",
-    "dim_ctx_batch_convert_values",
-  ];
-
-  for (const name of required) {
-    if (!(name in exports)) {
-      throw new Error(`dim wasm exports mismatch: missing ${String(name)}`);
-    }
-  }
-
-  const ctx = toPtr(exports.dim_ctx_new());
-  if (!ctx) {
-    throw new Error("dim_ctx_new failed");
-  }
-
-  runtime = {
-    ...exports,
-    ctx,
-    enc: new TextEncoder(),
-    dec: new TextDecoder(),
-  };
-  emitReady(true);
-}
-
-export async function recoverDim(): Promise<void> {
+export async function recoverDim(options: DimInitOptions = {}): Promise<void> {
   if (runtime) {
     runtime.dim_ctx_free(runtime.ctx);
   }
   runtime = null;
   initPromise = null;
   emitReady(false);
-  await initDim();
+  await initDim(options);
 }
 
 function requireRuntime(): DimRuntime {
@@ -910,6 +972,7 @@ export function getBaseUnit(expr: string): string {
 
 const dim = {
   init: initDim,
+  recover: recoverDim,
   eval: evalDim,
   evalStructured,
   formatEvalResult,

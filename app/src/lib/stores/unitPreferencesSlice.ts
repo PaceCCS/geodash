@@ -55,9 +55,9 @@ const DIMENSION_CONFIGS: Record<DimensionKey, DimensionConfig> = {
     options: ["Pa", "kPa", "MPa", "bar", "psi"],
     defaultUnit: "bar",
     tooltipOptions: [
-      { unit: "bara", decimalPlaces: 2 },
+      { unit: "bar", label: "bara", decimalPlaces: 2 },
       { unit: "kPa", decimalPlaces: 0 },
-      { unit: "barg", decimalPlaces: 2 },
+      { unit: "bar", label: "barg", decimalPlaces: 2 },
     ],
   },
   pressureDelta: {

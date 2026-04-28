@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Input } from "../ui/input";
-import { checkUnitCompatibility } from "@/lib/dim/dim";
+import { checkUnitCompatibility, type DimEvalResult } from "@/lib/dim/dim";
 import { Badge } from "../ui/badge";
 import { CheckIcon, XIcon } from "lucide-react";
 import { useDim } from "@/lib/dim/use-dim";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
+import { getCompatibilityTooltipLines } from "@/lib/quantity-tooltip";
 
 export default function QuantityInput({
   unit,
@@ -37,26 +39,35 @@ export default function QuantityInput({
     [inputValue, getExpression]
   );
 
-  // Keep the ref in sync via an effect so we never write to it during render.
-  // The expression effect below only depends on expression/inputValue, not
-  // on the callback identity — preventing stale input values from being
-  // written back to the store when external updates change the callback.
-  const handleExpressionRef = useRef(handleExpression);
-  useEffect(() => {
-    handleExpressionRef.current = handleExpression;
-  }, [handleExpression]);
-
-  useEffect(() => {
-    if (inputValue === undefined || inputValue === "") {
-      return handleExpressionRef.current(undefined);
-    }
-
-    handleExpressionRef.current(expression);
-  }, [expression, inputValue]);
-
   const { status, results } = useDim(expression ? [expression] : [], {
     silenceErrors: true,
   });
+  const lastEmittedValueRef = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    let nextValue: string | undefined;
+
+    if (inputValue === undefined || inputValue === "") {
+      nextValue = undefined;
+    } else if (status === "idle" || status === "loading") {
+      return;
+    } else if (status === "error") {
+      nextValue = undefined;
+    } else {
+      const compatible =
+        results.length === 1 &&
+        !!expression &&
+        checkUnitCompatibility(expression, unit);
+      nextValue = compatible ? expression : undefined;
+    }
+
+    if (lastEmittedValueRef.current === nextValue) {
+      return;
+    }
+
+    lastEmittedValueRef.current = nextValue;
+    handleExpression(nextValue);
+  }, [status, results, expression, handleExpression, inputValue, unit]);
 
   return (
     <div className="flex flex-row gap-1 items-center flex-1">
@@ -67,14 +78,19 @@ export default function QuantityInput({
         autoComplete="off"
       />
       {status === "success" && (
-        <Badge variant="default" className="size-6 px-0.5">
-          <ResultCheck results={results} unit={unit} />
-        </Badge>
+        <ResultCheck results={results} unit={unit} expression={expression} />
       )}
       {status === "error" && (
-        <Badge variant="destructive" className="size-6 px-0.5">
-          <XIcon />
-        </Badge>
+        <Tooltip>
+          <TooltipTrigger>
+            <Badge variant="destructive" className="size-6 px-0.5">
+              <XIcon className="size-4" />
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Not compatible with {unit}</p>
+          </TooltipContent>
+        </Tooltip>
       )}
     </div>
   );
@@ -83,29 +99,58 @@ export default function QuantityInput({
 export function ResultCheck({
   results,
   unit,
+  expression,
+  dimension,
+  property,
 }: {
-  results: string[];
+  results: DimEvalResult[];
   unit: string;
-  expression?: string | undefined;
-  dimension?: string | undefined;
-  property?: string | undefined;
+  expression?: string;
+  dimension?: string;
+  property?: string;
 }) {
   if (results.length !== 1) {
-    return <XIcon />;
+    return <XIcon className="size-4" />;
   }
-  const result = results[0];
-  const compatible = checkUnitCompatibility(result, unit);
+  // Use the original expression for compatibility checking rather than the
+  // dim-normalized result, because normalized unit strings do not always parse.
+  const compatible = !!expression && checkUnitCompatibility(expression, unit);
   if (!compatible) {
-    console.log(
-      "[QuantityInput] result",
-      result,
-      "not compatible with unit",
-      unit
+    return (
+      <Tooltip>
+        <TooltipTrigger>
+          <Badge variant="destructive" className="size-6 px-0.5">
+            <XIcon className="size-4" />
+          </Badge>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Not compatible with {unit}</p>
+        </TooltipContent>
+      </Tooltip>
     );
-    return <XIcon />;
   }
 
-  console.log("[QuantityInput] result", result, "compatible", compatible);
+  const tooltipLines = getCompatibilityTooltipLines({
+    expression,
+    unit,
+    dimension,
+    property,
+  });
 
-  return <CheckIcon />;
+  return (
+    <Tooltip>
+      <TooltipTrigger>
+        <Badge variant="default" className="size-6 px-0.5">
+          <CheckIcon className="size-4" />
+        </Badge>
+      </TooltipTrigger>
+      <TooltipContent>
+        <div className="space-y-1">
+          {tooltipLines.map((line) => (
+            <p key={line}>{line}</p>
+          ))}
+        </div>
+      </TooltipContent>
+    </Tooltip>
+  );
 }
