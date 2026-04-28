@@ -15,9 +15,10 @@ import {
 } from "@/lib/collections/flow";
 import { refreshGeoCollection } from "@/lib/collections/geo";
 import { useFileWatcher } from "@/lib/hooks/use-file-watcher";
-import { writeNetworkFile } from "@/lib/desktop";
+import { revealPath, writeNetworkFile } from "@/lib/desktop";
 import { NetworkProvider } from "@/contexts/network-context";
 import { Button } from "@/components/ui/button";
+import { ShapefileEditorDialog } from "@/components/shapefile/shapefile-editor-dialog";
 import { appendActivityLogEntries } from "@/contexts/activity-log-context";
 import { HeaderSlot, useHeaderFileActions } from "@/components/header-slot";
 import { useCommands } from "@/contexts/keybind-provider";
@@ -89,8 +90,10 @@ function WatchPage() {
   const hydrated = useHydrated();
   const [isBusy, setIsBusy] = useState(false);
   const [isDirectoryBrowserOpen, setIsDirectoryBrowserOpen] = useState(false);
+  const [shapefileDialogPath, setShapefileDialogPath] = useState<string | null>(null);
   const { setActions: setHeaderFileActions } = useHeaderFileActions();
   const setSidebarDirectory = useWorkspaceSidebar((state) => state.setDirectory);
+  const setSidebarItemActions = useWorkspaceSidebar((state) => state.setItemActions);
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
   const selectedQuery = search.selected;
@@ -206,6 +209,56 @@ function WatchPage() {
     setSidebarDirectory(null);
   }, [setSidebarDirectory, watchMode.directoryPath, watchMode.enabled]);
 
+  useEffect(() => {
+    if (!watchMode.enabled || !watchMode.directoryPath) {
+      setSidebarItemActions({});
+      return;
+    }
+
+    const getNodeIdFromTreePath = (path: string) =>
+      path.replace(/\.toml$/i, "").split("/").at(-1) ?? path;
+    const getAbsoluteTreePath = (path: string) => {
+      const normalizedDirectory = watchMode.directoryPath!.replace(/[\\/]+$/, "");
+      const normalizedPath = path.replace(/[\\/]+$/, "");
+      return normalizedPath ? `${normalizedDirectory}/${normalizedPath}` : normalizedDirectory;
+    };
+
+    setSidebarItemActions({
+      viewPath: (path) => {
+        navigate({
+          replace: true,
+          search: (prev) => ({
+            ...prev,
+            selected: getNodeIdFromTreePath(path),
+            [FLOW_EDITOR_QUERY_PARAM]: undefined,
+          }),
+        });
+      },
+      editPath: (path) => {
+        if (path.endsWith("/")) {
+          setShapefileDialogPath(getAbsoluteTreePath(path));
+          return;
+        }
+
+        navigate({
+          replace: true,
+          search: (prev) => ({
+            ...prev,
+            selected: getNodeIdFromTreePath(path),
+            [FLOW_EDITOR_QUERY_PARAM]: "1",
+          }),
+        });
+      },
+      openInFinder: (path) => {
+        void revealPath(path).catch((err) =>
+          console.error("[sidebar] Failed to reveal path:", err),
+        );
+      },
+    });
+
+    return () => setSidebarItemActions({});
+  }, [navigate, setSidebarItemActions, watchMode.directoryPath, watchMode.enabled]);
+
   useCommands(
     watchMode.enabled
       ? [
@@ -285,6 +338,18 @@ function WatchPage() {
         onCreate={initializeCreatedNetworkDirectory}
       />
 
+      {shapefileDialogPath ? (
+        <ShapefileEditorDialog
+          open
+          directoryPath={shapefileDialogPath}
+          onOpenChange={(open) => {
+            if (!open) {
+              setShapefileDialogPath(null);
+            }
+          }}
+        />
+      ) : null}
+
       {watchMode.enabled && watchMode.directoryPath ? (
         <div className="flex-1 min-h-0">
           <NetworkProvider networkId={watchMode.directoryPath}>
@@ -296,6 +361,22 @@ function WatchPage() {
                 syncDirectory={watchMode.directoryPath}
                 suspendPersistence={isApplyingExternalChange}
                 onEditorOpenChange={handleEditorOpenChange}
+                onEditNode={(nodeId) => {
+                  navigate({
+                    replace: true,
+                    search: (prev) => ({
+                      ...prev,
+                      selected: nodeId,
+                      [FLOW_EDITOR_QUERY_PARAM]: "1",
+                    }),
+                  });
+                }}
+                onOpenNodeInFinder={(nodeId) => {
+                  if (!watchMode.directoryPath) return;
+                  void revealPath(`${watchMode.directoryPath}/${nodeId}.toml`).catch((err) =>
+                    console.error("[flow] Failed to reveal node file:", err),
+                  );
+                }}
                 onSelectedQueryChange={handleSelectedQueryChange}
               />
             ) : (
@@ -335,6 +416,8 @@ function HydratedWatchNetwork({
   syncDirectory,
   suspendPersistence,
   onEditorOpenChange,
+  onEditNode,
+  onOpenNodeInFinder,
   onSelectedQueryChange,
 }: {
   configMetadata: NetworkConfigMetadata | null;
@@ -343,6 +426,8 @@ function HydratedWatchNetwork({
   syncDirectory: string;
   suspendPersistence: boolean;
   onEditorOpenChange: (open: boolean) => void;
+  onEditNode?: (nodeId: string) => void;
+  onOpenNodeInFinder?: (nodeId: string) => void;
   onSelectedQueryChange: (query: string | null) => void;
 }) {
   const { data: nodesRaw = [] } = useLiveQuery(nodesCollection);
@@ -433,6 +518,8 @@ function HydratedWatchNetwork({
         syncDirectory={syncDirectory}
         suspendPersistence={suspendPersistence}
         selectedQuery={selectedQuery}
+        onEditNode={onEditNode}
+        onOpenNodeInFinder={onOpenNodeInFinder}
         onSelectedQueryChange={onSelectedQueryChange}
       />
       <SelectionEditorOverlay

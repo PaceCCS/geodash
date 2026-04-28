@@ -32,6 +32,8 @@ const desktopApi = {
     }>,
   openDirectory: (path: string) =>
     ipcRenderer.invoke("desktop:open-directory", path) as Promise<void>,
+  revealPath: (path: string) =>
+    ipcRenderer.invoke("desktop:reveal-path", path) as Promise<void>,
   readNetworkDirectory: (path: string) =>
     ipcRenderer.invoke("desktop:read-network-directory", path) as Promise<
       Array<{ path: string; content: string }>

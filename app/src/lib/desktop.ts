@@ -38,6 +38,7 @@ type DesktopApi = {
   readFileTree: (path: string) => Promise<FileTreeReadResult>;
   createDirectory: (path: string) => Promise<DirectoryBrowseResult>;
   openDirectory: (path: string) => Promise<void>;
+  revealPath: (path: string) => Promise<void>;
   readNetworkDirectory: (path: string) => Promise<NetworkFile[]>;
   writeNetworkFile: (path: string, content: string) => Promise<void>;
   deleteNetworkFile: (path: string) => Promise<void>;
@@ -106,6 +107,10 @@ export async function createDirectory(path: string): Promise<DirectoryBrowseResu
 
 export async function openDirectory(path: string): Promise<void> {
   return getDesktopApi().openDirectory(path);
+}
+
+export async function revealPath(path: string): Promise<void> {
+  return getDesktopApi().revealPath(path);
 }
 
 export async function readNetworkDirectory(path: string): Promise<NetworkFile[]> {

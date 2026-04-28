@@ -42,6 +42,7 @@ import {
   createNetworkSnapshotFromFlow,
   diffNetworkSnapshots,
 } from "@/lib/network-activity";
+import { cn } from "@/lib/utils";
 
 const nodeTypes: NodeTypes = {
   branch: BranchNode as NodeTypes["branch"],
@@ -59,6 +60,8 @@ type FlowNetworkProps = {
   edges: FlowEdge[];
   selectedQuery?: string;
   onSelectedQueryChange?: (query: string | null) => void;
+  onEditNode?: (nodeId: string) => void;
+  onOpenNodeInFinder?: (nodeId: string) => void;
   onPropagationInputsChanged?: () => Promise<void> | void;
   /**
    * When provided, canvas edits are written back to TOML files in this
@@ -76,6 +79,8 @@ export function FlowNetwork({
   nodes,
   edges,
   selectedQuery,
+  onEditNode,
+  onOpenNodeInFinder,
   onSelectedQueryChange,
   onPropagationInputsChanged,
   syncDirectory,
@@ -93,6 +98,11 @@ export function FlowNetwork({
   const lastViewportNodeSelectionRef = useRef<string | undefined>(undefined);
   const [localNodes, setLocalNodes] = useState<FlowNode[]>(nodes);
   const [localEdges, setLocalEdges] = useState<FlowEdge[]>(edges);
+  const [contextMenu, setContextMenu] = useState<{
+    node: Node;
+    x: number;
+    y: number;
+  } | null>(null);
   const localNodesRef = useRef<FlowNode[]>(nodes);
   const localEdgesRef = useRef<FlowEdge[]>(edges);
   const persistedNodesRef = useRef<FlowNode[]>(nodes);
@@ -299,8 +309,26 @@ export function FlowNetwork({
   );
 
   const onPaneClick = useCallback(() => {
+    setContextMenu(null);
     handleSelectedQueryChange(null);
   }, [handleSelectedQueryChange]);
+
+  const onNodeContextMenu = useCallback<NodeMouseHandler<Node>>((event, node) => {
+    event.preventDefault();
+    setContextMenu({ node, x: event.clientX, y: event.clientY });
+  }, []);
+
+  useEffect(() => {
+    if (!contextMenu) return;
+
+    const close = () => setContextMenu(null);
+    window.addEventListener("click", close);
+    window.addEventListener("keydown", close);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("keydown", close);
+    };
+  }, [contextMenu]);
 
   useEffect(() => {
     if (localNodes.length === 0) return;
@@ -356,6 +384,7 @@ export function FlowNetwork({
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onNodeClick={onNodeClick}
+          onNodeContextMenu={onNodeContextMenu}
           onPaneClick={onPaneClick}
           nodeTypes={nodeTypes}
           colorMode={colorMode}
@@ -366,7 +395,86 @@ export function FlowNetwork({
           <Controls position="top-right" />
           {/* <MiniMap position="bottom-left" /> */}
         </ReactFlow>
+        {contextMenu ? (
+          <FlowNodeContextMenu
+            node={contextMenu.node}
+            x={contextMenu.x}
+            y={contextMenu.y}
+            onClose={() => setContextMenu(null)}
+            onEditNode={onEditNode}
+            onOpenNodeInFinder={onOpenNodeInFinder}
+          />
+        ) : null}
       </FlowSelectionProvider>
     </div>
+  );
+}
+
+function FlowNodeContextMenu({
+  node,
+  onClose,
+  onEditNode,
+  onOpenNodeInFinder,
+  x,
+  y,
+}: {
+  node: Node;
+  onClose: () => void;
+  onEditNode?: (nodeId: string) => void;
+  onOpenNodeInFinder?: (nodeId: string) => void;
+  x: number;
+  y: number;
+}) {
+  const canEdit = node.type === "branch" || node.type === "labeledGroup";
+  const closeAndRun = (run: (() => void) | undefined) => {
+    onClose();
+    run?.();
+  };
+
+  return (
+    <div
+      className="fixed z-50 min-w-36 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
+      style={{ left: x, top: y }}
+    >
+      <FlowContextMenuButton
+        disabled={!canEdit || !onEditNode}
+        onClick={() => closeAndRun(() => onEditNode?.(node.id))}
+      >
+        Edit
+      </FlowContextMenuButton>
+      <div className="-mx-1 my-1 h-px bg-border" />
+      <FlowContextMenuButton
+        disabled={!onOpenNodeInFinder}
+        onClick={() => closeAndRun(() => onOpenNodeInFinder?.(node.id))}
+      >
+        Open in Finder
+      </FlowContextMenuButton>
+    </div>
+  );
+}
+
+function FlowContextMenuButton({
+  children,
+  disabled,
+  onClick,
+}: {
+  children: React.ReactNode;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        "flex w-full items-center rounded-sm px-2 py-1.5 text-left text-sm outline-hidden",
+        disabled
+          ? "cursor-not-allowed opacity-50"
+          : "hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground",
+      )}
+    >
+      {children}
+    </button>
   );
 }

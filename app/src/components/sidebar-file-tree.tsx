@@ -7,6 +7,9 @@ import type { CSSProperties } from "react";
 import { useEffect, useRef, useState } from "react";
 
 import { onFileChanged, readFileTree } from "@/lib/desktop";
+import type { WorkspaceItemActions } from "@/lib/stores/workspace-sidebar";
+import { useWorkspaceSidebar } from "@/lib/stores/workspace-sidebar";
+import { cn } from "@/lib/utils";
 
 const MAX_TREE_PATHS = 2_000;
 
@@ -24,6 +27,29 @@ type LoadState =
       truncated: boolean;
     }
   | { status: "error"; message: string };
+
+type TreeContextMenuTarget = {
+  absolutePath: string;
+  canEdit: boolean;
+  canView: boolean;
+  isConfig: boolean;
+  treePath: string;
+};
+
+function joinTreePath(rootPath: string, treePath: string): string {
+  const normalizedRoot = rootPath.replace(/[\\/]+$/, "");
+  const normalizedTreePath = treePath.replace(/[\\/]+$/, "");
+
+  return normalizedTreePath ? `${normalizedRoot}/${normalizedTreePath}` : normalizedRoot;
+}
+
+function isBranchOrGroupFile(path: string): boolean {
+  return /^(branch|group)-[^/]+\.toml$/i.test(path);
+}
+
+function isConfigFile(path: string): boolean {
+  return path.toLowerCase() === "config.toml";
+}
 
 async function loadTreePaths(directoryPath: string): Promise<{
   paths: string[];
@@ -46,6 +72,8 @@ async function loadTreePaths(directoryPath: string): Promise<{
 
 export function SidebarFileTree({ directoryPath }: SidebarFileTreeProps) {
   const [state, setState] = useState<LoadState>({ status: "idle" });
+  const itemActions = useWorkspaceSidebar((store) => store.itemActions);
+  const itemActionsRef = useRef<WorkspaceItemActions>({});
   const shapefileDirectorySetRef = useRef(new Set<string>());
   const { model } = useFileTree({
     paths: [],
@@ -59,6 +87,10 @@ export function SidebarFileTree({ directoryPath }: SidebarFileTreeProps) {
         : null,
   });
   const loadedPaths = state.status === "ready" ? state.paths.join("\n") : "";
+
+  useEffect(() => {
+    itemActionsRef.current = itemActions;
+  }, [itemActions]);
 
   useEffect(() => {
     let cancelled = false;
@@ -120,6 +152,26 @@ export function SidebarFileTree({ directoryPath }: SidebarFileTreeProps) {
       ) : null}
       <FileTree
         model={model}
+        renderContextMenu={(item, context) => {
+          const treePath = item.path;
+          const isShapefileDirectory = shapefileDirectorySetRef.current.has(treePath);
+          const canEdit = isBranchOrGroupFile(treePath) || isShapefileDirectory;
+          const canView = isBranchOrGroupFile(treePath);
+
+          return (
+            <SidebarFileTreeContextMenu
+              actions={itemActionsRef.current}
+              contextClose={context.close}
+              target={{
+                absolutePath: joinTreePath(directoryPath, treePath),
+                canEdit,
+                canView,
+                isConfig: isConfigFile(treePath),
+                treePath,
+              }}
+            />
+          );
+        }}
         className="min-h-0 flex-1 text-sm"
         style={
           {
@@ -154,5 +206,73 @@ export function SidebarFileTree({ directoryPath }: SidebarFileTreeProps) {
         </div>
       ) : null}
     </div>
+  );
+}
+
+function SidebarFileTreeContextMenu({
+  actions,
+  contextClose,
+  target,
+}: {
+  actions: WorkspaceItemActions;
+  contextClose: () => void;
+  target: TreeContextMenuTarget;
+}) {
+  const closeAndRun = (run: (() => void) | undefined) => {
+    contextClose();
+    run?.();
+  };
+
+  return (
+    <div
+      data-file-tree-context-menu-root="true"
+      className="min-w-36 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
+    >
+      <FileTreeContextMenuButton
+        disabled={!target.canView || !actions.viewPath}
+        onClick={() => closeAndRun(() => actions.viewPath?.(target.treePath))}
+      >
+        View
+      </FileTreeContextMenuButton>
+      <FileTreeContextMenuButton
+        disabled={target.isConfig || !target.canEdit || !actions.editPath}
+        onClick={() => closeAndRun(() => actions.editPath?.(target.treePath))}
+      >
+        Edit
+      </FileTreeContextMenuButton>
+      <div className="-mx-1 my-1 h-px bg-border" />
+      <FileTreeContextMenuButton
+        disabled={!actions.openInFinder}
+        onClick={() => closeAndRun(() => actions.openInFinder?.(target.absolutePath))}
+      >
+        Open in Finder
+      </FileTreeContextMenuButton>
+    </div>
+  );
+}
+
+function FileTreeContextMenuButton({
+  children,
+  disabled,
+  onClick,
+}: {
+  children: React.ReactNode;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        "flex w-full items-center rounded-sm px-2 py-1.5 text-left text-sm outline-hidden",
+        disabled
+          ? "cursor-not-allowed opacity-50"
+          : "hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground",
+      )}
+    >
+      {children}
+    </button>
   );
 }

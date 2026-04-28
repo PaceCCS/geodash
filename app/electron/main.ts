@@ -639,6 +639,21 @@ function registerIpcHandlers(): void {
     }
   });
 
+  ipcMain.handle("desktop:reveal-path", async (_event, targetPath: string) => {
+    const resolvedPath = resolveBrowsePath(targetPath);
+    const stats = await fs.stat(resolvedPath);
+
+    if (stats.isDirectory()) {
+      const errorMessage = await shell.openPath(resolvedPath);
+      if (errorMessage) {
+        throw new Error(errorMessage);
+      }
+      return;
+    }
+
+    shell.showItemInFolder(resolvedPath);
+  });
+
   ipcMain.handle("desktop:read-network-directory", async (_event, directoryPath: string) => {
     const entries = await fs.readdir(directoryPath, { withFileTypes: true });
     return Promise.all(
