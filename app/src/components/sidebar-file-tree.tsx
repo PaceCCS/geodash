@@ -1,6 +1,7 @@
+import { prepareFileTreeInput, type FileTreePreparedInput } from "@pierre/trees";
 import { FileTree, useFileTree } from "@pierre/trees/react";
 import type { CSSProperties } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { browseDirectory, onFileChanged } from "@/lib/desktop";
 
@@ -12,7 +13,13 @@ type SidebarFileTreeProps = {
 
 type LoadState =
   | { status: "idle" | "loading" }
-  | { status: "ready"; paths: string[]; truncated: boolean }
+  | {
+      status: "ready";
+      paths: string[];
+      preparedInput: FileTreePreparedInput;
+      shapefileDirectories: string[];
+      truncated: boolean;
+    }
   | { status: "error"; message: string };
 
 function getPathName(path: string): string {
@@ -32,11 +39,25 @@ function toDirectoryPath(rootPath: string, entryPath: string): string {
   return `${toRelativePath(rootPath, entryPath).replace(/\/+$/, "")}/`;
 }
 
+function getDirectoryPath(path: string): string {
+  const normalizedPath = path.replace(/\/+$/, "");
+  const slashIndex = normalizedPath.lastIndexOf("/");
+
+  return slashIndex === -1 ? "" : `${normalizedPath.slice(0, slashIndex)}/`;
+}
+
+function isShapefileMainPath(path: string): boolean {
+  return path.toLowerCase().endsWith(".shp");
+}
+
 async function loadTreePaths(rootPath: string): Promise<{
   paths: string[];
+  preparedInput: FileTreePreparedInput;
+  shapefileDirectories: string[];
   truncated: boolean;
 }> {
   const paths: string[] = [];
+  const shapefileDirectories = new Set<string>();
   const pending = [rootPath];
   let truncated = false;
 
@@ -56,23 +77,41 @@ async function loadTreePaths(rootPath: string): Promise<{
         paths.push(toDirectoryPath(rootPath, entry.path));
         pending.push(entry.path);
       } else {
-        paths.push(toRelativePath(rootPath, entry.path));
+        const relativePath = toRelativePath(rootPath, entry.path);
+        paths.push(relativePath);
+
+        if (isShapefileMainPath(relativePath)) {
+          shapefileDirectories.add(getDirectoryPath(relativePath));
+        }
       }
     }
   }
 
-  return { paths, truncated };
+  return {
+    paths,
+    preparedInput: prepareFileTreeInput(paths, {
+      flattenEmptyDirectories: true,
+      sort: "default",
+    }),
+    shapefileDirectories: [...shapefileDirectories],
+    truncated,
+  };
 }
 
 export function SidebarFileTree({ directoryPath }: SidebarFileTreeProps) {
+  const [state, setState] = useState<LoadState>({ status: "idle" });
+  const shapefileDirectorySetRef = useRef(new Set<string>());
   const { model } = useFileTree({
     paths: [],
     density: "compact",
     flattenEmptyDirectories: true,
     icons: "standard",
     initialExpansion: "open",
+    renderRowDecoration: ({ item }) =>
+      shapefileDirectorySetRef.current.has(item.path)
+        ? { text: "shp", title: "Shapefile" }
+        : null,
   });
-  const [state, setState] = useState<LoadState>({ status: "idle" });
   const loadedPaths = state.status === "ready" ? state.paths.join("\n") : "";
 
   useEffect(() => {
@@ -83,7 +122,8 @@ export function SidebarFileTree({ directoryPath }: SidebarFileTreeProps) {
       try {
         const next = await loadTreePaths(directoryPath);
         if (cancelled) return;
-        model.resetPaths(next.paths);
+        shapefileDirectorySetRef.current = new Set(next.shapefileDirectories);
+        model.resetPaths(next.paths, { preparedInput: next.preparedInput });
         setState({ status: "ready", ...next });
       } catch (err) {
         if (cancelled) return;
