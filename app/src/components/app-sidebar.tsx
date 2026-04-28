@@ -1,5 +1,4 @@
-import { Link, useRouterState } from "@tanstack/react-router";
-import { Home, Network, Wrench, Sun, Moon } from "lucide-react";
+import { Sun, Moon } from "lucide-react";
 
 import {
   Sidebar,
@@ -15,11 +14,6 @@ import {
 } from "@/components/ui/sidebar";
 import { useTheme } from "@/hooks/use-theme";
 import { useCommands } from "@/contexts/keybind-provider";
-
-const navItems = [
-  { title: "Home", to: "/", icon: Home },
-  { title: "Network Editor", to: "/network/watch", icon: Network },
-] as const;
 
 function ThemeToggle() {
   const { theme, toggle } = useTheme();
@@ -47,57 +41,15 @@ function ThemeToggle() {
 }
 
 export function AppSidebar() {
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
-
   return (
     <Sidebar side="left" collapsible="icon">
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+          <SidebarGroupLabel>Workspace</SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>
-              {navItems.map((item) => (
-                <SidebarMenuItem key={item.to}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={pathname === item.to}
-                    tooltip={item.title}
-                  >
-                    {item.to === "/network/watch" ? (
-                      <Link to={item.to} search={{}}>
-                        <item.icon />
-                        <span>{item.title}</span>
-                      </Link>
-                    ) : (
-                      <Link to={item.to}>
-                        <item.icon />
-                        <span>{item.title}</span>
-                      </Link>
-                    )}
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarGroup>
-          <SidebarGroupLabel>Tools</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={pathname === "/shapefiles/watch"}
-                  tooltip="Shapefile Tools"
-                >
-                  <Link to="/shapefiles/watch">
-                    <Wrench />
-                    <span>Shapefile Tools</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
+            <div className="px-2 py-2 text-sm text-sidebar-foreground/80 group-data-[collapsible=icon]:hidden">
+              Sidebar content placeholder.
+            </div>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>

@@ -19,7 +19,7 @@ import { pickNetworkDirectory, writeNetworkFile } from "@/lib/desktop";
 import { NetworkProvider } from "@/contexts/network-context";
 import { Button } from "@/components/ui/button";
 import { appendActivityLogEntries } from "@/contexts/activity-log-context";
-import { HeaderSlot } from "@/components/header-slot";
+import { HeaderSlot, useHeaderFileActions } from "@/components/header-slot";
 import { useCommands } from "@/contexts/keybind-provider";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { exportNetworkToToml } from "@/lib/exporters/network-toml";
@@ -41,6 +41,7 @@ import {
 import { isEditableFlowSelection } from "@/lib/selection-editor";
 
 type WatchSearch = {
+  directory?: string;
   selected?: string;
   edit?: "1";
 };
@@ -64,6 +65,7 @@ pressure = ["block"]
 
 export const Route = createFileRoute("/network/watch")({
   validateSearch: (search): WatchSearch => ({
+    directory: typeof search.directory === "string" ? search.directory : undefined,
     [FLOW_SELECTION_QUERY_PARAM]: normalizeFlowSelectionQuery(
       search[FLOW_SELECTION_QUERY_PARAM],
     ),
@@ -86,11 +88,13 @@ function WatchPage() {
   const hydrated = useHydrated();
   const [isBusy, setIsBusy] = useState(false);
   const [isDirectoryBrowserOpen, setIsDirectoryBrowserOpen] = useState(false);
+  const { setActions: setHeaderFileActions } = useHeaderFileActions();
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
   const selectedQuery = search.selected;
   const isEditorOpen = search.edit === "1";
   const displayDirectoryPath = watchMode.directoryPath?.replace(/^\/+/, "") ?? null;
+  const directoryQuery = search.directory;
 
   const handleSelectedQueryChange = useCallback(
     (nextQuery: string | null) => {
@@ -126,7 +130,7 @@ function WatchPage() {
     [navigate],
   );
 
-  const openDirectory = async (path: string) => {
+  const openDirectory = useCallback(async (path: string) => {
     setIsBusy(true);
     try {
       await enableWatchMode(path);
@@ -136,11 +140,11 @@ function WatchPage() {
     } finally {
       setIsBusy(false);
     }
-  };
+  }, [enableWatchMode]);
 
-  const handleSelectDirectory = () => {
+  const handleSelectDirectory = useCallback(() => {
     setIsDirectoryBrowserOpen(true);
-  };
+  }, []);
 
   const handleNativeSelectDirectory = async () => {
     const path = await pickNetworkDirectory();
@@ -151,7 +155,20 @@ function WatchPage() {
     await writeNetworkFile(`${path}/config.toml`, DEFAULT_NETWORK_CONFIG);
   };
 
-  const handleStopWatching = async () => {
+  useEffect(() => {
+    if (!directoryQuery || watchMode.directoryPath === directoryQuery) return;
+    void openDirectory(directoryQuery).then(() => {
+      navigate({
+        replace: true,
+        search: (prev) => ({
+          ...prev,
+          directory: undefined,
+        }),
+      });
+    });
+  }, [directoryQuery, navigate, openDirectory, watchMode.directoryPath]);
+
+  const handleStopWatching = useCallback(async () => {
     setIsBusy(true);
     try {
       await disableWatchMode();
@@ -168,7 +185,21 @@ function WatchPage() {
     } finally {
       setIsBusy(false);
     }
-  };
+  }, [disableWatchMode, navigate]);
+
+  const handleClose = useCallback(() => {
+    void handleStopWatching().finally(() => {
+      void navigate({ to: "/" });
+    });
+  }, [handleStopWatching, navigate]);
+
+  useEffect(() => {
+    setHeaderFileActions({
+      openDirectory: handleSelectDirectory,
+      close: handleClose,
+    });
+    return () => setHeaderFileActions({});
+  }, [handleClose, handleSelectDirectory, setHeaderFileActions]);
 
   useCommands(
     watchMode.enabled
@@ -233,24 +264,11 @@ function WatchPage() {
                 <Save className="inline w-3 h-3 mr-1" />
                 Auto-saving
               </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleStopWatching}
-                disabled={isBusy}
-              >
-                <EyeOff className="mr-1 h-3 w-3" />
-                Stop Watching
-              </Button>
             </div>
           </div>
         ) : (
           <div className="flex items-center justify-between w-full px-2">
             <span className="text-sm font-medium">Watch Network Directory</span>
-            <Button size="sm" onClick={handleSelectDirectory} disabled={isBusy}>
-              <FolderOpen className="mr-1 h-3 w-3" />
-              Select Directory
-            </Button>
           </div>
         )}
       </HeaderSlot>

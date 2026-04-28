@@ -10,6 +10,8 @@ const desktopApi = {
     ipcRenderer.invoke("desktop:pick-network-directory") as Promise<string | null>,
   pickShapefileDirectory: () =>
     ipcRenderer.invoke("desktop:pick-shapefile-directory") as Promise<string | null>,
+  pickFileSystemPath: (mode?: "directory" | "file") =>
+    ipcRenderer.invoke("desktop:pick-file-system-path", mode) as Promise<string | null>,
   browseDirectory: (path?: string, mode?: "directory" | "file") =>
     ipcRenderer.invoke("desktop:browse-directory", path, mode) as Promise<{
       path: string;

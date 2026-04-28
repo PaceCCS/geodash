@@ -2,6 +2,7 @@
 
 import {
   FilePlus,
+  Search,
   Settings,
   PanelLeftClose,
   PanelLeftOpen,
@@ -18,8 +19,6 @@ import {
   CommandList,
   CommandShortcut,
 } from "@/components/ui/command";
-import { Button } from "./ui/button";
-import { CmdOrCtrl } from "./ui/command";
 
 import {
   formatShortcutForDisplay,
@@ -40,6 +39,16 @@ export function GlobalCommandDialog() {
     commands,
     runCommand,
   } = useCommands([
+    {
+      id: "view-commands",
+      label: "View Commands",
+      run: (dialog: DialogAPI) => {
+        dialog.open();
+      },
+      shortcut: "Mod+J",
+      group: "Run",
+      icon: <Search />,
+    },
     {
       id: "new",
       label: "New",
@@ -96,23 +105,6 @@ export function GlobalCommandDialog() {
 
   return (
     <>
-      <Button
-        variant="ghost"
-        aria-label="Open command dialog"
-        onClick={openPalette}
-        size="sm"
-      >
-        View Commands
-        <span className="text-muted-foreground text-sm">
-          <kbd className="bg-muted text-muted-foreground pointer-events-none inline-flex h-5 items-center gap-1 rounded border px-1.5 font-mono text-[10px] font-medium opacity-100 select-none">
-            <span className="text-xs">
-              <CmdOrCtrl />
-            </span>
-            J
-          </kbd>
-        </span>
-      </Button>
-
       <CommandDialog
         open={isCommandPaletteOpen}
         onOpenChange={(open) => (open ? openPalette() : closePalette())}

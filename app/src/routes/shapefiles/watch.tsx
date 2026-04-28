@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   EyeOff,
   FolderOpen,
@@ -8,7 +8,7 @@ import {
   TableProperties,
 } from "lucide-react";
 
-import { HeaderSlot } from "@/components/header-slot";
+import { HeaderSlot, useHeaderFileActions } from "@/components/header-slot";
 import { DirectoryBrowserDialog } from "@/components/directory-browser-dialog";
 import { ShapefileEditor } from "@/components/shapefile/shapefile-editor";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +41,18 @@ function ShapefileWatchPage() {
 
   const { watch, editor, status, actions } = useShapefileWatch(directoryQuery);
   const [isDirectoryBrowserOpen, setIsDirectoryBrowserOpen] = useState(false);
+  const navigate = Route.useNavigate();
+  const { setActions: setHeaderFileActions } = useHeaderFileActions();
+
+  const handleOpenShapefileDirectory = useCallback(() => {
+    setIsDirectoryBrowserOpen(true);
+  }, []);
+
+  const handleClose = useCallback(() => {
+    void actions.stopWatching().finally(() => {
+      void navigate({ to: "/" });
+    });
+  }, [actions.stopWatching, navigate]);
 
   const displayDirectoryPath =
     watch.phase === "active" ? watch.directoryPath.replace(/^\/+/, "") : null;
@@ -156,6 +168,14 @@ function ShapefileWatchPage() {
         ],
   );
 
+  useEffect(() => {
+    setHeaderFileActions({
+      openShapefile: handleOpenShapefileDirectory,
+      close: handleClose,
+    });
+    return () => setHeaderFileActions({});
+  }, [handleClose, handleOpenShapefileDirectory, setHeaderFileActions]);
+
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-background">
       <HeaderSlot>
@@ -179,41 +199,11 @@ function ShapefileWatchPage() {
               {status.hasExternalChanges ? (
                 <Badge variant="destructive">Changed on disk</Badge>
               ) : null}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={actions.reload}
-                disabled={status.isBusy || status.isSaving}
-              >
-                <RefreshCcw className="mr-1 h-3 w-3" />
-                Reload
-              </Button>
-              <Button size="sm" onClick={actions.save} disabled={!status.canSave}>
-                <Save className="mr-1 h-3 w-3" />
-                Save
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={actions.stopWatching}
-                disabled={status.isBusy || status.isSaving}
-              >
-                <EyeOff className="mr-1 h-3 w-3" />
-                Stop Watching
-              </Button>
             </div>
           </div>
         ) : (
           <div className="flex w-full items-center justify-between px-2">
             <span className="text-sm font-medium">Watch Shapefile Directory</span>
-            <Button
-              size="sm"
-              onClick={() => setIsDirectoryBrowserOpen(true)}
-              disabled={status.isBusy}
-            >
-              <FolderOpen className="mr-1 h-3 w-3" />
-              Select Directory
-            </Button>
           </div>
         )}
       </HeaderSlot>

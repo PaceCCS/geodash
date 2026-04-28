@@ -297,7 +297,7 @@ export function useCommands(initial?: CommandItem[] | (() => CommandItem[])) {
   const resolvedItems = (typeof initial === "function" ? initial() : initial) ?? [];
 
   const commandsKey = resolvedItems
-    .map((c) => `${c.id}:${c.label}`)
+    .map((c) => `${c.id}:${c.group ?? ""}:${c.label}:${c.shortcut ?? ""}`)
     .join("|");
 
   useEffect(() => {

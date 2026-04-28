@@ -1,12 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  ChevronLeft,
-  ExternalLink,
-  Folder,
-  FolderOpen,
-  RefreshCcw,
-  File,
-} from "lucide-react";
+import { ChevronLeft, Folder, FolderOpen, File } from "lucide-react";
 
 import {
   Dialog,
@@ -21,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import {
   browseDirectory,
   createDirectory,
-  openDirectory,
+  pickFileSystemPath,
   type BrowseMode,
   type FileSystemBrowseResult,
 } from "@/lib/desktop";
@@ -44,7 +37,7 @@ export type FileSystemBrowserDialogProps = {
   onOpenChange: (open: boolean) => void;
   onSelect: (path: string) => void | Promise<void>;
   onCreate?: (path: string) => void | Promise<void>;
-  onNativePick?: () => void | Promise<void>;
+  onNativePick?: () => void | string | null | Promise<void | string | null>;
 };
 
 export type DirectoryBrowserDialogProps = Omit<
@@ -116,7 +109,7 @@ function FileSystemBrowserDialog({
   createTitle = "Create a new directory?",
   createLabel = "Create Folder",
   nativePickerLabel = "Native Picker",
-  openInFileManagerLabel = "Open in Finder",
+  openInFileManagerLabel = "Choose with Finder",
   initialPath,
   onOpenChange,
   onSelect,
@@ -133,7 +126,6 @@ function FileSystemBrowserDialog({
   const [missingPath, setMissingPath] = useState<string | null>(null);
   const requestedDirectoryRef = useRef<string | undefined>(undefined);
 
-  const currentPath = result?.path ?? query.trim();
   const { directoryQuery, filter } = useMemo(
     () => splitBrowseQuery(query),
     [query],
@@ -167,7 +159,7 @@ function FileSystemBrowserDialog({
         }
         setHighlightedIndex(0);
       } catch (err) {
-        setMissingPath(allowCreate ? path ?? null : null);
+        setMissingPath(allowCreate ? (path ?? null) : null);
         const message = err instanceof Error ? err.message : String(err);
         if (!message.includes("ENOENT")) {
           setError(message);
@@ -200,13 +192,17 @@ function FileSystemBrowserDialog({
     );
   }, [visibleEntries.length]);
 
+  const handleSelectPath = async (path: string) => {
+    await onSelect(path);
+    onOpenChange(false);
+  };
+
   const handleSubmit = async () => {
     if (!canSelect) return;
     setError(null);
     try {
       if (!selectedPath) return;
-      await onSelect(selectedPath);
-      onOpenChange(false);
+      await handleSelectPath(selectedPath);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -238,23 +234,25 @@ function FileSystemBrowserDialog({
   };
 
   const handleNativePick = async () => {
-    if (!onNativePick) return;
     setError(null);
     try {
-      await onNativePick();
-      onOpenChange(false);
+      const pickedPath = onNativePick
+        ? await onNativePick()
+        : await pickFileSystemPath(mode);
+      if (typeof pickedPath === "string") {
+        await handleSelectPath(pickedPath);
+        return;
+      }
+      if (pickedPath !== null) {
+        onOpenChange(false);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
   };
 
   const handleOpenInFileManager = async () => {
-    if (!currentPath) return;
-    try {
-      await openDirectory(currentPath);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
+    await handleNativePick();
   };
 
   const handleBrowserKeyDown = (event: React.KeyboardEvent) => {
@@ -292,7 +290,7 @@ function FileSystemBrowserDialog({
       event.preventDefault();
       const entry = visibleEntries[highlightedIndex];
       if (entry.type === "file") {
-        void onSelect(entry.path).then(() => onOpenChange(false));
+        void handleSelectPath(entry.path);
       } else {
         void loadDirectory(entry.path);
       }
@@ -334,7 +332,7 @@ function FileSystemBrowserDialog({
             onSubmit={() => {
               const highlightedEntry = visibleEntries[highlightedIndex];
               if (highlightedEntry?.type === "file") {
-                void onSelect(highlightedEntry.path).then(() => onOpenChange(false));
+                void handleSelectPath(highlightedEntry.path);
               } else {
                 void loadDirectory(highlightedEntry?.path ?? query);
               }
@@ -355,7 +353,6 @@ function FileSystemBrowserDialog({
             />
           ) : (
             <DirectoryListPanel
-              currentPath={result?.path ?? null}
               parentPath={result?.parentPath ?? null}
               entries={visibleEntries}
               highlightedIndex={highlightedIndex}
@@ -363,12 +360,15 @@ function FileSystemBrowserDialog({
               isFiltered={filter.trim().length > 0}
               mode={mode}
               openInFileManagerLabel={openInFileManagerLabel}
+              showNativePicker
               onOpenInFileManager={handleOpenInFileManager}
-              onParent={() => void loadDirectory(result?.parentPath ?? undefined)}
+              onParent={() =>
+                void loadDirectory(result?.parentPath ?? undefined)
+              }
               onEntryHover={setHighlightedIndex}
               onEntryOpen={(entry) => {
                 if (entry.type === "file") {
-                  void onSelect(entry.path).then(() => onOpenChange(false));
+                  void handleSelectPath(entry.path);
                 } else {
                   void loadDirectory(entry.path);
                 }
@@ -381,7 +381,7 @@ function FileSystemBrowserDialog({
         <DirectoryBrowserFooter
           confirmLabel={confirmLabel}
           canSelect={canSelect}
-          showNativePicker={Boolean(onNativePick)}
+          showNativePicker
           nativePickerLabel={nativePickerLabel}
           onNativePick={handleNativePick}
           onSelect={handleSubmit}
@@ -406,7 +406,7 @@ function DirectoryPathForm({
 }) {
   return (
     <form
-      className="flex gap-2"
+      className="flex"
       onSubmit={(event) => {
         event.preventDefault();
         onSubmit();
@@ -419,10 +419,6 @@ function DirectoryPathForm({
         placeholder="Documents/"
         aria-label="Directory path"
       />
-      <Button type="submit" variant="outline" disabled={isLoading}>
-        <RefreshCcw className="mr-1 h-3 w-3" />
-        Browse
-      </Button>
     </form>
   );
 }
@@ -456,7 +452,7 @@ function CreateDirectoryConfirmation({
 }) {
   return (
     <div
-      className="flex h-[29.875rem] flex-col items-center justify-center rounded-md border border-border px-8 text-center"
+      className="flex h-119.5 flex-col items-center justify-center rounded-md border border-border px-8 text-center"
       tabIndex={-1}
       onKeyDown={onKeyDown}
     >
@@ -484,7 +480,6 @@ function CreateDirectoryConfirmation({
 }
 
 function DirectoryListPanel({
-  currentPath,
   parentPath,
   entries,
   highlightedIndex,
@@ -492,13 +487,13 @@ function DirectoryListPanel({
   isFiltered,
   mode,
   openInFileManagerLabel,
+  showNativePicker,
   onOpenInFileManager,
   onParent,
   onEntryHover,
   onEntryOpen,
   onKeyDown,
 }: {
-  currentPath: string | null;
   parentPath: string | null;
   entries: BrowserEntry[];
   highlightedIndex: number;
@@ -506,6 +501,7 @@ function DirectoryListPanel({
   isFiltered: boolean;
   mode: BrowseMode;
   openInFileManagerLabel: string;
+  showNativePicker: boolean;
   onOpenInFileManager: () => void;
   onParent: () => void;
   onEntryHover: (index: number) => void;
@@ -515,10 +511,10 @@ function DirectoryListPanel({
   return (
     <div className="overflow-hidden rounded-md border border-border">
       <DirectoryListHeader
-        currentPath={currentPath}
         parentPath={parentPath}
         isLoading={isLoading}
         openInFileManagerLabel={openInFileManagerLabel}
+        showNativePicker={showNativePicker}
         onOpenInFileManager={onOpenInFileManager}
         onParent={onParent}
       />
@@ -531,53 +527,54 @@ function DirectoryListPanel({
         onEntryOpen={onEntryOpen}
         onKeyDown={onKeyDown}
       />
-      <DirectoryListCount count={entries.length} isFiltered={isFiltered} mode={mode} />
+      <DirectoryListCount
+        count={entries.length}
+        isFiltered={isFiltered}
+        mode={mode}
+      />
     </div>
   );
 }
 
 function DirectoryListHeader({
-  currentPath,
   parentPath,
   isLoading,
   openInFileManagerLabel,
+  showNativePicker,
   onOpenInFileManager,
   onParent,
 }: {
-  currentPath: string | null;
   parentPath: string | null;
   isLoading: boolean;
   openInFileManagerLabel: string;
+  showNativePicker: boolean;
   onOpenInFileManager: () => void;
   onParent: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-2 border-b border-border bg-muted/40 px-3 py-2">
-      <div className="min-w-0 truncate text-sm text-muted-foreground">
-        {currentPath ?? "Loading..."}
-      </div>
-      <div className="flex shrink-0 items-center gap-1">
+    <div className="flex items-center justify-between gap-2 border-b border-border bg-muted/40">
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        disabled={!parentPath || isLoading}
+        onClick={onParent}
+      >
+        <ChevronLeft className="mr-1 h-3 w-3" />
+        Parent
+      </Button>
+      {showNativePicker ? (
         <Button
           type="button"
           variant="ghost"
           size="sm"
-          disabled={!currentPath || isLoading}
+          disabled={isLoading}
           onClick={onOpenInFileManager}
         >
-          <ExternalLink className="mr-1 h-3 w-3" />
+          <FolderOpen className="mr-1 h-3 w-3" />
           {openInFileManagerLabel}
         </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          disabled={!parentPath || isLoading}
-          onClick={onParent}
-        >
-          <ChevronLeft className="mr-1 h-3 w-3" />
-          Parent
-        </Button>
-      </div>
+      ) : null}
     </div>
   );
 }
@@ -603,14 +600,14 @@ function DirectoryListBody({
 
   if (entries.length > 0) {
     content = entries.map((entry, index) => (
-        <DirectoryListItem
+      <DirectoryListItem
         key={entry.path}
         entry={entry}
-            isHighlighted={index === highlightedIndex}
-            mode={mode}
-            onHover={() => onEntryHover(index)}
-            onOpen={() => onEntryOpen(entry)}
-          />
+        isHighlighted={index === highlightedIndex}
+        mode={mode}
+        onHover={() => onEntryHover(index)}
+        onOpen={() => onEntryOpen(entry)}
+      />
     ));
   } else if (!isLoading) {
     content = <DirectoryListEmpty mode={mode} />;
@@ -663,7 +660,9 @@ function DirectoryListItem({
 function DirectoryListEmpty({ mode }: { mode: BrowseMode }) {
   return (
     <div className="px-3 py-8 text-center text-sm text-muted-foreground">
-      {mode === "file" ? "No files or subdirectories found." : "No subdirectories found."}
+      {mode === "file"
+        ? "No files or subdirectories found."
+        : "No subdirectories found."}
     </div>
   );
 }
@@ -695,7 +694,8 @@ function DirectoryListCount({
 
   return (
     <div className="border-t border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-      {count} {label}{plural}
+      {count} {label}
+      {suffix}
       {isFiltered ? " match" : ""}
     </div>
   );

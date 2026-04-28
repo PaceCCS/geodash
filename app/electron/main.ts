@@ -493,6 +493,25 @@ function registerIpcHandlers(): void {
     return result.filePaths[0] ?? null;
   });
 
+  ipcMain.handle("desktop:pick-file-system-path", async (_event, mode?: BrowseMode) => {
+    const browseMode = mode ?? "directory";
+    const result = mainWindow
+      ? await dialog.showOpenDialog(mainWindow, {
+          properties: [browseMode === "file" ? "openFile" : "openDirectory"],
+          title: browseMode === "file" ? "Select File" : "Select Directory",
+        })
+      : await dialog.showOpenDialog({
+          properties: [browseMode === "file" ? "openFile" : "openDirectory"],
+          title: browseMode === "file" ? "Select File" : "Select Directory",
+        });
+
+    if (result.canceled) {
+      return null;
+    }
+
+    return result.filePaths[0] ?? null;
+  });
+
   ipcMain.handle(
     "desktop:browse-directory",
     async (_event, directoryPath?: string, mode?: BrowseMode) => {
