@@ -3,9 +3,9 @@ import { FileTree, useFileTree } from "@pierre/trees/react";
 import type { CSSProperties } from "react";
 import { useEffect, useRef, useState } from "react";
 
-import { browseDirectory, onFileChanged } from "@/lib/desktop";
+import { onFileChanged, readFileTree } from "@/lib/desktop";
 
-const MAX_TREE_PATHS = 2000;
+const MAX_TREE_PATHS = 2_000;
 
 type SidebarFileTreeProps = {
   directoryPath: string;
@@ -22,71 +22,13 @@ type LoadState =
     }
   | { status: "error"; message: string };
 
-function getPathName(path: string): string {
-  return path.split(/[\\/]/).filter(Boolean).at(-1) ?? path;
-}
-
-function toRelativePath(rootPath: string, entryPath: string): string {
-  const normalizedRoot = rootPath.replace(/[\\/]+$/, "");
-  const relative = entryPath.startsWith(`${normalizedRoot}/`)
-    ? entryPath.slice(normalizedRoot.length + 1)
-    : getPathName(entryPath);
-
-  return relative.replace(/\\/g, "/");
-}
-
-function toDirectoryPath(rootPath: string, entryPath: string): string {
-  return `${toRelativePath(rootPath, entryPath).replace(/\/+$/, "")}/`;
-}
-
-function getDirectoryPath(path: string): string {
-  const normalizedPath = path.replace(/\/+$/, "");
-  const slashIndex = normalizedPath.lastIndexOf("/");
-
-  return slashIndex === -1 ? "" : `${normalizedPath.slice(0, slashIndex)}/`;
-}
-
-function isShapefileMainPath(path: string): boolean {
-  return path.toLowerCase().endsWith(".shp");
-}
-
-async function loadTreePaths(rootPath: string): Promise<{
+async function loadTreePaths(directoryPath: string): Promise<{
   paths: string[];
   preparedInput: FileTreePreparedInput;
   shapefileDirectories: string[];
   truncated: boolean;
 }> {
-  const paths: string[] = [];
-  const shapefileDirectories = new Set<string>();
-  const pending = [rootPath];
-  let truncated = false;
-
-  while (pending.length > 0) {
-    const directory = pending.shift();
-    if (!directory) continue;
-
-    const result = await browseDirectory(directory, "file");
-    for (const entry of result.entries) {
-      if (paths.length >= MAX_TREE_PATHS) {
-        truncated = true;
-        pending.length = 0;
-        break;
-      }
-
-      if (entry.type === "directory") {
-        paths.push(toDirectoryPath(rootPath, entry.path));
-        pending.push(entry.path);
-      } else {
-        const relativePath = toRelativePath(rootPath, entry.path);
-        paths.push(relativePath);
-
-        if (isShapefileMainPath(relativePath)) {
-          shapefileDirectories.add(getDirectoryPath(relativePath));
-        }
-      }
-    }
-  }
-
+  const { paths, shapefileDirectories, truncated } = await readFileTree(directoryPath);
   return {
     paths,
     preparedInput: prepareFileTreeInput(paths, {

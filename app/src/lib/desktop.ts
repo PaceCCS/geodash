@@ -17,6 +17,12 @@ export type FileSystemBrowseResult = {
 
 export type DirectoryBrowseResult = FileSystemBrowseResult;
 
+export type FileTreeReadResult = {
+  paths: string[];
+  shapefileDirectories: string[];
+  truncated: boolean;
+};
+
 type FileChangedListener = (paths: string[]) => void;
 
 type DesktopApi = {
@@ -29,6 +35,7 @@ type DesktopApi = {
     defaultPath?: string,
   ) => Promise<string | null>;
   browseDirectory: (path?: string, mode?: BrowseMode) => Promise<FileSystemBrowseResult>;
+  readFileTree: (path: string) => Promise<FileTreeReadResult>;
   createDirectory: (path: string) => Promise<DirectoryBrowseResult>;
   openDirectory: (path: string) => Promise<void>;
   readNetworkDirectory: (path: string) => Promise<NetworkFile[]>;
@@ -87,6 +94,10 @@ export async function browseDirectory(
   mode?: BrowseMode,
 ): Promise<FileSystemBrowseResult> {
   return getDesktopApi().browseDirectory(path, mode);
+}
+
+export async function readFileTree(path: string): Promise<FileTreeReadResult> {
+  return getDesktopApi().readFileTree(path);
 }
 
 export async function createDirectory(path: string): Promise<DirectoryBrowseResult> {

@@ -18,6 +18,12 @@ const desktopApi = {
       parentPath: string | null;
       entries: Array<{ name: string; path: string; type: "directory" | "file" }>;
     }>,
+  readFileTree: (path: string) =>
+    ipcRenderer.invoke("desktop:read-file-tree", path) as Promise<{
+      paths: string[];
+      shapefileDirectories: string[];
+      truncated: boolean;
+    }>,
   createDirectory: (path: string) =>
     ipcRenderer.invoke("desktop:create-directory", path) as Promise<{
       path: string;

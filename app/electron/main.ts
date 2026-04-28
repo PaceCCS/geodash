@@ -1,5 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
-import { dirname, extname, isAbsolute, join, resolve, sep } from "node:path";
+import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promises as fs, type Stats } from "node:fs";
 import { homedir } from "node:os";
@@ -39,6 +39,12 @@ type FileSystemBrowseResult = {
     path: string;
     type: "directory" | "file";
   }>;
+};
+
+type FileTreeReadResult = {
+  paths: string[];
+  shapefileDirectories: string[];
+  truncated: boolean;
 };
 
 function pruneOwnWrites(now = Date.now()): void {
@@ -241,6 +247,92 @@ function resolveBrowsePath(inputPath?: string): string {
   }
 
   return isAbsolute(trimmedPath) ? resolve(trimmedPath) : resolve(homedir(), trimmedPath);
+}
+
+function toTreePath(rootPath: string, entryPath: string): string {
+  return relative(rootPath, entryPath).replace(/\\/g, "/");
+}
+
+function toTreeDirectoryPath(rootPath: string, entryPath: string): string {
+  return `${toTreePath(rootPath, entryPath).replace(/\/+$/, "")}/`;
+}
+
+function getTreeDirectoryPath(path: string): string {
+  const normalizedPath = path.replace(/\/+$/, "");
+  const slashIndex = normalizedPath.lastIndexOf("/");
+
+  return slashIndex === -1 ? "" : `${normalizedPath.slice(0, slashIndex)}/`;
+}
+
+function isShapefileMainPath(path: string): boolean {
+  return path.toLowerCase().endsWith(".shp");
+}
+
+async function readFileTree(inputPath: string): Promise<FileTreeReadResult> {
+  const rootPath = resolveBrowsePath(inputPath);
+  const stats = await fs.stat(rootPath);
+
+  if (!stats.isDirectory()) {
+    throw new Error("Path is not a directory.");
+  }
+
+  const paths: string[] = [];
+  const shapefileDirectories = new Set<string>();
+  const pendingDirectories = [rootPath];
+  let truncated = false;
+
+  while (pendingDirectories.length > 0) {
+    const batch = pendingDirectories.splice(0, WATCH_PREFLIGHT_CONCURRENCY);
+    const results = await Promise.all(
+      batch.map(async (currentDirectory) => ({
+        currentDirectory,
+        entries: await fs.readdir(currentDirectory, { withFileTypes: true }),
+      })),
+    );
+
+    for (const { currentDirectory, entries } of results) {
+      const visibleEntries = entries
+        .filter(
+          (entry) =>
+            (entry.isDirectory() || entry.isFile()) &&
+            !isIgnoredWatchDirectoryName(entry.name) &&
+            !(entry.isDirectory() && isHiddenDirectoryName(entry.name)),
+        )
+        .sort((a, b) => {
+          if (a.isDirectory() !== b.isDirectory()) {
+            return a.isDirectory() ? -1 : 1;
+          }
+          return a.name.localeCompare(b.name);
+        });
+
+      for (const entry of visibleEntries) {
+        if (paths.length >= MAX_WATCH_FILES) {
+          truncated = true;
+          pendingDirectories.length = 0;
+          break;
+        }
+
+        const entryPath = join(currentDirectory, entry.name);
+        if (entry.isDirectory()) {
+          paths.push(toTreeDirectoryPath(rootPath, entryPath));
+          pendingDirectories.push(entryPath);
+        } else {
+          const treePath = toTreePath(rootPath, entryPath);
+          paths.push(treePath);
+
+          if (isShapefileMainPath(treePath)) {
+            shapefileDirectories.add(getTreeDirectoryPath(treePath));
+          }
+        }
+      }
+    }
+  }
+
+  return {
+    paths,
+    shapefileDirectories: [...shapefileDirectories],
+    truncated,
+  };
 }
 
 async function browseFileSystem(
@@ -525,6 +617,10 @@ function registerIpcHandlers(): void {
       return browseFileSystem(directoryPath, mode);
     },
   );
+
+  ipcMain.handle("desktop:read-file-tree", async (_event, directoryPath: string) => {
+    return readFileTree(directoryPath);
+  });
 
   ipcMain.handle("desktop:create-directory", async (_event, directoryPath: string) => {
     return createDirectory(directoryPath);
