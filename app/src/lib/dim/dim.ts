@@ -281,18 +281,15 @@ async function findWasmBytes(
     process.versions != null &&
     process.versions.node != null;
 
-  const moduleUrl = new URL("./dim_wasm.wasm", import.meta.url);
-
   if (isNode) {
-    const { readFile } = await import("node:fs/promises");
-    const { existsSync } = await import("node:fs");
-    const { join, dirname } = await import("node:path");
-    const { fileURLToPath } = await import("node:url");
+    const { readFile } = await import(/* @vite-ignore */ "node:fs/promises");
+    const { existsSync } = await import(/* @vite-ignore */ "node:fs");
+    const { join, dirname } = await import(/* @vite-ignore */ "node:path");
+    const { fileURLToPath } = await import(/* @vite-ignore */ "node:url");
     const __filename = fileURLToPath(import.meta.url);
     const thisDir = dirname(__filename);
 
     const candidates = [
-      fileURLToPath(moduleUrl),
       join(thisDir, "dim_wasm.wasm"),
       join(thisDir, "..", "..", "..", "public", "dim", "dim_wasm.wasm"),
       join(process.cwd(), "dim", "wasm", "dim_wasm.wasm"),
@@ -309,7 +306,7 @@ async function findWasmBytes(
     const buf = await readFile(wasmPath);
     return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
   } else {
-    const sources: Array<string | URL> = [moduleUrl, "/dim/dim_wasm.wasm"];
+    const sources: Array<string | URL> = ["/dim/dim_wasm.wasm"];
     const failures: string[] = [];
 
     for (const source of sources) {
