@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import { dirname, extname, isAbsolute, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promises as fs, type Stats } from "node:fs";
@@ -29,12 +29,15 @@ let backendProcess: ChildProcess | null = null;
 let watcher: FSWatcher | null = null;
 const recentOwnWrites = new Map<string, number>();
 
-type DirectoryBrowseResult = {
+type BrowseMode = "directory" | "file";
+
+type FileSystemBrowseResult = {
   path: string;
   parentPath: string | null;
   entries: Array<{
     name: string;
     path: string;
+    type: "directory" | "file";
   }>;
 };
 
@@ -213,13 +216,24 @@ function hasAllowedExtension(filePath: string, extensions: string[]): boolean {
 }
 
 function isIgnoredWatchDirectoryName(name: string): boolean {
-  return name === "node_modules" || name === ".git";
+  const normalizedName = name.toLowerCase();
+  return (
+    normalizedName === "node_modules" ||
+    normalizedName === ".git" ||
+    normalizedName === "$recycle.bin" ||
+    normalizedName === "recycler" ||
+    normalizedName === "system volume information"
+  );
+}
+
+function isHiddenDirectoryName(name: string): boolean {
+  return name.startsWith(".");
 }
 
 function resolveBrowsePath(inputPath?: string): string {
   const trimmedPath = inputPath?.trim();
   if (!trimmedPath || trimmedPath === "~") {
-    return homedir();
+    return app.getPath("documents");
   }
 
   if (trimmedPath.startsWith(`~${sep}`)) {
@@ -229,7 +243,10 @@ function resolveBrowsePath(inputPath?: string): string {
   return isAbsolute(trimmedPath) ? resolve(trimmedPath) : resolve(homedir(), trimmedPath);
 }
 
-async function browseDirectory(inputPath?: string): Promise<DirectoryBrowseResult> {
+async function browseFileSystem(
+  inputPath?: string,
+  mode: BrowseMode = "directory",
+): Promise<FileSystemBrowseResult> {
   const directoryPath = resolveBrowsePath(inputPath);
   const stats = await fs.stat(directoryPath);
 
@@ -238,21 +255,38 @@ async function browseDirectory(inputPath?: string): Promise<DirectoryBrowseResul
   }
 
   const entries = await fs.readdir(directoryPath, { withFileTypes: true });
-  const directories = entries
-    .filter((entry) => entry.isDirectory() && !isIgnoredWatchDirectoryName(entry.name))
+  const browsableEntries = entries
+    .filter(
+      (entry) =>
+        (entry.isDirectory() || (mode === "file" && entry.isFile())) &&
+        !isIgnoredWatchDirectoryName(entry.name) &&
+        !isHiddenDirectoryName(entry.name),
+    )
     .map((entry) => ({
       name: entry.name,
       path: join(directoryPath, entry.name),
+      type: entry.isDirectory() ? "directory" as const : "file" as const,
     }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => {
+      if (a.type !== b.type) {
+        return a.type === "directory" ? -1 : 1;
+      }
+      return a.name.localeCompare(b.name);
+    });
 
   const parentPath = resolve(directoryPath, "..");
 
   return {
     path: directoryPath,
     parentPath: parentPath === directoryPath ? null : parentPath,
-    entries: directories,
+    entries: browsableEntries,
   };
+}
+
+async function createDirectory(inputPath: string): Promise<FileSystemBrowseResult> {
+  const directoryPath = resolveBrowsePath(inputPath);
+  await fs.mkdir(directoryPath, { recursive: true });
+  return browseFileSystem(directoryPath);
 }
 
 async function assertWatchableDirectory(
@@ -461,6 +495,23 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle("desktop:browse-directory", async (_event, directoryPath?: string) => {
     return browseDirectory(directoryPath);
+  });
+
+  ipcMain.handle("desktop:create-directory", async (_event, directoryPath: string) => {
+    return createDirectory(directoryPath);
+  });
+
+  ipcMain.handle("desktop:open-directory", async (_event, directoryPath: string) => {
+    const resolvedPath = resolveBrowsePath(directoryPath);
+    const stats = await fs.stat(resolvedPath);
+    if (!stats.isDirectory()) {
+      throw new Error("Path is not a directory.");
+    }
+
+    const errorMessage = await shell.openPath(resolvedPath);
+    if (errorMessage) {
+      throw new Error(errorMessage);
+    }
   });
 
   ipcMain.handle("desktop:read-network-directory", async (_event, directoryPath: string) => {

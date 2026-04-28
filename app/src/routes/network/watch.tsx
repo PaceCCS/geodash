@@ -15,7 +15,7 @@ import {
 } from "@/lib/collections/flow";
 import { refreshGeoCollection } from "@/lib/collections/geo";
 import { useFileWatcher } from "@/lib/hooks/use-file-watcher";
-import { pickNetworkDirectory } from "@/lib/desktop";
+import { pickNetworkDirectory, writeNetworkFile } from "@/lib/desktop";
 import { NetworkProvider } from "@/contexts/network-context";
 import { Button } from "@/components/ui/button";
 import { appendActivityLogEntries } from "@/contexts/activity-log-context";
@@ -44,6 +44,23 @@ type WatchSearch = {
   selected?: string;
   edit?: "1";
 };
+
+const DEFAULT_NETWORK_CONFIG = `id = "new-project"
+label = "New project"
+
+# Global properties (preset-level defaults)
+[properties]
+ambientTemperature = 20.0
+pressure = 14.7
+
+# Inheritance rules
+[inheritance]
+general = ["block", "branch", "group", "global"]
+
+[inheritance.rules]
+ambientTemperature = ["group", "global"]
+pressure = ["block"]
+`;
 
 export const Route = createFileRoute("/network/watch")({
   validateSearch: (search): WatchSearch => ({
@@ -115,6 +132,7 @@ function WatchPage() {
       await enableWatchMode(path);
     } catch (err) {
       console.error("[watch] Failed to enable watch mode:", err);
+      throw err;
     } finally {
       setIsBusy(false);
     }
@@ -127,6 +145,10 @@ function WatchPage() {
   const handleNativeSelectDirectory = async () => {
     const path = await pickNetworkDirectory();
     if (path) await openDirectory(path);
+  };
+
+  const initializeCreatedNetworkDirectory = async (path: string) => {
+    await writeNetworkFile(`${path}/config.toml`, DEFAULT_NETWORK_CONFIG);
   };
 
   const handleStopWatching = async () => {
@@ -241,6 +263,7 @@ function WatchPage() {
         confirmLabel="Watch Directory"
         onOpenChange={setIsDirectoryBrowserOpen}
         onSelect={openDirectory}
+        onCreatedDirectory={initializeCreatedNetworkDirectory}
         onNativePick={handleNativeSelectDirectory}
       />
 

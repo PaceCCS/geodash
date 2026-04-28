@@ -120,6 +120,7 @@ export function useShapefileWatch(autoOpenDirectory?: string | null) {
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
+        throw err;
       } finally {
         setIsBusy(false);
       }
