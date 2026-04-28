@@ -21,6 +21,7 @@ const presetFixtureDirectory = resolve(
   "test-data",
   "preset1",
 );
+const exampleFixtureDirectory = resolve(appRoot, "..", "workingfiles", "example");
 
 test("launches the Electron app and enters watch mode", async () => {
   const watchDirectory = await createWatchFixture();
@@ -38,12 +39,45 @@ test("launches the Electron app and enters watch mode", async () => {
   try {
     const page = await electronApp.firstWindow();
 
-    await openWatchMode(page);
+    await openNetworkDirectory(page, watchDirectory);
     await expect(page.getByText("Preset 1")).toBeVisible();
     await expect(page.getByText("Auto-saving")).toBeVisible();
     await expect(
       page.getByText("No recent activity."),
     ).toBeVisible();
+  } finally {
+    await electronApp.close();
+    await rm(watchDirectory, { recursive: true, force: true });
+  }
+});
+
+test("shows selected network directory files in the left sidebar tree", async () => {
+  const watchDirectory = await createExampleWatchFixture();
+  const electronApp = await electron.launch({
+    executablePath: electronBinary,
+    args: [mainScriptPath],
+    env: {
+      ...process.env,
+      ELECTRON_RENDERER_URL: rendererEntryPath,
+      GEODASH_DISABLE_DEVTOOLS: "1",
+      GEODASH_TEST_PICK_DIRECTORY: watchDirectory,
+    },
+  });
+
+  try {
+    const page = await electronApp.firstWindow();
+
+    await openNetworkDirectory(page, watchDirectory);
+    await expect(page.getByText("Network Files")).toBeVisible();
+    const fileTree = page.getByTestId("sidebar-file-tree");
+    await expect(fileTree).toBeVisible();
+    await expect(page.getByText("This directory is empty.")).toHaveCount(0);
+    await expect(fileTree).toHaveAttribute("data-loaded-paths", /config\.toml/);
+    await expect(fileTree).toHaveAttribute("data-loaded-paths", /assets\//);
+    await expect(fileTree).toHaveAttribute(
+      "data-loaded-paths",
+      /assets\/sample-diagram\.svg/,
+    );
   } finally {
     await electronApp.close();
     await rm(watchDirectory, { recursive: true, force: true });
@@ -66,7 +100,7 @@ test("repositioning a branch logs the move event", async () => {
   try {
     const page = await electronApp.firstWindow();
 
-    await openWatchMode(page);
+    await openNetworkDirectory(page, watchDirectory);
     const initialToml = await readFile(join(watchDirectory, "branch-4.toml"), "utf8");
 
     await dragBranch(page, "branch-4");
@@ -101,18 +135,16 @@ test("leaving watch mode via navigation clears the activity log", async () => {
   try {
     const page = await electronApp.firstWindow();
 
-    await openWatchMode(page);
+    await openNetworkDirectory(page, watchDirectory);
     await dragBranch(page, "branch-4");
 
     await expect(
       page.getByText(/Branch Branch 4 \(branch-4\) moved:/).first(),
     ).toBeVisible();
 
-    await page.getByRole("link", { name: "Home", exact: true }).click();
+    await page.goto(rendererEntryPath);
 
-    await expect(
-      page.getByRole("heading", { name: "geodash" }).first(),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Network hierarchy" })).toBeVisible();
     await expect(page.getByText("No recent activity.")).toBeVisible();
     await expect(
       page.getByText(/Branch Branch 4 \(branch-4\) moved:/),
@@ -122,27 +154,6 @@ test("leaving watch mode via navigation clears the activity log", async () => {
     await rm(watchDirectory, { recursive: true, force: true });
   }
 });
-
-async function openWatchMode(page: Page) {
-  await page.waitForLoadState("domcontentloaded");
-  await expect(page.getByRole("heading", { name: "geodash" })).toBeVisible();
-  await page.getByRole("link", { name: "Network Editor", exact: true }).click();
-  const selectDirectoryButtons = page.getByRole("button", { name: "Select Directory" });
-  const stopWatchingButton = page.getByRole("button", { name: "Stop Watching" });
-
-  await expect(page.getByText("No Directory Selected")).toBeVisible();
-  await expect(selectDirectoryButtons.last()).toBeVisible();
-  await selectDirectoryButtons.last().click();
-
-  try {
-    await expect(stopWatchingButton).toBeVisible({ timeout: 3_000 });
-  } catch {
-    await selectDirectoryButtons.first().click();
-    await expect(stopWatchingButton).toBeVisible();
-  }
-
-  await expect(page.getByText("Auto-saving")).toBeVisible();
-}
 
 async function dragBranch(page: Page, branchId: string) {
   const branchNodeContent = page.getByTestId(`branch-node-${branchId}`);
@@ -164,8 +175,22 @@ async function dragBranch(page: Page, branchId: string) {
   await page.mouse.up();
 }
 
+async function openNetworkDirectory(page: Page, directoryPath: string) {
+  await page.waitForLoadState("domcontentloaded");
+  await page.goto(
+    `${rendererEntryPath}/network/watch?directory=${encodeURIComponent(directoryPath)}`,
+  );
+  await expect(page.getByText("Auto-saving")).toBeVisible();
+}
+
 async function createWatchFixture(): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), "geodash-playwright-"));
   await cp(presetFixtureDirectory, directory, { recursive: true });
+  return directory;
+}
+
+async function createExampleWatchFixture(): Promise<string> {
+  const directory = await mkdtemp(join(tmpdir(), "geodash-example-playwright-"));
+  await cp(exampleFixtureDirectory, directory, { recursive: true });
   return directory;
 }

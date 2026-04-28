@@ -15,6 +15,9 @@ const config = defineConfig({
   define: {
     global: "globalThis",
   },
+  build: {
+    chunkSizeWarningLimit: 1000,
+  },
 });
 
 export default config;

@@ -39,6 +39,7 @@ import {
   type NetworkConfigMetadata,
 } from "@/lib/api-client";
 import { isEditableFlowSelection } from "@/lib/selection-editor";
+import { useWorkspaceSidebar } from "@/lib/stores/workspace-sidebar";
 
 type WatchSearch = {
   directory?: string;
@@ -89,6 +90,7 @@ function WatchPage() {
   const [isBusy, setIsBusy] = useState(false);
   const [isDirectoryBrowserOpen, setIsDirectoryBrowserOpen] = useState(false);
   const { setActions: setHeaderFileActions } = useHeaderFileActions();
+  const setSidebarDirectory = useWorkspaceSidebar((state) => state.setDirectory);
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
   const selectedQuery = search.selected;
@@ -194,6 +196,15 @@ function WatchPage() {
     });
     return () => setHeaderFileActions({});
   }, [handleClose, handleSelectDirectory, setHeaderFileActions]);
+
+  useEffect(() => {
+    if (watchMode.enabled && watchMode.directoryPath) {
+      setSidebarDirectory({ path: watchMode.directoryPath, label: "Network Files" });
+      return () => setSidebarDirectory(null);
+    }
+
+    setSidebarDirectory(null);
+  }, [setSidebarDirectory, watchMode.directoryPath, watchMode.enabled]);
 
   useCommands(
     watchMode.enabled

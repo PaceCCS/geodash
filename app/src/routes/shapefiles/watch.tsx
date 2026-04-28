@@ -17,6 +17,7 @@ import { useCommands } from "@/contexts/keybind-provider";
 import type { ShapefileSummary } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { useShapefileWatch } from "@/lib/hooks/use-shapefile-watch";
+import { useWorkspaceSidebar } from "@/lib/stores/workspace-sidebar";
 
 type ShapefileWatchSearch = {
   directory?: string;
@@ -43,6 +44,8 @@ function ShapefileWatchPage() {
   const [isDirectoryBrowserOpen, setIsDirectoryBrowserOpen] = useState(false);
   const navigate = Route.useNavigate();
   const { setActions: setHeaderFileActions } = useHeaderFileActions();
+  const setSidebarDirectory = useWorkspaceSidebar((state) => state.setDirectory);
+  const activeDirectoryPath = watch.phase === "active" ? watch.directoryPath : null;
 
   const handleOpenShapefileDirectory = useCallback(() => {
     setIsDirectoryBrowserOpen(true);
@@ -173,6 +176,15 @@ function ShapefileWatchPage() {
     });
     return () => setHeaderFileActions({});
   }, [handleClose, handleOpenShapefileDirectory, setHeaderFileActions]);
+
+  useEffect(() => {
+    if (activeDirectoryPath) {
+      setSidebarDirectory({ path: activeDirectoryPath, label: "Shapefile Files" });
+      return () => setSidebarDirectory(null);
+    }
+
+    setSidebarDirectory(null);
+  }, [activeDirectoryPath, setSidebarDirectory]);
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-background">

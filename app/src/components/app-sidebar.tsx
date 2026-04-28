@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/sidebar";
 import { useTheme } from "@/hooks/use-theme";
 import { useCommands } from "@/contexts/keybind-provider";
+import { SidebarFileTree } from "@/components/sidebar-file-tree";
+import { useWorkspaceSidebar } from "@/lib/stores/workspace-sidebar";
 
 function ThemeToggle() {
   const { theme, toggle } = useTheme();
@@ -41,15 +43,23 @@ function ThemeToggle() {
 }
 
 export function AppSidebar() {
+  const directory = useWorkspaceSidebar((state) => state.directory);
+
   return (
     <Sidebar side="left" collapsible="icon">
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Workspace</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <div className="px-2 py-2 text-sm text-sidebar-foreground/80 group-data-[collapsible=icon]:hidden">
-              Sidebar content placeholder.
-            </div>
+        <SidebarGroup className="min-h-0 flex-1">
+          <SidebarGroupLabel>
+            {directory ? directory.label : "Workspace"}
+          </SidebarGroupLabel>
+          <SidebarGroupContent className="flex min-h-0 flex-1 flex-col">
+            {directory ? (
+              <SidebarFileTree directoryPath={directory.path} />
+            ) : (
+              <div className="px-2 py-2 text-sm text-sidebar-foreground/80 group-data-[collapsible=icon]:hidden">
+                Select a directory to browse its files.
+              </div>
+            )}
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
