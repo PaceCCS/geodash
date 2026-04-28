@@ -137,8 +137,27 @@ export function SidebarFileTree({ directoryPath }: SidebarFileTreeProps) {
         className="min-h-0 flex-1 text-sm"
         style={{
           height: "100%",
-          "--trees-background-override": "var(--sidebar)",
-          "--trees-foreground-override": "var(--sidebar-foreground)",
+          backgroundColor: "var(--sidebar)",
+          color: "var(--sidebar-foreground)",
+          borderColor: "var(--sidebar-border)",
+          "--trees-theme-sidebar-bg": "var(--sidebar)",
+          "--trees-theme-sidebar-fg": "var(--sidebar-foreground)",
+          "--trees-theme-sidebar-header-fg": "var(--muted-foreground)",
+          "--trees-theme-sidebar-border": "var(--sidebar-border)",
+          "--trees-theme-list-hover-bg":
+            "color-mix(in oklab, var(--sidebar-accent) 70%, transparent)",
+          "--trees-theme-list-active-selection-bg": "var(--sidebar-accent)",
+          "--trees-theme-list-active-selection-fg":
+            "var(--sidebar-accent-foreground)",
+          "--trees-theme-focus-ring": "var(--sidebar-ring)",
+          "--trees-theme-input-bg": "var(--background)",
+          "--trees-theme-input-border": "var(--border)",
+          "--trees-theme-scrollbar-thumb": "var(--muted-foreground)",
+          "--trees-file-icon-color": "var(--muted-foreground)",
+          "--trees-theme-git-added-fg": "var(--rose-pine-foam)",
+          "--trees-theme-git-modified-fg": "var(--rose-pine-rose)",
+          "--trees-theme-git-renamed-fg": "var(--rose-pine-pine)",
+          "--trees-theme-git-deleted-fg": "var(--rose-pine-love)",
         } as CSSProperties}
       />
       {state.status === "ready" && state.truncated ? (
