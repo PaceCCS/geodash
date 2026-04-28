@@ -236,6 +236,10 @@ function isHiddenDirectoryName(name: string): boolean {
   return name.startsWith(".");
 }
 
+function isHiddenFileSystemEntryName(name: string): boolean {
+  return name.startsWith(".");
+}
+
 function resolveBrowsePath(inputPath?: string): string {
   const trimmedPath = inputPath?.trim();
   if (!trimmedPath || trimmedPath === "~") {
@@ -296,7 +300,7 @@ async function readFileTree(inputPath: string): Promise<FileTreeReadResult> {
           (entry) =>
             (entry.isDirectory() || entry.isFile()) &&
             !isIgnoredWatchDirectoryName(entry.name) &&
-            !(entry.isDirectory() && isHiddenDirectoryName(entry.name)),
+            !isHiddenFileSystemEntryName(entry.name),
         )
         .sort((a, b) => {
           if (a.isDirectory() !== b.isDirectory()) {
@@ -449,15 +453,15 @@ async function assertWatchableDirectory(
 
 function shouldIgnoreWatchedPath(
   watchedPath: string,
-  extensions: string[],
   stats?: Stats,
 ): boolean {
-  if (stats?.isDirectory()) {
-    return isIgnoredWatchDirectoryName(watchedPath.split(/[\\/]/).at(-1) ?? "");
+  const name = watchedPath.split(/[\\/]/).at(-1) ?? "";
+  if (isHiddenFileSystemEntryName(name)) {
+    return true;
   }
 
-  if (stats?.isFile()) {
-    return !hasAllowedExtension(watchedPath, extensions);
+  if (stats?.isDirectory()) {
+    return isIgnoredWatchDirectoryName(name);
   }
 
   return false;
@@ -479,15 +483,11 @@ async function startWatchingDirectory(
       pollInterval: 50,
     },
     ignored: (watchedPath, stats) =>
-      shouldIgnoreWatchedPath(watchedPath, watchedExtensions, stats),
+      shouldIgnoreWatchedPath(watchedPath, stats),
   });
 
   const handleChange = (changedPath: string) => {
     const resolvedPath = resolve(changedPath);
-    if (!hasAllowedExtension(resolvedPath, watchedExtensions)) {
-      return;
-    }
-
     if (shouldIgnoreOwnWrite(resolvedPath)) {
       return;
     }
@@ -641,16 +641,7 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle("desktop:reveal-path", async (_event, targetPath: string) => {
     const resolvedPath = resolveBrowsePath(targetPath);
-    const stats = await fs.stat(resolvedPath);
-
-    if (stats.isDirectory()) {
-      const errorMessage = await shell.openPath(resolvedPath);
-      if (errorMessage) {
-        throw new Error(errorMessage);
-      }
-      return;
-    }
-
+    await fs.stat(resolvedPath);
     shell.showItemInFolder(resolvedPath);
   });
 

@@ -147,6 +147,10 @@ export function useFileWatcher() {
     };
 
     const unlisten = onFileChanged((changedPaths) => {
+      if (!changedPaths.some((path) => path.toLowerCase().endsWith(".toml"))) {
+        return;
+      }
+
       console.log("[watch] External file change:", changedPaths);
       setIsApplyingExternalChange(true);
       scheduleReload(watchMode.directoryPath!);
