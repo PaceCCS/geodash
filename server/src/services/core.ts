@@ -334,14 +334,20 @@ export async function computeRouteKp(shpB64: string): Promise<RouteKpResult> {
   ) as RouteKpResult;
 }
 
-export async function readRouteGeometry(shpB64: string): Promise<RouteGeometryResult> {
+export async function readRouteGeometry(
+  input:
+    | { format: "shapefile"; shpB64: string }
+    | { format: "kmz" | "kml" | "csv"; dataB64: string },
+): Promise<RouteGeometryResult> {
   await init();
   const rt = runtime!;
   return callWasm(
     "read_route_geometry",
     rt,
     (a, b, c, d) => rt.geodash_read_route_geometry(a, b, c, d),
-    { shp_b64: shpB64 }
+    input.format === "shapefile"
+      ? { format: input.format, shp_b64: input.shpB64 }
+      : { format: input.format, data_b64: input.dataB64 },
   ) as RouteGeometryResult;
 }
 

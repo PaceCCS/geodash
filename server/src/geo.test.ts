@@ -131,7 +131,9 @@ describe("POST /api/operations/geo/inspect", () => {
     expect(kmzRoute!.route.format).toBe("kmz");
     expect(kmzRoute!.route.mapStatus).toBe("ready");
     expect(kmzRoute!.route.sourceCrs).toBe("EPSG:4326");
-    expect(kmzRoute!.routeGeometry).toBeNull();
+    expect(kmzRoute!.routeGeometry).toBeDefined();
+    expect(kmzRoute!.routeGeometry!.type).toBe("LineString");
+    expect(kmzRoute!.routeGeometry!.coordinates.length).toBeGreaterThan(1);
 
     expect(compressor).toBeDefined();
     expect(compressor!.route.mapStatus).toBe("unsupported");

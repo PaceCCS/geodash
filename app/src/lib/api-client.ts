@@ -284,6 +284,10 @@ export type MappableBlock = {
   format: GeoFormat;
   routePath: string | null;
   routeLength: string | null;
+  routeGeometry: {
+    type: "LineString";
+    coordinates: { lon: number; lat: number; z: number | null }[];
+  } | null;
 };
 
 export type GeoInspectResult = {

@@ -31,6 +31,7 @@ pub const readShx = shx.read;
 pub const readDbf = dbf.read;
 pub const readPrj = shp.readPrj;
 pub const readKml = kml.read;
+pub const readKmlFromBytes = kml.readFromBytes;
 
 // Writers
 pub const writeShp = shp.write;

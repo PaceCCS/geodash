@@ -230,7 +230,7 @@ async function inspectShapefileRoute(
     const shpB64 = Buffer.from(shpData).toString("base64");
 
     if (crs.mapStatus === "ready") {
-      const geometry = await readRouteGeometry(shpB64);
+      const geometry = await readRouteGeometry({ format: "shapefile", shpB64 });
       return {
         lengthM: null,
         ...crs,
@@ -281,20 +281,63 @@ async function inspectRoute(networkDir: string, routePath: string, format: GeoFo
     };
   }
 
-  return {
-    route: {
-      path: routePath,
+  if (format === "coordinates") {
+    return {
+      route: {
+        path: routePath,
+        format,
+        length_m: null,
+        displayLength: null,
+        mapStatus: "unsupported",
+        sourceCrs: null,
+        targetCrs: "EPSG:4326",
+        message: "This block does not define a route file.",
+      },
+      routeGeometry: null,
+    };
+  }
+
+  try {
+    const routeData = await fs.readFile(join(networkDir, routePath));
+    const geometry = await readRouteGeometry({
       format,
-      length_m: null,
-      displayLength: null,
-      mapStatus: "ready",
-      sourceCrs: "EPSG:4326",
-      targetCrs: "EPSG:4326",
-      message:
-        "This route is in a map-ready geographic format. Route coordinates will be returned after the Zig/WASM route geometry operation is added.",
-    },
-    routeGeometry: null,
-  };
+      dataB64: Buffer.from(routeData).toString("base64"),
+    });
+    return {
+      route: {
+        path: routePath,
+        format,
+        length_m: null,
+        displayLength: null,
+        mapStatus: "ready",
+        sourceCrs: "EPSG:4326",
+        targetCrs: "EPSG:4326",
+        message: null,
+      },
+      routeGeometry: {
+        type: geometry.geometry.type,
+        coordinates: geometry.geometry.coordinates.map(([lon, lat, z]) => ({
+          lon,
+          lat,
+          z,
+        })),
+      },
+    };
+  } catch {
+    return {
+      route: {
+        path: routePath,
+        format,
+        length_m: null,
+        displayLength: null,
+        mapStatus: "parse_error",
+        sourceCrs: "EPSG:4326",
+        targetCrs: "EPSG:4326",
+        message: "This route could not be read.",
+      },
+      routeGeometry: null,
+    };
+  }
 }
 
 function routeStart(block: MappableBlock): GeoCoordinate | null {

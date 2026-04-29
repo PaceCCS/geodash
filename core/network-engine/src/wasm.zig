@@ -796,7 +796,7 @@ fn runComputeRouteKp(input: []const u8) ![]u8 {
 
 // ── geodash_read_route_geometry ───────────────────────────────────────────────
 //
-// Input:  { shp_b64: string }
+// Input:  { format?: "shapefile" | "kmz" | "kml" | "csv", shp_b64?: string, data_b64?: string }
 // Output: { geometry: { type: "LineString", coordinates: [[lon, lat, z], ...] } }
 
 export fn geodash_read_route_geometry(in_ptr: u32, in_len: u32, out_ptr: u32, out_len: u32) i32 {
@@ -817,38 +817,62 @@ fn runReadRouteGeometry(input: []const u8) ![]u8 {
         .object => |o| o,
         else => return error.InvalidInput,
     };
-    const shp_b64: []const u8 = switch (obj.get("shp_b64") orelse return error.MissingShpB64) {
+    const format: []const u8 = if (obj.get("format")) |value| switch (value) {
         .string => |s| s,
         else => return error.InvalidInput,
-    };
+    } else "shapefile";
 
     const dec = std.base64.standard.Decoder;
-    const shp_len = try dec.calcSizeForSlice(shp_b64);
-    const shp_bytes = try a.alloc(u8, shp_len);
-    try dec.decode(shp_bytes, shp_b64);
-
-    const records = try shapefile.readShpFromBytes(a, shp_bytes);
 
     var out_buf: Buf = .empty;
     errdefer out_buf.deinit(wasm_alloc);
 
-    try bufAppendSlice(&out_buf, wasm_alloc, "{\"geometry\":{\"type\":\"LineString\",\"coordinates\":[");
-    var first = true;
-    for (records) |record| {
-        switch (record.geometry) {
-            .point_z => |point| {
-                if (!first) try bufAppend(&out_buf, wasm_alloc, ',');
-                first = false;
-                try bufPrint(&out_buf, wasm_alloc, "[{d},{d},{d}]", .{ point.x, point.y, point.z });
-            },
-            .poly_line_z => |poly| {
-                for (poly.points, 0..) |coords, index| {
+    if (std.mem.eql(u8, format, "shapefile")) {
+        const shp_b64: []const u8 = switch (obj.get("shp_b64") orelse return error.MissingShpB64) {
+            .string => |s| s,
+            else => return error.InvalidInput,
+        };
+        const shp_len = try dec.calcSizeForSlice(shp_b64);
+        const shp_bytes = try a.alloc(u8, shp_len);
+        try dec.decode(shp_bytes, shp_b64);
+
+        const records = try shapefile.readShpFromBytes(a, shp_bytes);
+
+        try bufAppendSlice(&out_buf, wasm_alloc, "{\"geometry\":{\"type\":\"LineString\",\"coordinates\":[");
+        var first = true;
+        for (records) |record| {
+            switch (record.geometry) {
+                .point_z => |point| {
                     if (!first) try bufAppend(&out_buf, wasm_alloc, ',');
                     first = false;
-                    try bufPrint(&out_buf, wasm_alloc, "[{d},{d},{d}]", .{ coords[0], coords[1], poly.z[index] });
-                }
-            },
+                    try bufPrint(&out_buf, wasm_alloc, "[{d},{d},{d}]", .{ point.x, point.y, point.z });
+                },
+                .poly_line_z => |poly| {
+                    for (poly.points, 0..) |coords, index| {
+                        if (!first) try bufAppend(&out_buf, wasm_alloc, ',');
+                        first = false;
+                        try bufPrint(&out_buf, wasm_alloc, "[{d},{d},{d}]", .{ coords[0], coords[1], poly.z[index] });
+                    }
+                },
+            }
         }
+        try bufAppendSlice(&out_buf, wasm_alloc, "]}}");
+        return out_buf.toOwnedSlice(wasm_alloc);
+    }
+
+    const data_b64: []const u8 = switch (obj.get("data_b64") orelse return error.MissingDataB64) {
+        .string => |s| s,
+        else => return error.InvalidInput,
+    };
+    const data_len = try dec.calcSizeForSlice(data_b64);
+    const route_bytes = try a.alloc(u8, data_len);
+    try dec.decode(route_bytes, data_b64);
+    const poly = try shapefile.readKmlFromBytes(a, format, route_bytes);
+
+    try bufAppendSlice(&out_buf, wasm_alloc, "{\"geometry\":{\"type\":\"LineString\",\"coordinates\":[");
+    for (poly.points, 0..) |coords, index| {
+        if (index > 0) try bufAppend(&out_buf, wasm_alloc, ',');
+        try bufPrint(&out_buf, wasm_alloc, "[{d},{d},{d}]", .{ coords[0], coords[1], poly.z[index] });
     }
     try bufAppendSlice(&out_buf, wasm_alloc, "]}}");
 

@@ -36,8 +36,8 @@ export function BranchNode({ data, selected }: NodeProps) {
       {blocks && blocks.length > 0 && (
         <div className="space-y-1 px-0.5">
           {blocks.map((block, index) => {
-            const isMappable = geoBlocks.some(
-              (b) => b.branchId === nodeData.id && b.blockIndex === index,
+            const hasOwnRouteGeometry = geoBlocks.some(
+              (b) => b.branchId === nodeData.id && b.blockIndex === index && b.routeGeometry !== null,
             );
 
             return (
@@ -62,7 +62,7 @@ export function BranchNode({ data, selected }: NodeProps) {
                   {block.label || block.type || block.kind}
                 </span>
 
-                {isMappable ? (
+                {hasOwnRouteGeometry ? (
                   <Map className="h-3 w-3 shrink-0 text-muted-foreground" />
                 ) : null}
 

@@ -41,6 +41,13 @@ pub fn read(allocator: std.mem.Allocator, path: []const u8) !PolyLineZ {
     return KmlError.UnsupportedFormat;
 }
 
+pub fn readFromBytes(allocator: std.mem.Allocator, format: []const u8, data: []const u8) !PolyLineZ {
+    if (std.mem.eql(u8, format, "kmz")) return readKmzFromBytes(allocator, data);
+    if (std.mem.eql(u8, format, "kml")) return parseKml(allocator, data);
+    if (std.mem.eql(u8, format, "csv")) return parseCsv(allocator, data);
+    return KmlError.UnsupportedFormat;
+}
+
 // ---------------------------------------------------------------------------
 // KML
 // ---------------------------------------------------------------------------
@@ -131,6 +138,72 @@ fn readKmz(allocator: std.mem.Allocator, path: []const u8) !PolyLineZ {
     }
 
     return KmlError.KmlNotFound;
+}
+
+fn readKmzFromBytes(allocator: std.mem.Allocator, data: []const u8) !PolyLineZ {
+    const end_record = findZipEndRecord(data) orelse return error.ZipNoEndRecord;
+    var cd_offset: usize = end_record.central_directory_offset;
+
+    for (0..end_record.record_count_total) |_| {
+        if (cd_offset + @sizeOf(std.zip.CentralDirectoryFileHeader) > data.len) return error.ZipTruncated;
+        const header: *align(1) const std.zip.CentralDirectoryFileHeader = @ptrCast(data[cd_offset..][0..@sizeOf(std.zip.CentralDirectoryFileHeader)].ptr);
+        if (!std.mem.eql(u8, &header.signature, &std.zip.central_file_header_sig)) return error.ZipBadCdOffset;
+
+        const filename_start = cd_offset + @sizeOf(std.zip.CentralDirectoryFileHeader);
+        const filename_end = filename_start + header.filename_len;
+        if (filename_end > data.len) return error.ZipTruncated;
+        const filename = data[filename_start..filename_end];
+
+        if (std.mem.endsWith(u8, filename, ".kml")) {
+            const kml_data = try readKmzEntryBytes(allocator, data, header.*);
+            defer allocator.free(kml_data);
+            return parseKml(allocator, kml_data);
+        }
+
+        cd_offset = filename_end + header.extra_len + header.comment_len;
+    }
+
+    return KmlError.KmlNotFound;
+}
+
+fn findZipEndRecord(data: []const u8) ?std.zip.EndRecord {
+    const pos = std.mem.lastIndexOf(u8, data, &std.zip.end_record_sig) orelse return null;
+    if (pos + @sizeOf(std.zip.EndRecord) > data.len) return null;
+    const record: *align(1) const std.zip.EndRecord = @ptrCast(data[pos..][0..@sizeOf(std.zip.EndRecord)].ptr);
+    return record.*;
+}
+
+fn readKmzEntryBytes(
+    allocator: std.mem.Allocator,
+    data: []const u8,
+    header: std.zip.CentralDirectoryFileHeader,
+) ![]u8 {
+    const local_offset: usize = header.local_file_header_offset;
+    if (local_offset + @sizeOf(std.zip.LocalFileHeader) > data.len) return error.ZipTruncated;
+    const local_header: *align(1) const std.zip.LocalFileHeader = @ptrCast(data[local_offset..][0..@sizeOf(std.zip.LocalFileHeader)].ptr);
+    if (!std.mem.eql(u8, &local_header.signature, &std.zip.local_file_header_sig)) return error.ZipBadFileOffset;
+
+    const compressed_start = local_offset + @sizeOf(std.zip.LocalFileHeader) + local_header.filename_len + local_header.extra_len;
+    const compressed_end = compressed_start + header.compressed_size;
+    if (compressed_end > data.len) return error.ZipTruncated;
+    const compressed = data[compressed_start..compressed_end];
+
+    const output = try allocator.alloc(u8, header.uncompressed_size);
+    errdefer allocator.free(output);
+
+    switch (header.compression_method) {
+        .store => @memcpy(output, compressed),
+        .deflate => {
+            var input = std.Io.Reader.fixed(compressed);
+            var writer = std.Io.Writer.fixed(output);
+            var flate_buffer: [std.compress.flate.max_window_len]u8 = undefined;
+            var decompress: std.compress.flate.Decompress = .init(&input, .raw, &flate_buffer);
+            try decompress.reader.streamExact64(&writer, header.uncompressed_size);
+        },
+        else => return error.UnsupportedCompressionMethod,
+    }
+
+    return output;
 }
 
 // ---------------------------------------------------------------------------
