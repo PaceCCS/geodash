@@ -42,6 +42,7 @@ type LoadState =
 type TreeContextMenuTarget = {
   absolutePath: string;
   canEdit: boolean;
+  canRename: boolean;
   canView: boolean;
   isConfig: boolean;
   treePath: string;
@@ -108,7 +109,9 @@ function getTreePathName(path: string): string {
     normalizedPath.lastIndexOf("\\"),
   );
 
-  return lastSlash === -1 ? normalizedPath : normalizedPath.slice(lastSlash + 1);
+  return lastSlash === -1
+    ? normalizedPath
+    : normalizedPath.slice(lastSlash + 1);
 }
 
 function getDropDestinationTreePath(
@@ -197,6 +200,7 @@ export function SidebarFileTree({ directoryPath }: SidebarFileTreeProps) {
         ? { text: "shp", title: "Shapefile" }
         : null,
     renaming: {
+      canRename: (item) => item.path !== "config.toml",
       onError: (message) => {
         console.error("[sidebar] Failed to rename tree item:", message);
       },
@@ -304,7 +308,10 @@ export function SidebarFileTree({ directoryPath }: SidebarFileTreeProps) {
         );
       }
     } catch (err) {
-      await handleMoveFailure("[sidebar] Failed to persist drag/drop move:", err);
+      await handleMoveFailure(
+        "[sidebar] Failed to persist drag/drop move:",
+        err,
+      );
     }
   }
 
@@ -399,6 +406,7 @@ export function SidebarFileTree({ directoryPath }: SidebarFileTreeProps) {
               target={{
                 absolutePath: joinTreePath(directoryPath, treePath),
                 canEdit,
+                canRename: !isConfigFile(treePath),
                 canView,
                 isConfig: isConfigFile(treePath),
                 treePath,
@@ -488,6 +496,7 @@ function SidebarFileTreeContextMenu({
         View
       </FileTreeContextMenuButton>
       <FileTreeContextMenuButton
+        disabled={!target.canRename}
         onClick={() =>
           closeAndRun(() => {
             selectTreePath(model, target.treePath);
