@@ -1,8 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLiveQuery } from "@tanstack/react-db";
-import { Map as MapLibreMap, Source, Layer, type MapRef } from "@vis.gl/react-maplibre";
-import { FolderOpen, EyeOff, Map as MapIcon, Save, Workflow } from "lucide-react";
+import {
+  Map as MapLibreMap,
+  Source,
+  Layer,
+  type MapRef,
+} from "@vis.gl/react-maplibre";
+import {
+  FolderOpen,
+  EyeOff,
+  Map as MapIcon,
+  Save,
+  Workflow,
+} from "lucide-react";
 
 import { BlockCreatorDialog } from "@/components/flow/editor/block-creator-dialog";
 import { SelectionEditorOverlay } from "@/components/flow/editor/selection-editor-overlay";
@@ -37,7 +48,10 @@ import {
   resolveFlowSelection,
 } from "@/lib/flow-selection";
 import type { FlowEdge, FlowNode } from "@/lib/collections/flow-nodes";
-import { createNetworkSnapshotFromFlow, diffNetworkSnapshots } from "@/lib/network-activity";
+import {
+  createNetworkSnapshotFromFlow,
+  diffNetworkSnapshots,
+} from "@/lib/network-activity";
 import {
   getNetworkFromPath,
   inspectGeoBlocks,
@@ -87,7 +101,8 @@ pressure = ["block"]
 
 export const Route = createFileRoute("/network/watch")({
   validateSearch: (search): WatchSearch => ({
-    directory: typeof search.directory === "string" ? search.directory : undefined,
+    directory:
+      typeof search.directory === "string" ? search.directory : undefined,
     [FLOW_SELECTION_QUERY_PARAM]: normalizeFlowSelectionQuery(
       search[FLOW_SELECTION_QUERY_PARAM],
     ),
@@ -111,10 +126,16 @@ function WatchPage() {
   const hydrated = useHydrated();
   const [isBusy, setIsBusy] = useState(false);
   const [isDirectoryBrowserOpen, setIsDirectoryBrowserOpen] = useState(false);
-  const [shapefileDialogPath, setShapefileDialogPath] = useState<string | null>(null);
+  const [shapefileDialogPath, setShapefileDialogPath] = useState<string | null>(
+    null,
+  );
   const { setActions: setHeaderFileActions } = useHeaderFileActions();
-  const setSidebarDirectory = useWorkspaceSidebar((state) => state.setDirectory);
-  const setSidebarItemActions = useWorkspaceSidebar((state) => state.setItemActions);
+  const setSidebarDirectory = useWorkspaceSidebar(
+    (state) => state.setDirectory,
+  );
+  const setSidebarItemActions = useWorkspaceSidebar(
+    (state) => state.setItemActions,
+  );
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
   const selectedQuery = search.selected;
@@ -135,7 +156,9 @@ function WatchPage() {
         search: (prev) => ({
           ...prev,
           selected: nextSelected,
-          [FLOW_EDITOR_QUERY_PARAM]: nextSelected ? prev[FLOW_EDITOR_QUERY_PARAM] : undefined,
+          [FLOW_EDITOR_QUERY_PARAM]: nextSelected
+            ? prev[FLOW_EDITOR_QUERY_PARAM]
+            : undefined,
         }),
       });
     },
@@ -164,24 +187,29 @@ function WatchPage() {
           ...prev,
           view: nextViewMode === "schematic" ? undefined : nextViewMode,
           [FLOW_EDITOR_QUERY_PARAM]:
-            nextViewMode === "schematic" ? prev[FLOW_EDITOR_QUERY_PARAM] : undefined,
+            nextViewMode === "schematic"
+              ? prev[FLOW_EDITOR_QUERY_PARAM]
+              : undefined,
         }),
       });
     },
     [navigate],
   );
 
-  const openDirectory = useCallback(async (path: string) => {
-    setIsBusy(true);
-    try {
-      await enableWatchMode(path);
-    } catch (err) {
-      console.error("[watch] Failed to enable watch mode:", err);
-      throw err;
-    } finally {
-      setIsBusy(false);
-    }
-  }, [enableWatchMode]);
+  const openDirectory = useCallback(
+    async (path: string) => {
+      setIsBusy(true);
+      try {
+        await enableWatchMode(path);
+      } catch (err) {
+        console.error("[watch] Failed to enable watch mode:", err);
+        throw err;
+      } finally {
+        setIsBusy(false);
+      }
+    },
+    [enableWatchMode],
+  );
 
   const handleSelectDirectory = useCallback(() => {
     setIsDirectoryBrowserOpen(true);
@@ -239,7 +267,10 @@ function WatchPage() {
 
   useEffect(() => {
     if (watchMode.enabled && watchMode.directoryPath) {
-      setSidebarDirectory({ path: watchMode.directoryPath, label: "Network Files" });
+      setSidebarDirectory({
+        path: watchMode.directoryPath,
+        label: "Network Files",
+      });
       return () => setSidebarDirectory(null);
     }
 
@@ -253,11 +284,19 @@ function WatchPage() {
     }
 
     const getNodeIdFromTreePath = (path: string) =>
-      path.replace(/\.toml$/i, "").split("/").at(-1) ?? path;
+      path
+        .replace(/\.toml$/i, "")
+        .split("/")
+        .at(-1) ?? path;
     const getAbsoluteTreePath = (path: string) => {
-      const normalizedDirectory = watchMode.directoryPath!.replace(/[\\/]+$/, "");
+      const normalizedDirectory = watchMode.directoryPath!.replace(
+        /[\\/]+$/,
+        "",
+      );
       const normalizedPath = path.replace(/[\\/]+$/, "");
-      return normalizedPath ? `${normalizedDirectory}/${normalizedPath}` : normalizedDirectory;
+      return normalizedPath
+        ? `${normalizedDirectory}/${normalizedPath}`
+        : normalizedDirectory;
     };
 
     setSidebarItemActions({
@@ -292,14 +331,19 @@ function WatchPage() {
         );
       },
       copyPath: (path) => {
-        void navigator.clipboard.writeText(path).catch((err) =>
-          console.error("[sidebar] Failed to copy path:", err),
-        );
+        void navigator.clipboard
+          .writeText(path)
+          .catch((err) => console.error("[sidebar] Failed to copy path:", err));
       },
     });
 
     return () => setSidebarItemActions({});
-  }, [navigate, setSidebarItemActions, watchMode.directoryPath, watchMode.enabled]);
+  }, [
+    navigate,
+    setSidebarItemActions,
+    watchMode.directoryPath,
+    watchMode.enabled,
+  ]);
 
   useCommands(
     watchMode.enabled
@@ -326,7 +370,7 @@ function WatchPage() {
               dialog.close();
             },
             group: "View",
-            icon: <Map />,
+            icon: <MapIcon />,
             shortcut: "Mod+G",
             checked: viewMode === "geographic",
             menuOrder: 201,
@@ -443,7 +487,9 @@ function WatchPage() {
                 }}
                 onOpenNodeInFinder={(nodeId) => {
                   if (!watchMode.directoryPath) return;
-                  void revealPath(`${watchMode.directoryPath}/${nodeId}.toml`).catch((err) =>
+                  void revealPath(
+                    `${watchMode.directoryPath}/${nodeId}.toml`,
+                  ).catch((err) =>
                     console.error("[flow] Failed to reveal node file:", err),
                   );
                 }}
@@ -509,7 +555,9 @@ function HydratedWatchNetwork({
     () => resolveFlowSelection(selectedQuery, nodesRaw),
     [nodesRaw, selectedQuery],
   );
-  const editableSelection = isEditableFlowSelection(selection) ? selection : undefined;
+  const editableSelection = isEditableFlowSelection(selection)
+    ? selection
+    : undefined;
   const addBlockBranch = useMemo(() => {
     if (!addBlockBranchId) {
       return undefined;
@@ -603,10 +651,7 @@ function HydratedWatchNetwork({
   );
 
   const handleCreateBranch = useCallback(
-    async (
-      position: { x: number; y: number },
-      parentId?: string,
-    ) => {
+    async (position: { x: number; y: number }, parentId?: string) => {
       const previousNodes = sortNodesWithParentsFirst(nodesRaw);
       const existingIds = new Set(previousNodes.map((node) => node.id));
       const newId = nextBranchId(existingIds);
@@ -797,7 +842,10 @@ function GeographicNetworkView({ syncDirectory }: { syncDirectory: string }) {
 
   const routeGeoJson = useMemo(() => {
     const features = (geoResult?.blocks ?? [])
-      .filter((block) => block.routeGeometry && block.routeGeometry.coordinates.length > 1)
+      .filter(
+        (block) =>
+          block.routeGeometry && block.routeGeometry.coordinates.length > 1,
+      )
       .map((block) => ({
         type: "Feature" as const,
         properties: {
@@ -889,9 +937,7 @@ function GeographicNetworkView({ syncDirectory }: { syncDirectory: string }) {
           <MapIcon className="size-4" />
           Geographic view
         </div>
-        <p className="mt-1 text-muted-foreground">
-          {statusText}
-        </p>
+        <p className="mt-1 text-muted-foreground">{statusText}</p>
         {!error && geoResult && routeCount === 0 ? (
           <p className="mt-2 text-muted-foreground">
             Add a WGS84 shapefile, KMZ, KML, or CSV route to draw it here.
