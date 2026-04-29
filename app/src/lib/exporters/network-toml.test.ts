@@ -11,7 +11,7 @@ import {
   getTomlPathsToDelete,
   serializeNodeToToml,
 } from "./network-toml";
-import type { FlowNode, FlowEdge } from "@/lib/collections/flow-nodes";
+import type { FlowNode, FlowEdge, FlowBranchNode } from "@/lib/collections/flow-nodes";
 import type { NetworkNode } from "@/lib/api-client";
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -135,13 +135,30 @@ describe("serializeNodeToToml", () => {
     expect(blocks[1].pressure).toBe("120 bar");
   });
 
-  test("branch: computed block fields (kind, label) are stripped", () => {
+  test("branch: computed block fields are stripped", () => {
     const node = makeBranchNode();
     const toml = serializeNodeToToml(node as unknown as NetworkNode);
     const parsed = TOML.parse(toml) as Record<string, unknown>;
     const blocks = parsed.block as Record<string, unknown>[];
     expect(blocks[0].kind).toBeUndefined();
     expect(blocks[0].label).toBeUndefined();
+  });
+
+  test("branch: custom block labels are preserved", () => {
+    const base = makeBranchNode() as FlowBranchNode;
+    const node = makeBranchNode("branch-1", {
+      data: {
+        ...base.data,
+        blocks: [
+          { quantity: 2, type: "Pipe", kind: "pipe", label: "Custom Pipe" },
+          ...base.data.blocks.slice(1),
+        ],
+      },
+    });
+    const toml = serializeNodeToToml(node as unknown as NetworkNode);
+    const parsed = TOML.parse(toml) as Record<string, unknown>;
+    const blocks = parsed.block as Record<string, unknown>[];
+    expect(blocks[0].label).toBe("Custom Pipe");
   });
 
   test("branch: authored extras are preserved while derived fluid values are omitted", () => {

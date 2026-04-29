@@ -233,6 +233,41 @@ test("leaving watch mode via navigation clears the activity log", async () => {
   }
 });
 
+test("editing a block label through the flow UI persists to TOML", async () => {
+  const watchDirectory = await createExampleWatchFixture();
+  const electronApp = await electron.launch({
+    executablePath: electronBinary,
+    args: [mainScriptPath],
+    env: {
+      ...process.env,
+      ELECTRON_RENDERER_URL: rendererEntryPath,
+      GEODASH_DISABLE_DEVTOOLS: "1",
+      GEODASH_TEST_PICK_DIRECTORY: watchDirectory,
+    },
+  });
+
+  try {
+    const page = await electronApp.firstWindow();
+
+    await openNetworkDirectory(page, watchDirectory);
+    await page.getByTestId("branch-node-branch-2").getByText("special pipe").click();
+    await page.keyboard.press("Meta+E");
+
+    const editor = page.getByRole("dialog", { name: /Block editor:/ });
+    await expect(editor).toBeVisible();
+    await editor.getByRole("textbox").first().fill("renamed pipe");
+    await editor.getByRole("button", { name: "Apply Changes" }).click();
+
+    await expect(page.getByTestId("branch-node-branch-2").getByText("renamed pipe")).toBeVisible();
+    await expect.poll(
+      async () => readFile(join(watchDirectory, "branch-2.toml"), "utf8"),
+    ).toContain('label = "renamed pipe"');
+  } finally {
+    await electronApp.close();
+    await rm(watchDirectory, { recursive: true, force: true });
+  }
+});
+
 async function dragBranch(page: Page, branchId: string) {
   const branchNodeContent = page.getByTestId(`branch-node-${branchId}`);
   await expect(branchNodeContent).toBeVisible();

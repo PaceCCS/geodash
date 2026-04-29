@@ -15,6 +15,9 @@ export function buildTomlBlockObject(block: Block): Record<string, unknown> {
     blockObj.quantity = block.quantity;
   }
   blockObj.type = block.type;
+  if (block.label && block.label !== block.type) {
+    blockObj.label = block.label;
+  }
   Object.keys(block).forEach((key) => {
     if (!["type", "quantity", "kind", "label"].includes(key)) {
       blockObj[key] = (block as Record<string, unknown>)[key];

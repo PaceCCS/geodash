@@ -82,9 +82,6 @@ export function getSelectionEditorDerivedValues(
       if (selection.block?.kind) {
         derived.kind = selection.block.kind;
       }
-      if (selection.block?.label) {
-        derived.label = selection.block.label;
-      }
       return derived;
     }
     case "branch": {
@@ -159,18 +156,23 @@ function applyBlockSelectionAuthoredValues(
     typeof authoredValues.quantity === "number" && Number.isFinite(authoredValues.quantity)
       ? authoredValues.quantity
       : selection.block?.quantity ?? 1;
+  const nextLabel =
+    typeof authoredValues.label === "string" && authoredValues.label.trim()
+      ? authoredValues.label.trim()
+      : selection.block?.label ?? nextType;
 
   const nextBlock: Block = {
     type: nextType,
     quantity: nextQuantity,
     kind: nextType.toLowerCase(),
-    label: nextType,
+    label: nextLabel,
   };
 
   for (const [key, value] of Object.entries(authoredValues)) {
     if (
       key === "type" ||
       key === "quantity" ||
+      key === "label" ||
       value === undefined
     ) {
       continue;
@@ -278,6 +280,7 @@ function getBlockAuthoredValues(
   block: Block,
 ): Record<string, NetworkValue> {
   const authoredValues: Record<string, NetworkValue> = {
+    label: block.label ?? block.type,
     type: block.type,
     quantity: block.quantity,
   };

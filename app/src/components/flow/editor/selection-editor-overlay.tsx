@@ -1156,7 +1156,7 @@ function isFieldRequired(
 ): boolean {
   switch (selection.kind) {
     case "block":
-      return key === "type" || key === "quantity";
+      return key === "label" || key === "type" || key === "quantity";
     case "branch":
     case "group":
       return key === "position";
@@ -1169,7 +1169,7 @@ function isFieldRemovable(
 ): boolean {
   switch (selection.kind) {
     case "block":
-      return key !== "type" && key !== "quantity";
+      return key !== "label" && key !== "type" && key !== "quantity";
     case "branch":
     case "group":
       return key !== "label" && key !== "position";
@@ -1182,7 +1182,7 @@ function getOrderedFieldKeys(
 ): string[] {
   const priority =
     selection.kind === "block"
-      ? ["type", "quantity", "composition"]
+      ? ["label", "type", "quantity", "composition"]
       : ["label", "position", "parentId", "width", "height"];
 
   const remaining = keys
