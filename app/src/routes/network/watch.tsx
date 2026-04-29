@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLiveQuery } from "@tanstack/react-db";
 import { FolderOpen, EyeOff, Map, Save, Workflow } from "lucide-react";
 
+import { BlockCreatorDialog } from "@/components/flow/editor/block-creator-dialog";
 import { SelectionEditorOverlay } from "@/components/flow/editor/selection-editor-overlay";
 import { DirectoryBrowserDialog } from "@/components/directory-browser-dialog";
 import { FlowNetwork } from "@/components/flow/flow-network";
@@ -39,6 +40,7 @@ import {
   getNetworkFromPath,
   type NetworkConfigMetadata,
 } from "@/lib/api-client";
+import { isBranchNode } from "@/lib/collections/flow-nodes";
 import { isEditableFlowSelection } from "@/lib/selection-editor";
 import { useWorkspaceSidebar } from "@/lib/stores/workspace-sidebar";
 
@@ -495,11 +497,26 @@ function HydratedWatchNetwork({
 }) {
   const { data: nodesRaw = [] } = useLiveQuery(nodesCollection);
   const { data: edgesRaw = [] } = useLiveQuery(edgesCollection);
+  const [addBlockBranchId, setAddBlockBranchId] = useState<string | null>(null);
   const selection = useMemo(
     () => resolveFlowSelection(selectedQuery, nodesRaw),
     [nodesRaw, selectedQuery],
   );
   const editableSelection = isEditableFlowSelection(selection) ? selection : undefined;
+  const addBlockBranch = useMemo(() => {
+    if (!addBlockBranchId) {
+      return undefined;
+    }
+
+    const candidate = nodesRaw.find((node) => node.id === addBlockBranchId);
+    return candidate && isBranchNode(candidate) ? candidate : undefined;
+  }, [addBlockBranchId, nodesRaw]);
+
+  useEffect(() => {
+    if (addBlockBranchId && !addBlockBranch) {
+      setAddBlockBranchId(null);
+    }
+  }, [addBlockBranch, addBlockBranchId]);
 
   const nodes = useMemo(() => {
     const selectedNodeId = getSelectedNodeIdFromQuery(selectedQuery);
@@ -585,6 +602,7 @@ function HydratedWatchNetwork({
             selectedQuery={selectedQuery}
             onEditNode={onEditNode}
             onOpenNodeInFinder={onOpenNodeInFinder}
+            onAddBlockToBranch={setAddBlockBranchId}
             onSelectedQueryChange={onSelectedQueryChange}
           />
           <SelectionEditorOverlay
@@ -592,6 +610,13 @@ function HydratedWatchNetwork({
             selection={editableSelection}
             configMetadata={configMetadata}
             onClose={() => onEditorOpenChange(false)}
+            onSave={handleSaveSelection}
+            onAddBlock={setAddBlockBranchId}
+          />
+          <BlockCreatorDialog
+            open={Boolean(addBlockBranch)}
+            branch={addBlockBranch}
+            onClose={() => setAddBlockBranchId(null)}
             onSave={handleSaveSelection}
           />
         </>

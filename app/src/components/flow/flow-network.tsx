@@ -62,6 +62,7 @@ type FlowNetworkProps = {
   onSelectedQueryChange?: (query: string | null) => void;
   onEditNode?: (nodeId: string) => void;
   onOpenNodeInFinder?: (nodeId: string) => void;
+  onAddBlockToBranch?: (branchId: string) => void;
   onPropagationInputsChanged?: () => Promise<void> | void;
   /**
    * When provided, canvas edits are written back to TOML files in this
@@ -81,6 +82,7 @@ export function FlowNetwork({
   selectedQuery,
   onEditNode,
   onOpenNodeInFinder,
+  onAddBlockToBranch,
   onSelectedQueryChange,
   onPropagationInputsChanged,
   syncDirectory,
@@ -374,6 +376,7 @@ export function FlowNetwork({
         value={{
           selectedQuery,
           setSelectedQuery: handleSelectedQueryChange,
+          onAddBlockToBranch,
         }}
       >
         <ReactFlow

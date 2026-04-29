@@ -3,6 +3,7 @@ import { createContext, useContext } from "react";
 type FlowSelectionContextValue = {
   selectedQuery?: string;
   setSelectedQuery?: (query: string | null) => void;
+  onAddBlockToBranch?: (branchId: string) => void;
 };
 
 const FlowSelectionContext = createContext<FlowSelectionContextValue>({});

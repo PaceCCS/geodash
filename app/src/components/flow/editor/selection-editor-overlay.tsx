@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLiveQuery } from "@tanstack/react-db";
-import { Plus, TableProperties, Trash2, X } from "lucide-react";
+import { Plus, TableProperties, ToyBrick, Trash2, X } from "lucide-react";
 import QuantityDisplay from "@/components/quantities/quantity-display";
 
 import { FluidCompositionInput } from "@/components/forms/fields/fluid-composition-input";
@@ -65,6 +65,7 @@ type SelectionEditorOverlayProps = {
   onSave: (
     nextNode: ReturnType<typeof applySelectionEditorAuthoredValues>,
   ) => Promise<void>;
+  onAddBlock?: (branchId: string) => void;
 };
 
 export function SelectionEditorOverlay({
@@ -73,6 +74,7 @@ export function SelectionEditorOverlay({
   configMetadata,
   onClose,
   onSave,
+  onAddBlock,
 }: SelectionEditorOverlayProps) {
   const derivedValues = useMemo(
     () => (selection ? getSelectionEditorDerivedValues(selection) : {}),
@@ -257,10 +259,24 @@ export function SelectionEditorOverlay({
               {selection.query}
             </p>
           </div>
-          <Button type="button" size="icon" variant="ghost" onClick={onClose}>
-            <X className="size-4" />
-            <span className="sr-only">Close editor</span>
-          </Button>
+          <div className="flex items-center gap-2">
+            {selection.kind === "branch" && onAddBlock ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => onAddBlock(selection.node.id)}
+              >
+                <ToyBrick className="size-4" />
+                Add Block
+              </Button>
+            ) : null}
+            <Button type="button" size="icon" variant="ghost" onClick={onClose}>
+              <X className="size-4" />
+              <span className="sr-only">Close editor</span>
+            </Button>
+          </div>
         </div>
 
         <div className="grid min-h-0 flex-1 gap-0 xl:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
