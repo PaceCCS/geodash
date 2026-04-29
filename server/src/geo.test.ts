@@ -159,78 +159,80 @@ describe("POST /api/operations/geo/inspect", () => {
 
   test("places multiple non-pipe blocks between neighboring route endpoints", async () => {
     const networkDir = await fs.mkdtemp(join(tmpdir(), "geodash-geo-"));
-    await fs.cp(EXAMPLE_DIR, networkDir, { recursive: true });
-    await fs.writeFile(
-      join(networkDir, "branch-1.toml"),
-      `type = "branch"
-label = "Branch 1"
-parentId = "group-1"
 
-[position]
-x = 31.473801421615534
-y = 39.864923307171864
+    try {
+      await fs.mkdir(join(networkDir, "assets"));
+      await fs.writeFile(
+        join(networkDir, "config.toml"),
+        ['id = "geo-test"', 'label = "Geo Test"'].join("\n"),
+      );
+      await fs.writeFile(
+        join(networkDir, "assets/route-a.csv"),
+        [
+          "WKT,name,description",
+          '"LINESTRING (-2 53, -1 54)",Route A,',
+        ].join("\n"),
+      );
+      await fs.writeFile(
+        join(networkDir, "assets/route-b.csv"),
+        [
+          "WKT,name,description",
+          '"LINESTRING (1 55, 2 56)",Route B,',
+        ].join("\n"),
+      );
+      await fs.writeFile(
+        join(networkDir, "branch-1.toml"),
+        [
+          'type = "branch"',
+          'label = "Branch 1"',
+          "",
+          "[position]",
+          "x = 0",
+          "y = 0",
+          "",
+          "[[block]]",
+          'type = "Pipe"',
+          'route = "assets/route-a.csv"',
+          "",
+          "[[block]]",
+          'type = "Compressor"',
+          "",
+          "[[block]]",
+          'type = "Valve"',
+          "",
+          "[[block]]",
+          'type = "Pipe"',
+          'route = "assets/route-b.csv"',
+        ].join("\n"),
+      );
 
-[[outgoing]]
-target = "branch-2"
-weight = 1
+      const res = await postJson(app, "/api/operations/geo/inspect", {
+        network: networkDir,
+      });
 
-[[block]]
-type = "Source"
-flow_rate = 5
-pressure = 10
+      expect(res.status).toBe(200);
 
-[block.composition]
-carbonDioxideFraction = 0.96
-hydrogenFraction = 0.0075
-nitrogenFraction = 0.0325
+      const body = (await res.json()) as {
+        blocks: Array<{
+          type: string | null;
+          previousRouteEndpoint: { lon: number; lat: number; z: number | null } | null;
+          nextRouteEndpoint: { lon: number; lat: number; z: number | null } | null;
+        }>;
+      };
+      const compressor = body.blocks.find((b) => b.type === "Compressor");
+      const valve = body.blocks.find((b) => b.type === "Valve");
+      const previousEndpoint = { lon: -1, lat: 54, z: 0 };
+      const nextEndpoint = { lon: 1, lat: 55, z: 0 };
 
-[[block]]
-quantity = 4
-type = "Capture Unit"
-
-[[block]]
-type = "Pipe"
-route = "assets/spirit_wgs84"
-
-[[block]]
-type = "Compressor"
-pressure = "120 bar"
-
-[[block]]
-type = "Valve"
-
-[[block]]
-type = "Pipe"
-route = "assets/kmz_routes/route.kmz"
-`,
-      "utf8",
-    );
-
-    const res = await postJson(app, "/api/operations/geo/inspect", {
-      network: networkDir,
-    });
-
-    expect(res.status).toBe(200);
-
-    const body = (await res.json()) as {
-      blocks: Array<{
-        type: string | null;
-        previousRouteEndpoint: { lon: number; lat: number; z: number | null } | null;
-        nextRouteEndpoint: { lon: number; lat: number; z: number | null } | null;
-      }>;
-    };
-    const compressor = body.blocks.find((b) => b.type === "Compressor");
-    const valve = body.blocks.find((b) => b.type === "Valve");
-
-    expect(compressor).toBeDefined();
-    expect(valve).toBeDefined();
-    expect(compressor!.previousRouteEndpoint).toBeDefined();
-    expect(compressor!.nextRouteEndpoint).toBeDefined();
-    expect(valve!.previousRouteEndpoint).toEqual(compressor!.previousRouteEndpoint);
-    expect(valve!.nextRouteEndpoint).toEqual(compressor!.nextRouteEndpoint);
-    expect(compressor!.previousRouteEndpoint).not.toEqual(compressor!.nextRouteEndpoint);
-
-    await fs.rm(networkDir, { recursive: true, force: true });
+      expect(compressor).toBeDefined();
+      expect(valve).toBeDefined();
+      expect(compressor!.previousRouteEndpoint).toEqual(previousEndpoint);
+      expect(compressor!.nextRouteEndpoint).toEqual(nextEndpoint);
+      expect(valve!.previousRouteEndpoint).toEqual(previousEndpoint);
+      expect(valve!.nextRouteEndpoint).toEqual(nextEndpoint);
+    } finally {
+      await fs.rm(networkDir, { recursive: true, force: true });
+    }
   });
 
   test("returns empty blocks for missing network", async () => {
