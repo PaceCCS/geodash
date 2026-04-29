@@ -46,7 +46,12 @@ type TreeContextMenuTarget = {
 
 type TreeSelectionModel = {
   getFocusedPath: () => string | null;
-  getItem: (path: string) => { isDirectory: () => boolean } | null;
+  getItem: (path: string) => {
+    deselect: () => void;
+    focus: () => void;
+    isDirectory: () => boolean;
+    select: () => void;
+  } | null;
   getSelectedPaths: () => readonly string[];
 };
 
@@ -102,6 +107,22 @@ function getSelectedTargetDirectory(model: TreeSelectionModel): string {
   return item?.isDirectory()
     ? `${selectedPath.replace(/\/+$/, "")}/`
     : getParentTreePath(selectedPath);
+}
+
+function selectTreePath(model: TreeSelectionModel, path: string): void {
+  const item = model.getItem(path);
+  if (!item) {
+    return;
+  }
+
+  for (const selectedPath of model.getSelectedPaths()) {
+    if (selectedPath !== path) {
+      model.getItem(selectedPath)?.deselect();
+    }
+  }
+
+  item.select();
+  item.focus();
 }
 
 async function loadTreePaths(directoryPath: string): Promise<{
@@ -299,6 +320,7 @@ export function SidebarFileTree({ directoryPath }: SidebarFileTreeProps) {
             <SidebarFileTreeContextMenu
               actions={itemActionsRef.current}
               context={context}
+              model={model}
               target={{
                 absolutePath: joinTreePath(directoryPath, treePath),
                 canEdit,
@@ -352,10 +374,12 @@ export function SidebarFileTree({ directoryPath }: SidebarFileTreeProps) {
 function SidebarFileTreeContextMenu({
   actions,
   context,
+  model,
   target,
 }: {
   actions: WorkspaceItemActions;
   context: ContextMenuOpenContext;
+  model: TreeSelectionModel;
   target: TreeContextMenuTarget;
 }) {
   const { anchorRect } = context;
@@ -379,7 +403,12 @@ function SidebarFileTreeContextMenu({
     >
       <FileTreeContextMenuButton
         disabled={!target.canView || !actions.viewPath}
-        onClick={() => closeAndRun(() => actions.viewPath?.(target.treePath))}
+        onClick={() =>
+          closeAndRun(() => {
+            selectTreePath(model, target.treePath);
+            actions.viewPath?.(target.treePath);
+          })
+        }
       >
         View
       </FileTreeContextMenuButton>
