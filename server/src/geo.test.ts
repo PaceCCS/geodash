@@ -102,6 +102,13 @@ describe("POST /api/operations/geo/inspect", () => {
           coordinates: Array<{ lon: number; lat: number; z: number | null }>;
         } | null;
       }>;
+      bounds: {
+        west: number;
+        south: number;
+        east: number;
+        north: number;
+      } | null;
+      center: { longitude: number; latitude: number } | null;
     };
 
     const spiritRoute = body.blocks.find(
@@ -137,6 +144,15 @@ describe("POST /api/operations/geo/inspect", () => {
 
     expect(compressor).toBeDefined();
     expect(compressor!.route.mapStatus).toBe("unsupported");
+
+    expect(body.bounds).toBeDefined();
+    expect(body.center).toBeDefined();
+    expect(body.bounds!.west).toBeLessThan(body.bounds!.east);
+    expect(body.bounds!.south).toBeLessThan(body.bounds!.north);
+    expect(body.center!.longitude).toBeGreaterThanOrEqual(body.bounds!.west);
+    expect(body.center!.longitude).toBeLessThanOrEqual(body.bounds!.east);
+    expect(body.center!.latitude).toBeGreaterThanOrEqual(body.bounds!.south);
+    expect(body.center!.latitude).toBeLessThanOrEqual(body.bounds!.north);
   });
 
   test("returns empty blocks for missing network", async () => {

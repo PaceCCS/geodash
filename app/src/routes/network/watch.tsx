@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLiveQuery } from "@tanstack/react-db";
-import { FolderOpen, EyeOff, Map, Save, Workflow } from "lucide-react";
+import { Map as MapLibreMap, Source, Layer, type MapRef } from "@vis.gl/react-maplibre";
+import { FolderOpen, EyeOff, Map as MapIcon, Save, Workflow } from "lucide-react";
 
 import { BlockCreatorDialog } from "@/components/flow/editor/block-creator-dialog";
 import { SelectionEditorOverlay } from "@/components/flow/editor/selection-editor-overlay";
@@ -39,6 +40,8 @@ import type { FlowEdge, FlowNode } from "@/lib/collections/flow-nodes";
 import { createNetworkSnapshotFromFlow, diffNetworkSnapshots } from "@/lib/network-activity";
 import {
   getNetworkFromPath,
+  inspectGeoBlocks,
+  type GeoInspectResult,
   type NetworkConfigMetadata,
 } from "@/lib/api-client";
 import { isBranchNode } from "@/lib/collections/flow-nodes";
@@ -768,15 +771,132 @@ function nextBranchId(existingIds: Set<string>): string {
 }
 
 function GeographicNetworkView({ syncDirectory }: { syncDirectory: string }) {
+  const mapRef = useRef<MapRef>(null);
+  const [geoResult, setGeoResult] = useState<GeoInspectResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    setError(null);
+    inspectGeoBlocks(syncDirectory)
+      .then((result) => {
+        if (!cancelled) setGeoResult(result);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setGeoResult(null);
+          setError(err instanceof Error ? err.message : String(err));
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [syncDirectory]);
+
+  const routeGeoJson = useMemo(() => {
+    const features = (geoResult?.blocks ?? [])
+      .filter((block) => block.routeGeometry && block.routeGeometry.coordinates.length > 1)
+      .map((block) => ({
+        type: "Feature" as const,
+        properties: {
+          id: `${block.branchId}/${block.blockIndex}`,
+          branchId: block.branchId,
+          blockIndex: block.blockIndex,
+          routePath: block.routePath,
+        },
+        geometry: {
+          type: "LineString" as const,
+          coordinates: block.routeGeometry!.coordinates.map((coordinate) => [
+            coordinate.lon,
+            coordinate.lat,
+          ]),
+        },
+      }));
+
+    return {
+      type: "FeatureCollection" as const,
+      features,
+    };
+  }, [geoResult]);
+
+  const fitMapToBounds = useCallback(() => {
+    if (!geoResult?.bounds) return;
+    mapRef.current?.fitBounds(
+      [
+        [geoResult.bounds.west, geoResult.bounds.south],
+        [geoResult.bounds.east, geoResult.bounds.north],
+      ],
+      { padding: 72, duration: 0 },
+    );
+  }, [geoResult?.bounds]);
+
+  useEffect(() => {
+    fitMapToBounds();
+  }, [fitMapToBounds]);
+
+  const center = geoResult?.center ?? { longitude: 0, latitude: 20 };
+  const routeCount = routeGeoJson.features.length;
+  let statusText = "Loading route geometry...";
+  if (error) {
+    statusText = `Could not load route geometry: ${error}`;
+  } else if (geoResult) {
+    statusText = `${routeCount} route${routeCount === 1 ? "" : "s"} ready for mapping.`;
+  }
+
   return (
-    <div className="flex h-full w-full items-center justify-center bg-muted/30 p-6">
-      <div className="max-w-md rounded-lg border bg-background/95 p-6 text-center shadow-sm">
-        <Map className="mx-auto mb-4 size-10 text-muted-foreground" />
-        <h2 className="text-lg font-semibold">Geographic view</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Map rendering is ready to be added here. This view will use geographic route
-          data from KMZ or shapefile sources in {syncDirectory}.
+    <div className="relative h-full w-full bg-muted/30">
+      <MapLibreMap
+        ref={mapRef}
+        initialViewState={{
+          longitude: center.longitude,
+          latitude: center.latitude,
+          zoom: 8,
+        }}
+        mapStyle="https://demotiles.maplibre.org/style.json"
+        style={{ width: "100%", height: "100%" }}
+        onLoad={fitMapToBounds}
+      >
+        {routeCount > 0 ? (
+          <Source id="network-routes" type="geojson" data={routeGeoJson}>
+            <Layer
+              id="network-routes-casing"
+              type="line"
+              paint={{
+                "line-color": "#0f172a",
+                "line-width": 7,
+                "line-opacity": 0.78,
+              }}
+              layout={{ "line-cap": "round", "line-join": "round" }}
+            />
+            <Layer
+              id="network-routes-line"
+              type="line"
+              paint={{
+                "line-color": "#38bdf8",
+                "line-width": 4,
+                "line-opacity": 0.95,
+              }}
+              layout={{ "line-cap": "round", "line-join": "round" }}
+            />
+          </Source>
+        ) : null}
+      </MapLibreMap>
+
+      <div className="absolute left-4 top-4 max-w-sm rounded-lg border bg-background/95 p-3 text-sm shadow-sm backdrop-blur">
+        <div className="flex items-center gap-2 font-medium">
+          <MapIcon className="size-4" />
+          Geographic view
+        </div>
+        <p className="mt-1 text-muted-foreground">
+          {statusText}
         </p>
+        {!error && geoResult && routeCount === 0 ? (
+          <p className="mt-2 text-muted-foreground">
+            Add a WGS84 shapefile, KMZ, KML, or CSV route to draw it here.
+          </p>
+        ) : null}
       </div>
     </div>
   );

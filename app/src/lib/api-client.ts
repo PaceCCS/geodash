@@ -276,7 +276,19 @@ export async function buildShapefileDocument(
 
 // ── Geo Inspect ──────────────────────────────────────────────────────────────
 
-export type GeoFormat = "shapefile" | "kmz" | "csv" | "coordinates";
+export type GeoFormat = "shapefile" | "kmz" | "kml" | "csv" | "coordinates";
+
+export type GeoBounds = {
+  west: number;
+  south: number;
+  east: number;
+  north: number;
+};
+
+export type GeoCenter = {
+  longitude: number;
+  latitude: number;
+};
 
 export type MappableBlock = {
   branchId: string;
@@ -292,6 +304,8 @@ export type MappableBlock = {
 
 export type GeoInspectResult = {
   blocks: MappableBlock[];
+  bounds: GeoBounds | null;
+  center: GeoCenter | null;
 };
 
 export async function inspectGeoBlocks(
