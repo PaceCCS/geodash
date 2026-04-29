@@ -593,6 +593,55 @@ function HydratedWatchNetwork({
     [edgesRaw, nodesRaw, reloadPersistedNetwork, syncDirectory],
   );
 
+  const handleCreateBranch = useCallback(
+    async (
+      position: { x: number; y: number },
+      parentId?: string,
+    ) => {
+      const previousNodes = sortNodesWithParentsFirst(nodesRaw);
+      const existingIds = new Set(previousNodes.map((node) => node.id));
+      const newId = nextBranchId(existingIds);
+
+      const newBranch: FlowNode = {
+        id: newId,
+        type: "branch",
+        position,
+        parentId,
+        extent: parentId ? "parent" : undefined,
+        data: {
+          id: newId,
+          label: "New branch",
+          blocks: [],
+        },
+        draggable: true,
+        selectable: true,
+      };
+
+      const nextNodes = [...previousNodes, newBranch];
+      const activityEntries = diffNetworkSnapshots(
+        createNetworkSnapshotFromFlow(previousNodes, edgesRaw),
+        createNetworkSnapshotFromFlow(nextNodes, edgesRaw),
+        {
+          source: "canvas",
+        },
+      );
+
+      writeNodesToCollection(nextNodes);
+      await exportNetworkToToml(nextNodes, edgesRaw, syncDirectory);
+      await reloadPersistedNetwork();
+      appendActivityLogEntries(activityEntries);
+
+      onSelectedQueryChange(newId);
+    },
+    [
+      edgesRaw,
+      nodesRaw,
+      onSelectedQueryChange,
+      reloadPersistedNetwork,
+      syncDirectory,
+    ],
+  );
+
   const handleDeleteSelection = useCallback(
     async (target: EditableFlowSelection) => {
       const previousNodes = sortNodesWithParentsFirst(nodesRaw);
@@ -675,6 +724,7 @@ function HydratedWatchNetwork({
             onEditNode={onEditNode}
             onOpenNodeInFinder={onOpenNodeInFinder}
             onAddBlockToBranch={setAddBlockBranchId}
+            onCreateBranch={handleCreateBranch}
             onSelectedQueryChange={onSelectedQueryChange}
           />
           <SelectionEditorOverlay
@@ -698,6 +748,16 @@ function HydratedWatchNetwork({
       )}
     </div>
   );
+}
+
+function nextBranchId(existingIds: Set<string>): string {
+  for (let i = 1; i < 10_000; i += 1) {
+    const candidate = `branch-${i}`;
+    if (!existingIds.has(candidate)) {
+      return candidate;
+    }
+  }
+  return `branch-${crypto.randomUUID()}`;
 }
 
 function GeographicNetworkView({ syncDirectory }: { syncDirectory: string }) {

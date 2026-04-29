@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import {
   Background,
   Controls,
@@ -17,6 +24,13 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { FlowSelectionProvider } from "@/components/flow/selection-context";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import {
   writeNodesToCollection,
   writeEdgesToCollection,
@@ -42,7 +56,6 @@ import {
   createNetworkSnapshotFromFlow,
   diffNetworkSnapshots,
 } from "@/lib/network-activity";
-import { cn } from "@/lib/utils";
 
 const nodeTypes: NodeTypes = {
   branch: BranchNode as NodeTypes["branch"],
@@ -63,6 +76,10 @@ type FlowNetworkProps = {
   onEditNode?: (nodeId: string) => void;
   onOpenNodeInFinder?: (nodeId: string) => void;
   onAddBlockToBranch?: (branchId: string) => void;
+  onCreateBranch?: (
+    position: { x: number; y: number },
+    parentId?: string,
+  ) => void;
   onPropagationInputsChanged?: () => Promise<void> | void;
   /**
    * When provided, canvas edits are written back to TOML files in this
@@ -83,6 +100,7 @@ export function FlowNetwork({
   onEditNode,
   onOpenNodeInFinder,
   onAddBlockToBranch,
+  onCreateBranch,
   onSelectedQueryChange,
   onPropagationInputsChanged,
   syncDirectory,
@@ -100,11 +118,7 @@ export function FlowNetwork({
   const lastViewportNodeSelectionRef = useRef<string | undefined>(undefined);
   const [localNodes, setLocalNodes] = useState<FlowNode[]>(nodes);
   const [localEdges, setLocalEdges] = useState<FlowEdge[]>(edges);
-  const [contextMenu, setContextMenu] = useState<{
-    node: Node;
-    x: number;
-    y: number;
-  } | null>(null);
+  const [menuTarget, setMenuTarget] = useState<MenuTarget | null>(null);
   const localNodesRef = useRef<FlowNode[]>(nodes);
   const localEdgesRef = useRef<FlowEdge[]>(edges);
   const persistedNodesRef = useRef<FlowNode[]>(nodes);
@@ -311,26 +325,65 @@ export function FlowNetwork({
   );
 
   const onPaneClick = useCallback(() => {
-    setContextMenu(null);
     handleSelectedQueryChange(null);
   }, [handleSelectedQueryChange]);
 
-  const onNodeContextMenu = useCallback<NodeMouseHandler<Node>>((event, node) => {
-    event.preventDefault();
-    setContextMenu({ node, x: event.clientX, y: event.clientY });
-  }, []);
+  const onNodeContextMenu = useCallback<NodeMouseHandler<Node>>(
+    (event, node) => {
+      setMenuTarget({
+        kind: "node",
+        node,
+        clientX: event.clientX,
+        clientY: event.clientY,
+      });
+    },
+    [],
+  );
 
-  useEffect(() => {
-    if (!contextMenu) return;
+  const onPaneContextMenu = useCallback(
+    (event: ReactMouseEvent | MouseEvent) => {
+      setMenuTarget({
+        kind: "pane",
+        clientX: event.clientX,
+        clientY: event.clientY,
+      });
+    },
+    [],
+  );
 
-    const close = () => setContextMenu(null);
-    window.addEventListener("click", close);
-    window.addEventListener("keydown", close);
-    return () => {
-      window.removeEventListener("click", close);
-      window.removeEventListener("keydown", close);
-    };
-  }, [contextMenu]);
+  const handleCreateBranchAtTarget = useCallback(
+    (parentId?: string) => {
+      if (!menuTarget || !onCreateBranch) {
+        return;
+      }
+
+      const reactFlow = reactFlowRef.current;
+      if (!reactFlow) {
+        return;
+      }
+
+      const flowPosition = reactFlow.screenToFlowPosition({
+        x: menuTarget.clientX,
+        y: menuTarget.clientY,
+      });
+
+      let position = flowPosition;
+      if (parentId) {
+        const parent = localNodesRef.current.find(
+          (candidate) => candidate.id === parentId,
+        );
+        if (parent) {
+          position = {
+            x: flowPosition.x - parent.position.x,
+            y: flowPosition.y - parent.position.y,
+          };
+        }
+      }
+
+      onCreateBranch(position, parentId);
+    },
+    [menuTarget, onCreateBranch],
+  );
 
   useEffect(() => {
     if (localNodes.length === 0) return;
@@ -379,105 +432,109 @@ export function FlowNetwork({
           onAddBlockToBranch,
         }}
       >
-        <ReactFlow
-          nodes={localNodes as Node[]}
-          edges={localEdges as Edge[]}
-          onInit={onInit}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          onNodeClick={onNodeClick}
-          onNodeContextMenu={onNodeContextMenu}
-          onPaneClick={onPaneClick}
-          nodeTypes={nodeTypes}
-          colorMode={colorMode}
-          fitView
-          onlyRenderVisibleElements
+        <ContextMenu
+          onOpenChange={(open) => {
+            if (!open) {
+              setMenuTarget(null);
+            }
+          }}
         >
-          <Background />
-          <Controls position="top-right" />
-          {/* <MiniMap position="bottom-left" /> */}
-        </ReactFlow>
-        {contextMenu ? (
-          <FlowNodeContextMenu
-            node={contextMenu.node}
-            x={contextMenu.x}
-            y={contextMenu.y}
-            onClose={() => setContextMenu(null)}
-            onEditNode={onEditNode}
-            onOpenNodeInFinder={onOpenNodeInFinder}
-          />
-        ) : null}
+          <ContextMenuTrigger asChild>
+            <div className="h-full w-full">
+              <ReactFlow
+                nodes={localNodes as Node[]}
+                edges={localEdges as Edge[]}
+                onInit={onInit}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                onConnect={onConnect}
+                onNodeClick={onNodeClick}
+                onNodeContextMenu={onNodeContextMenu}
+                onPaneContextMenu={onPaneContextMenu}
+                onPaneClick={onPaneClick}
+                nodeTypes={nodeTypes}
+                colorMode={colorMode}
+                fitView
+                onlyRenderVisibleElements
+              >
+                <Background />
+                <Controls position="top-right" />
+                {/* <MiniMap position="bottom-left" /> */}
+              </ReactFlow>
+            </div>
+          </ContextMenuTrigger>
+          <ContextMenuContent>
+            <FlowContextMenuItems
+              target={menuTarget}
+              onEditNode={onEditNode}
+              onOpenNodeInFinder={onOpenNodeInFinder}
+              onCreateBranch={
+                onCreateBranch ? handleCreateBranchAtTarget : undefined
+              }
+            />
+          </ContextMenuContent>
+        </ContextMenu>
       </FlowSelectionProvider>
     </div>
   );
 }
 
-function FlowNodeContextMenu({
-  node,
-  onClose,
+type MenuTarget =
+  | { kind: "pane"; clientX: number; clientY: number }
+  | { kind: "node"; node: Node; clientX: number; clientY: number };
+
+function FlowContextMenuItems({
+  target,
   onEditNode,
   onOpenNodeInFinder,
-  x,
-  y,
+  onCreateBranch,
 }: {
-  node: Node;
-  onClose: () => void;
+  target: MenuTarget | null;
   onEditNode?: (nodeId: string) => void;
   onOpenNodeInFinder?: (nodeId: string) => void;
-  x: number;
-  y: number;
+  onCreateBranch?: (parentId?: string) => void;
 }) {
+  if (!target) {
+    return null;
+  }
+
+  if (target.kind === "pane") {
+    if (!onCreateBranch) {
+      return null;
+    }
+
+    return (
+      <ContextMenuItem onSelect={() => onCreateBranch()}>
+        Create Branch
+      </ContextMenuItem>
+    );
+  }
+
+  const { node } = target;
   const canEdit = node.type === "branch" || node.type === "labeledGroup";
-  const closeAndRun = (run: (() => void) | undefined) => {
-    onClose();
-    run?.();
-  };
+  const showCreateInGroup =
+    node.type === "labeledGroup" && Boolean(onCreateBranch);
 
   return (
-    <div
-      className="fixed z-50 min-w-36 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
-      style={{ left: x, top: y }}
-    >
-      <FlowContextMenuButton
-        disabled={!canEdit || !onEditNode}
-        onClick={() => closeAndRun(() => onEditNode?.(node.id))}
-      >
-        Edit
-      </FlowContextMenuButton>
-      <div className="-mx-1 my-1 h-px bg-border" />
-      <FlowContextMenuButton
-        disabled={!onOpenNodeInFinder}
-        onClick={() => closeAndRun(() => onOpenNodeInFinder?.(node.id))}
-      >
-        Open in Finder
-      </FlowContextMenuButton>
-    </div>
-  );
-}
-
-function FlowContextMenuButton({
-  children,
-  disabled,
-  onClick,
-}: {
-  children: React.ReactNode;
-  disabled?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      className={cn(
-        "flex w-full items-center rounded-sm px-2 py-1.5 text-left text-sm outline-hidden",
-        disabled
-          ? "cursor-not-allowed opacity-50"
-          : "hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground",
-      )}
-    >
-      {children}
-    </button>
+    <>
+      {canEdit && onEditNode ? (
+        <ContextMenuItem onSelect={() => onEditNode(node.id)}>
+          Edit
+        </ContextMenuItem>
+      ) : null}
+      {showCreateInGroup ? (
+        <ContextMenuItem onSelect={() => onCreateBranch!(node.id)}>
+          Create Branch in group
+        </ContextMenuItem>
+      ) : null}
+      {(canEdit || showCreateInGroup) && onOpenNodeInFinder ? (
+        <ContextMenuSeparator />
+      ) : null}
+      {onOpenNodeInFinder ? (
+        <ContextMenuItem onSelect={() => onOpenNodeInFinder(node.id)}>
+          Open in Finder
+        </ContextMenuItem>
+      ) : null}
+    </>
   );
 }
