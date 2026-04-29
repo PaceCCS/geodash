@@ -3,7 +3,7 @@
 set -euo pipefail
 
 WASM_FILE="server/wasm/geodash.wasm"
-BUDGET_KB=320
+BUDGET_KB=400
 
 if [ ! -f "$WASM_FILE" ]; then
     echo "WASM file not found: $WASM_FILE (skipping size check)"

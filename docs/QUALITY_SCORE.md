@@ -77,7 +77,7 @@ Last updated: 2026-03-30
 | **Shapefile routes** (`modules/shapefiles.ts`) | A | 4 integration | List summaries, load editable data, build sidecars, schema validation. |
 | **Geo inspect** (`modules/operations/geo.ts`) | A | 3 integration | Detects shapefile route with length on preset1, missing network, missing body field. |
 
-**Total TypeScript tests: 48**
+**Total TypeScript tests: 49**
 
 ## Cross-Cutting Concerns
 
