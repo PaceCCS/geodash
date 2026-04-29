@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
+import { promises as fs } from "node:fs";
+import { tmpdir } from "node:os";
 import { Elysia } from "elysia";
 
 import { createGeodashServerConfig } from "./config";
@@ -153,6 +155,82 @@ describe("POST /api/operations/geo/inspect", () => {
     expect(body.center!.longitude).toBeLessThanOrEqual(body.bounds!.east);
     expect(body.center!.latitude).toBeGreaterThanOrEqual(body.bounds!.south);
     expect(body.center!.latitude).toBeLessThanOrEqual(body.bounds!.north);
+  });
+
+  test("places multiple non-pipe blocks between neighboring route endpoints", async () => {
+    const networkDir = await fs.mkdtemp(join(tmpdir(), "geodash-geo-"));
+    await fs.cp(EXAMPLE_DIR, networkDir, { recursive: true });
+    await fs.writeFile(
+      join(networkDir, "branch-1.toml"),
+      `type = "branch"
+label = "Branch 1"
+parentId = "group-1"
+
+[position]
+x = 31.473801421615534
+y = 39.864923307171864
+
+[[outgoing]]
+target = "branch-2"
+weight = 1
+
+[[block]]
+type = "Source"
+flow_rate = 5
+pressure = 10
+
+[block.composition]
+carbonDioxideFraction = 0.96
+hydrogenFraction = 0.0075
+nitrogenFraction = 0.0325
+
+[[block]]
+quantity = 4
+type = "Capture Unit"
+
+[[block]]
+type = "Pipe"
+route = "assets/spirit_wgs84"
+
+[[block]]
+type = "Compressor"
+pressure = "120 bar"
+
+[[block]]
+type = "Valve"
+
+[[block]]
+type = "Pipe"
+route = "assets/kmz_routes/route.kmz"
+`,
+      "utf8",
+    );
+
+    const res = await postJson(app, "/api/operations/geo/inspect", {
+      network: networkDir,
+    });
+
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as {
+      blocks: Array<{
+        type: string | null;
+        previousRouteEndpoint: { lon: number; lat: number; z: number | null } | null;
+        nextRouteEndpoint: { lon: number; lat: number; z: number | null } | null;
+      }>;
+    };
+    const compressor = body.blocks.find((b) => b.type === "Compressor");
+    const valve = body.blocks.find((b) => b.type === "Valve");
+
+    expect(compressor).toBeDefined();
+    expect(valve).toBeDefined();
+    expect(compressor!.previousRouteEndpoint).toBeDefined();
+    expect(compressor!.nextRouteEndpoint).toBeDefined();
+    expect(valve!.previousRouteEndpoint).toEqual(compressor!.previousRouteEndpoint);
+    expect(valve!.nextRouteEndpoint).toEqual(compressor!.nextRouteEndpoint);
+    expect(compressor!.previousRouteEndpoint).not.toEqual(compressor!.nextRouteEndpoint);
+
+    await fs.rm(networkDir, { recursive: true, force: true });
   });
 
   test("returns empty blocks for missing network", async () => {

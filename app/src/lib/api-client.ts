@@ -290,16 +290,35 @@ export type GeoCenter = {
   latitude: number;
 };
 
+export type GeoCoordinate = {
+  lon: number;
+  lat: number;
+  z: number | null;
+};
+
 export type MappableBlock = {
   branchId: string;
   blockIndex: number;
+  type: string | null;
   format: GeoFormat;
   routePath: string | null;
   routeLength: string | null;
+  route: {
+    path: string | null;
+    format: GeoFormat;
+    length_m: number | null;
+    displayLength: string | null;
+    mapStatus: string;
+    sourceCrs: string | null;
+    targetCrs: "EPSG:4326";
+    message: string | null;
+  };
   routeGeometry: {
     type: "LineString";
-    coordinates: { lon: number; lat: number; z: number | null }[];
+    coordinates: GeoCoordinate[];
   } | null;
+  previousRouteEndpoint: GeoCoordinate | null;
+  nextRouteEndpoint: GeoCoordinate | null;
 };
 
 export type GeoInspectResult = {
