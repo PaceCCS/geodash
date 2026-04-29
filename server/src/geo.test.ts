@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
+import { promises as fs } from "node:fs";
+import { tmpdir } from "node:os";
 import { Elysia } from "elysia";
 
 import { createGeodashServerConfig } from "./config";
@@ -102,6 +104,13 @@ describe("POST /api/operations/geo/inspect", () => {
           coordinates: Array<{ lon: number; lat: number; z: number | null }>;
         } | null;
       }>;
+      bounds: {
+        west: number;
+        south: number;
+        east: number;
+        north: number;
+      } | null;
+      center: { longitude: number; latitude: number } | null;
     };
 
     const spiritRoute = body.blocks.find(
@@ -137,6 +146,93 @@ describe("POST /api/operations/geo/inspect", () => {
 
     expect(compressor).toBeDefined();
     expect(compressor!.route.mapStatus).toBe("unsupported");
+
+    expect(body.bounds).toBeDefined();
+    expect(body.center).toBeDefined();
+    expect(body.bounds!.west).toBeLessThan(body.bounds!.east);
+    expect(body.bounds!.south).toBeLessThan(body.bounds!.north);
+    expect(body.center!.longitude).toBeGreaterThanOrEqual(body.bounds!.west);
+    expect(body.center!.longitude).toBeLessThanOrEqual(body.bounds!.east);
+    expect(body.center!.latitude).toBeGreaterThanOrEqual(body.bounds!.south);
+    expect(body.center!.latitude).toBeLessThanOrEqual(body.bounds!.north);
+  });
+
+  test("places multiple non-pipe blocks between neighboring route endpoints", async () => {
+    const networkDir = await fs.mkdtemp(join(tmpdir(), "geodash-geo-"));
+
+    try {
+      await fs.mkdir(join(networkDir, "assets"));
+      await fs.writeFile(
+        join(networkDir, "config.toml"),
+        ['id = "geo-test"', 'label = "Geo Test"'].join("\n"),
+      );
+      await fs.writeFile(
+        join(networkDir, "assets/route-a.csv"),
+        [
+          "WKT,name,description",
+          '"LINESTRING (-2 53, -1 54)",Route A,',
+        ].join("\n"),
+      );
+      await fs.writeFile(
+        join(networkDir, "assets/route-b.csv"),
+        [
+          "WKT,name,description",
+          '"LINESTRING (1 55, 2 56)",Route B,',
+        ].join("\n"),
+      );
+      await fs.writeFile(
+        join(networkDir, "branch-1.toml"),
+        [
+          'type = "branch"',
+          'label = "Branch 1"',
+          "",
+          "[position]",
+          "x = 0",
+          "y = 0",
+          "",
+          "[[block]]",
+          'type = "Pipe"',
+          'route = "assets/route-a.csv"',
+          "",
+          "[[block]]",
+          'type = "Compressor"',
+          "",
+          "[[block]]",
+          'type = "Valve"',
+          "",
+          "[[block]]",
+          'type = "Pipe"',
+          'route = "assets/route-b.csv"',
+        ].join("\n"),
+      );
+
+      const res = await postJson(app, "/api/operations/geo/inspect", {
+        network: networkDir,
+      });
+
+      expect(res.status).toBe(200);
+
+      const body = (await res.json()) as {
+        blocks: Array<{
+          type: string | null;
+          previousRouteEndpoint: { lon: number; lat: number; z: number | null } | null;
+          nextRouteEndpoint: { lon: number; lat: number; z: number | null } | null;
+        }>;
+      };
+      const compressor = body.blocks.find((b) => b.type === "Compressor");
+      const valve = body.blocks.find((b) => b.type === "Valve");
+      const previousEndpoint = { lon: -1, lat: 54, z: 0 };
+      const nextEndpoint = { lon: 1, lat: 55, z: 0 };
+
+      expect(compressor).toBeDefined();
+      expect(valve).toBeDefined();
+      expect(compressor!.previousRouteEndpoint).toEqual(previousEndpoint);
+      expect(compressor!.nextRouteEndpoint).toEqual(nextEndpoint);
+      expect(valve!.previousRouteEndpoint).toEqual(previousEndpoint);
+      expect(valve!.nextRouteEndpoint).toEqual(nextEndpoint);
+    } finally {
+      await fs.rm(networkDir, { recursive: true, force: true });
+    }
   });
 
   test("returns empty blocks for missing network", async () => {

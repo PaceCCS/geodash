@@ -34,6 +34,18 @@ type RouteGeometry = {
   coordinates: GeoCoordinate[];
 };
 
+type GeoBounds = {
+  west: number;
+  south: number;
+  east: number;
+  north: number;
+};
+
+type GeoCenter = {
+  longitude: number;
+  latitude: number;
+};
+
 type RouteInfo = {
   path: string | null;
   format: GeoFormat;
@@ -60,7 +72,11 @@ type MappableBlock = {
 
 type InspectResult = {
   blocks: MappableBlock[];
+  bounds: GeoBounds | null;
+  center: GeoCenter | null;
 };
+
+const MIN_BOUNDS_SPAN_DEGREES = 0.02;
 
 type NetworkBlock = {
   type?: string;
@@ -372,6 +388,64 @@ function attachNeighborRouteEndpoints(blocks: MappableBlock[]) {
   }
 }
 
+function expandBounds(bounds: GeoBounds): GeoBounds {
+  const lonSpan = bounds.east - bounds.west;
+  const latSpan = bounds.north - bounds.south;
+  const lonPadding = Math.max(0, (MIN_BOUNDS_SPAN_DEGREES - lonSpan) / 2);
+  const latPadding = Math.max(0, (MIN_BOUNDS_SPAN_DEGREES - latSpan) / 2);
+
+  return {
+    west: Math.max(-180, bounds.west - lonPadding),
+    south: Math.max(-90, bounds.south - latPadding),
+    east: Math.min(180, bounds.east + lonPadding),
+    north: Math.min(90, bounds.north + latPadding),
+  };
+}
+
+function inspectBounds(blocks: MappableBlock[]): {
+  bounds: GeoBounds | null;
+  center: GeoCenter | null;
+} {
+  let bounds: GeoBounds | null = null;
+
+  for (const block of blocks) {
+    if (block.route.mapStatus !== "ready") continue;
+    for (const coordinate of block.routeGeometry?.coordinates ?? []) {
+      if (!Number.isFinite(coordinate.lon) || !Number.isFinite(coordinate.lat)) {
+        continue;
+      }
+
+      if (!bounds) {
+        bounds = {
+          west: coordinate.lon,
+          south: coordinate.lat,
+          east: coordinate.lon,
+          north: coordinate.lat,
+        };
+        continue;
+      }
+
+      bounds.west = Math.min(bounds.west, coordinate.lon);
+      bounds.south = Math.min(bounds.south, coordinate.lat);
+      bounds.east = Math.max(bounds.east, coordinate.lon);
+      bounds.north = Math.max(bounds.north, coordinate.lat);
+    }
+  }
+
+  if (!bounds) {
+    return { bounds: null, center: null };
+  }
+
+  const expanded = expandBounds(bounds);
+  return {
+    bounds: expanded,
+    center: {
+      longitude: (expanded.west + expanded.east) / 2,
+      latitude: (expanded.south + expanded.north) / 2,
+    },
+  };
+}
+
 export const geoModule = createOperationModule({
   prefix: "/geo",
   register: (app, _config: GeodashServerConfig) =>
@@ -521,7 +595,8 @@ export const geoModule = createOperationModule({
                 }),
             );
 
-            const result: InspectResult = { blocks: mappableBlocks };
+            const { bounds, center } = inspectBounds(mappableBlocks);
+            const result: InspectResult = { blocks: mappableBlocks, bounds, center };
             return result;
           }),
           set,
