@@ -190,7 +190,6 @@ function createWasiImports(
       fd_filestat_set_size: () => 0,
       fd_filestat_set_times: () => 0,
       fd_filestat_get: () => 0,
-      fd_sync: () => 0,
       path_filestat_get: () => 0,
       path_filestat_set_times: () => 0,
       fd_prestat_get: () => 0,
