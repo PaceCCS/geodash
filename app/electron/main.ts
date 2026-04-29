@@ -495,9 +495,11 @@ async function startWatchingDirectory(
     emitFileChanged([resolvedPath]);
   };
 
-  nextWatcher.on("add", handleChange);
-  nextWatcher.on("change", handleChange);
-  nextWatcher.on("unlink", handleChange);
+   nextWatcher.on("add", handleChange);
+   nextWatcher.on("addDir", handleChange);
+   nextWatcher.on("change", handleChange);
+   nextWatcher.on("unlink", handleChange);
+   nextWatcher.on("unlinkDir", handleChange);
   nextWatcher.on("error", (error) => {
     console.error("[watch] File watcher error:", error);
   });

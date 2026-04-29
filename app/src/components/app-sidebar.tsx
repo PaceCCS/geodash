@@ -1,4 +1,5 @@
 import { Sun, Moon } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import {
   Sidebar,
@@ -19,24 +20,31 @@ import { useWorkspaceSidebar } from "@/lib/stores/workspace-sidebar";
 
 function ThemeToggle() {
   const { theme, toggle } = useTheme();
-  const label = theme === "light" ? "Dark mode" : "Light mode";
+  const [hasMounted, setHasMounted] = useState(false);
+  const displayTheme = hasMounted ? theme : "light";
+  const label = displayTheme === "light" ? "Dark mode" : "Light mode";
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
 
   useCommands([
     {
       id: "toggle-theme",
-      label: theme === "light" ? "Switch to Dark Mode" : "Switch to Light Mode",
+      label:
+        displayTheme === "light" ? "Switch to Dark Mode" : "Switch to Light Mode",
       run: (dialog) => {
         toggle();
         dialog.close();
       },
       group: "View",
-      icon: theme === "light" ? <Moon /> : <Sun />,
+      icon: displayTheme === "light" ? <Moon /> : <Sun />,
     },
   ]);
 
   return (
     <SidebarMenuButton onClick={toggle} tooltip={label}>
-      {theme === "light" ? <Moon /> : <Sun />}
+      {displayTheme === "light" ? <Moon /> : <Sun />}
       <span>{label}</span>
     </SidebarMenuButton>
   );
@@ -49,9 +57,7 @@ export function AppSidebar() {
     <Sidebar side="left" collapsible="icon">
       <SidebarContent>
         <SidebarGroup className="min-h-0 flex-1">
-          <SidebarGroupLabel>
-            {directory ? directory.label : "Workspace"}
-          </SidebarGroupLabel>
+          {directory ? null : <SidebarGroupLabel>Workspace</SidebarGroupLabel>}
           <SidebarGroupContent className="flex min-h-0 flex-1 flex-col">
             {directory ? (
               <SidebarFileTree directoryPath={directory.path} />

@@ -25,3 +25,6 @@ target/
 # Build output
 app/dist/
 app/dist-electron/
+
+# Test artifacts
+app/test-results/

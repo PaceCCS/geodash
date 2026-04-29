@@ -89,6 +89,30 @@ function splitBrowseQuery(query: string): {
   };
 }
 
+function getPersistedPreferredDirectory(): string {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  try {
+    const stored = window.localStorage.getItem("app-settings");
+    if (!stored) {
+      return "";
+    }
+
+    const parsed = JSON.parse(stored) as {
+      state?: {
+        preferredDirectory?: unknown;
+      };
+    };
+    return typeof parsed.state?.preferredDirectory === "string"
+      ? parsed.state.preferredDirectory
+      : "";
+  } catch {
+    return "";
+  }
+}
+
 export function DirectoryBrowserDialog({
   mode = "directory",
   ...props
@@ -117,15 +141,12 @@ function FileSystemBrowserDialog({
   onCreate,
   onNativePick,
 }: FileSystemBrowserDialogProps) {
-  const settingsHydrated = useAppSettings((state) => state.hasHydrated);
   const preferredDirectory = useAppSettings((state) => state.preferredDirectory);
   const recordDirectorySelection = useAppSettings(
     (state) => state.recordDirectorySelection,
   );
-  const initialBrowserPath = initialPath || preferredDirectory || null;
-  const [query, setQuery] = useState(
-    initialBrowserPath ? ensureTrailingPathSeparator(initialBrowserPath) : "",
-  );
+  const startPath = initialPath || preferredDirectory || getPersistedPreferredDirectory();
+  const [query, setQuery] = useState("");
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [result, setResult] = useState<FileSystemBrowseResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -152,6 +173,13 @@ function FileSystemBrowserDialog({
 
   const loadDirectory = useCallback(
     async (path?: string, updateQuery = true) => {
+      if (!path) {
+        requestedDirectoryRef.current = undefined;
+        setResult(null);
+        setIsLoading(false);
+        return;
+      }
+
       requestedDirectoryRef.current = path
         ? ensureTrailingPathSeparator(path)
         : undefined;
@@ -179,22 +207,27 @@ function FileSystemBrowserDialog({
   );
 
   useEffect(() => {
-    if (!open) return;
-    if (!initialPath && !settingsHydrated) return;
+    if (!open) {
+      setQuery("");
+      setResult(null);
+      setError(null);
+      setMissingPath(null);
+      requestedDirectoryRef.current = undefined;
+      return;
+    }
 
-    const nextInitialPath = initialPath || preferredDirectory;
-    const nextQuery = nextInitialPath
-      ? ensureTrailingPathSeparator(nextInitialPath)
-      : "";
+    if (!startPath) return;
+
+    const nextQuery = ensureTrailingPathSeparator(startPath);
     setQuery(nextQuery);
-    const nextDirectoryQuery = splitBrowseQuery(nextQuery).directoryQuery;
-    void loadDirectory(nextDirectoryQuery, false);
-  }, [initialPath, loadDirectory, open, preferredDirectory, settingsHydrated]);
+    void loadDirectory(startPath, false);
+  }, [loadDirectory, open, startPath]);
 
   useEffect(() => {
     if (!open || directoryQuery === requestedDirectoryRef.current) return;
+    if (!startPath && !directoryQuery) return;
     void loadDirectory(directoryQuery, false);
-  }, [directoryQuery, loadDirectory, open]);
+  }, [directoryQuery, loadDirectory, open, startPath]);
 
   useEffect(() => {
     setHighlightedIndex((current) =>
@@ -248,13 +281,11 @@ function FileSystemBrowserDialog({
   };
 
   const handleNativePick = async () => {
-    if (!initialPath && !settingsHydrated) return;
-
     setError(null);
     try {
       const pickedPath = onNativePick
         ? await onNativePick()
-        : await pickFileSystemPath(mode, preferredDirectory || undefined);
+        : await pickFileSystemPath(mode, startPath || undefined);
       if (typeof pickedPath === "string") {
         await handleSelectPath(pickedPath);
         return;

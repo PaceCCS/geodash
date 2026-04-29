@@ -1,12 +1,20 @@
 import {
   prepareFileTreeInput,
+  type ContextMenuOpenContext,
   type FileTreePreparedInput,
 } from "@pierre/trees";
 import { FileTree, useFileTree } from "@pierre/trees/react";
+import { FilePlus2, FolderPlus } from "lucide-react";
 import type { CSSProperties } from "react";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
-import { onFileChanged, readFileTree } from "@/lib/desktop";
+import {
+  createDirectory,
+  onFileChanged,
+  readFileTree,
+  writeNetworkFile,
+} from "@/lib/desktop";
 import type { WorkspaceItemActions } from "@/lib/stores/workspace-sidebar";
 import { useWorkspaceSidebar } from "@/lib/stores/workspace-sidebar";
 import { cn } from "@/lib/utils";
@@ -36,11 +44,19 @@ type TreeContextMenuTarget = {
   treePath: string;
 };
 
+type TreeSelectionModel = {
+  getFocusedPath: () => string | null;
+  getItem: (path: string) => { isDirectory: () => boolean } | null;
+  getSelectedPaths: () => readonly string[];
+};
+
 function joinTreePath(rootPath: string, treePath: string): string {
   const normalizedRoot = rootPath.replace(/[\\/]+$/, "");
   const normalizedTreePath = treePath.replace(/[\\/]+$/, "");
 
-  return normalizedTreePath ? `${normalizedRoot}/${normalizedTreePath}` : normalizedRoot;
+  return normalizedTreePath
+    ? `${normalizedRoot}/${normalizedTreePath}`
+    : normalizedRoot;
 }
 
 function isBranchOrGroupFile(path: string): boolean {
@@ -49,6 +65,43 @@ function isBranchOrGroupFile(path: string): boolean {
 
 function isConfigFile(path: string): boolean {
   return path.toLowerCase() === "config.toml";
+}
+
+function getUniquePath(
+  paths: string[],
+  baseName: string,
+  extension = "",
+): string {
+  const existingPaths = new Set(paths.map((path) => path.replace(/\/+$/, "")));
+  const firstPath = `${baseName}${extension}`;
+  if (!existingPaths.has(firstPath)) {
+    return firstPath;
+  }
+
+  for (let index = 2; ; index += 1) {
+    const nextPath = `${baseName}-${index}${extension}`;
+    if (!existingPaths.has(nextPath)) {
+      return nextPath;
+    }
+  }
+}
+
+function getParentTreePath(path: string): string {
+  const normalizedPath = path.replace(/\/+$/, "");
+  const lastSlash = normalizedPath.lastIndexOf("/");
+  return lastSlash === -1 ? "" : `${normalizedPath.slice(0, lastSlash)}/`;
+}
+
+function getSelectedTargetDirectory(model: TreeSelectionModel): string {
+  const selectedPath = model.getSelectedPaths()[0] ?? model.getFocusedPath();
+  if (!selectedPath) {
+    return "";
+  }
+
+  const item = model.getItem(selectedPath);
+  return item?.isDirectory()
+    ? `${selectedPath.replace(/\/+$/, "")}/`
+    : getParentTreePath(selectedPath);
 }
 
 async function loadTreePaths(directoryPath: string): Promise<{
@@ -72,21 +125,32 @@ async function loadTreePaths(directoryPath: string): Promise<{
 
 export function SidebarFileTree({ directoryPath }: SidebarFileTreeProps) {
   const [state, setState] = useState<LoadState>({ status: "idle" });
+  const directoryLabel = useWorkspaceSidebar((store) => store.directory?.label);
   const itemActions = useWorkspaceSidebar((store) => store.itemActions);
   const itemActionsRef = useRef<WorkspaceItemActions>({});
   const shapefileDirectorySetRef = useRef(new Set<string>());
   const { model } = useFileTree({
     paths: [],
+    composition: {
+      contextMenu: {
+        enabled: true,
+        triggerMode: "both",
+        buttonVisibility: "when-needed",
+      },
+    },
     density: "compact",
     flattenEmptyDirectories: true,
     icons: "standard",
     initialExpansion: "open",
+    search: true,
+    fileTreeSearchMode: "hide-non-matches",
     renderRowDecoration: ({ item }) =>
       shapefileDirectorySetRef.current.has(item.path)
         ? { text: "shp", title: "Shapefile" }
         : null,
   });
   const loadedPaths = state.status === "ready" ? state.paths.join("\n") : "";
+  const currentPaths = state.status === "ready" ? state.paths : [];
 
   useEffect(() => {
     itemActionsRef.current = itemActions;
@@ -120,11 +184,56 @@ export function SidebarFileTree({ directoryPath }: SidebarFileTreeProps) {
       }
     });
 
+    const handleWindowFocus = () => {
+      void reload();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void reload();
+      }
+    };
+
+    window.addEventListener("focus", handleWindowFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     return () => {
       cancelled = true;
       unlisten();
+      window.removeEventListener("focus", handleWindowFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [directoryPath, model]);
+
+  const reloadTree = async () => {
+    setState({ status: "loading" });
+    const next = await loadTreePaths(directoryPath);
+    shapefileDirectorySetRef.current = new Set(next.shapefileDirectories);
+    model.resetPaths(next.paths, { preparedInput: next.preparedInput });
+    setState({ status: "ready", ...next });
+  };
+
+  const handleCreateFile = async () => {
+    const targetDirectory = getSelectedTargetDirectory(model);
+    const nextPath = getUniquePath(
+      currentPaths,
+      `${targetDirectory}untitled`,
+      ".txt",
+    );
+    await writeNetworkFile(joinTreePath(directoryPath, nextPath), "");
+    await reloadTree();
+    model.focusPath(nextPath);
+  };
+
+  const handleCreateFolder = async () => {
+    const targetDirectory = getSelectedTargetDirectory(model);
+    const nextPath = getUniquePath(
+      currentPaths,
+      `${targetDirectory}untitled-folder`,
+    );
+    await createDirectory(joinTreePath(directoryPath, nextPath));
+    await reloadTree();
+    model.focusPath(`${nextPath}/`);
+  };
 
   if (state.status === "error") {
     return (
@@ -151,17 +260,45 @@ export function SidebarFileTree({ directoryPath }: SidebarFileTreeProps) {
         </div>
       ) : null}
       <FileTree
+        header={
+          <div className="flex items-center justify-between gap-2 px-2 py-1.5">
+            <span className="truncate text-xs font-medium text-muted-foreground">
+              {directoryLabel ?? "Files"}
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                className="rounded-sm p-1 text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                title="New file"
+                onClick={() => void handleCreateFile()}
+              >
+                <FilePlus2 className="size-3.5" />
+                <span className="sr-only">New file</span>
+              </button>
+              <button
+                type="button"
+                className="rounded-sm p-1 text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                title="New folder"
+                onClick={() => void handleCreateFolder()}
+              >
+                <FolderPlus className="size-3.5" />
+                <span className="sr-only">New folder</span>
+              </button>
+            </div>
+          </div>
+        }
         model={model}
         renderContextMenu={(item, context) => {
           const treePath = item.path;
-          const isShapefileDirectory = shapefileDirectorySetRef.current.has(treePath);
+          const isShapefileDirectory =
+            shapefileDirectorySetRef.current.has(treePath);
           const canEdit = isBranchOrGroupFile(treePath) || isShapefileDirectory;
           const canView = isBranchOrGroupFile(treePath);
 
           return (
             <SidebarFileTreeContextMenu
               actions={itemActionsRef.current}
-              contextClose={context.close}
+              context={context}
               target={{
                 absolutePath: joinTreePath(directoryPath, treePath),
                 canEdit,
@@ -193,6 +330,9 @@ export function SidebarFileTree({ directoryPath }: SidebarFileTreeProps) {
             "--trees-theme-input-border": "var(--border)",
             "--trees-theme-scrollbar-thumb": "var(--muted-foreground)",
             "--trees-file-icon-color": "var(--muted-foreground)",
+            "--trees-padding-inline-override": "0rem",
+            "--trees-context-menu-trigger-inline-offset":
+              "calc(var(--trees-padding-inline) + var(--trees-item-padding-x) + 0.5rem)",
             "--trees-theme-git-added-fg": "var(--rose-pine-foam)",
             "--trees-theme-git-modified-fg": "var(--rose-pine-rose)",
             "--trees-theme-git-renamed-fg": "var(--rose-pine-pine)",
@@ -211,22 +351,31 @@ export function SidebarFileTree({ directoryPath }: SidebarFileTreeProps) {
 
 function SidebarFileTreeContextMenu({
   actions,
-  contextClose,
+  context,
   target,
 }: {
   actions: WorkspaceItemActions;
-  contextClose: () => void;
+  context: ContextMenuOpenContext;
   target: TreeContextMenuTarget;
 }) {
+  const { anchorRect } = context;
   const closeAndRun = (run: (() => void) | undefined) => {
-    contextClose();
+    context.close();
     run?.();
   };
 
-  return (
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  return createPortal(
     <div
       data-file-tree-context-menu-root="true"
-      className="min-w-36 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
+      className="fixed z-50 min-w-36 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
+      style={{
+        left: anchorRect.right + 4,
+        top: anchorRect.top,
+      }}
     >
       <FileTreeContextMenuButton
         disabled={!target.canView || !actions.viewPath}
@@ -243,11 +392,14 @@ function SidebarFileTreeContextMenu({
       <div className="-mx-1 my-1 h-px bg-border" />
       <FileTreeContextMenuButton
         disabled={!actions.openInFinder}
-        onClick={() => closeAndRun(() => actions.openInFinder?.(target.absolutePath))}
+        onClick={() =>
+          closeAndRun(() => actions.openInFinder?.(target.absolutePath))
+        }
       >
         Open in Finder
       </FileTreeContextMenuButton>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

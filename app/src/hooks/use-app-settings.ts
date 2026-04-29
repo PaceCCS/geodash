@@ -18,6 +18,37 @@ const defaultSettings = {
   useLastSelectionParent: false,
 };
 
+function getStoredSettings(): Pick<
+  AppSettingsState,
+  "preferredDirectory" | "useLastSelectionParent"
+> {
+  if (typeof window === "undefined") {
+    return defaultSettings;
+  }
+
+  try {
+    const stored = window.localStorage.getItem("app-settings");
+    if (!stored) {
+      return defaultSettings;
+    }
+
+    const parsed = JSON.parse(stored) as {
+      state?: Partial<AppSettingsState>;
+    };
+
+    return {
+      preferredDirectory:
+        typeof parsed.state?.preferredDirectory === "string"
+          ? parsed.state.preferredDirectory
+          : "",
+      useLastSelectionParent:
+        parsed.state?.useLastSelectionParent === true,
+    };
+  } catch {
+    return defaultSettings;
+  }
+}
+
 function getParentPath(path: string): string {
   const normalizedPath = path.replace(/[\\/]+$/, "");
   const separatorIndex = Math.max(
@@ -36,6 +67,7 @@ export const useAppSettings = create<AppSettingsState>()(
   persist(
     (set, get) => ({
       ...defaultSettings,
+      ...getStoredSettings(),
       setHasHydrated: (hydrated) => set({ hasHydrated: hydrated }),
       setPreferredDirectory: (path) => set({ preferredDirectory: path }),
       setUseLastSelectionParent: (enabled) =>

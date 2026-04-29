@@ -14,6 +14,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { CircleHelp } from "lucide-react";
+import { useEffect, useState } from "react";
 import {
   Tooltip,
   TooltipContent,
@@ -392,9 +393,14 @@ const heroEdges: Edge[] = [
 
 export function HomeHero() {
   const theme = useTheme((state) => state.theme);
-  const colorMode = theme === "dark" ? "dark" : "light";
+  const [hasMounted, setHasMounted] = useState(false);
+  const colorMode = hasMounted && theme === "dark" ? "dark" : "light";
   const [nodes, , onNodesChange] = useNodesState(heroNodes);
   const [edges] = useEdgesState(heroEdges);
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
 
   return (
     <TooltipProvider>

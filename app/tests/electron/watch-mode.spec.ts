@@ -100,6 +100,68 @@ test("shows selected network directory files in the left sidebar tree", async ()
   }
 });
 
+test("uses preferred directory on first network directory dialog open", async () => {
+  const electronApp = await electron.launch({
+    executablePath: electronBinary,
+    args: [mainScriptPath],
+    env: {
+      ...process.env,
+      ELECTRON_RENDERER_URL: rendererEntryPath,
+      GEODASH_DISABLE_DEVTOOLS: "1",
+    },
+  });
+
+  try {
+    const page = await electronApp.firstWindow();
+    await page.waitForLoadState("domcontentloaded");
+    await page.evaluate((preferredDirectory) => {
+      window.localStorage.setItem(
+        "app-settings",
+        JSON.stringify({
+          state: {
+            preferredDirectory,
+            useLastSelectionParent: false,
+          },
+          version: 0,
+        }),
+      );
+    }, exampleFixtureDirectory);
+    await page.reload();
+    await expect
+      .poll(() =>
+        page.evaluate(() => window.localStorage.getItem("app-settings")),
+      )
+      .toContain(exampleFixtureDirectory);
+
+    await openNetworkDirectoryDialogWithShortcut(page);
+    await expect
+      .poll(() =>
+        page.evaluate(() => window.localStorage.getItem("app-settings")),
+      )
+      .toContain(exampleFixtureDirectory);
+    await expect(page.getByRole("textbox", { name: "Directory path" })).toHaveValue(
+      `${exampleFixtureDirectory}/`,
+    );
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+
+    await openNetworkDirectoryDialogWithShortcut(page);
+    await expect(page.getByRole("textbox", { name: "Directory path" })).toHaveValue(
+      `${exampleFixtureDirectory}/`,
+    );
+  } finally {
+    await electronApp.close();
+  }
+});
+
+async function openNetworkDirectoryDialogWithShortcut(page: Page) {
+  await page.getByRole("menuitem", { name: "File" }).click();
+  await page.getByRole("menuitem", { name: /Open Directory/ }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Select Network Directory" }),
+  ).toBeVisible();
+}
+
 test("repositioning a branch logs the move event", async () => {
   const watchDirectory = await createWatchFixture();
   const electronApp = await electron.launch({
