@@ -95,9 +95,9 @@ export function SelectionEditorOverlay({
   );
   const [fields, setFields] = useState<EditorFieldDraft[]>([]);
   const [outgoingDrafts, setOutgoingDrafts] = useState<OutgoingDraft[]>([]);
-  const [outgoingErrors, setOutgoingErrors] = useState<
-    Record<string, string>
-  >({});
+  const [outgoingErrors, setOutgoingErrors] = useState<Record<string, string>>(
+    {},
+  );
   const [newFieldName, setNewFieldName] = useState("");
   const [newFieldKind, setNewFieldKind] = useState<AddFieldKind>("text");
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -643,53 +643,53 @@ export function SelectionEditorOverlay({
 
         <div className="flex items-center justify-between gap-3 border-t border-border px-5 py-4">
           <div className="flex min-h-5 items-center gap-2">
-            {onDelete ? (
-              isConfirmingDelete ? (
-                <>
-                  <span className="text-xs text-muted-foreground">
-                    Delete this {kindLabel.toLowerCase()}?
-                  </span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setIsConfirmingDelete(false)}
-                    disabled={isDeleting}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="sm"
-                    onClick={handleDelete}
-                    disabled={isDeleting}
-                  >
-                    {isDeleting ? "Deleting..." : "Delete"}
-                  </Button>
-                </>
-              ) : (
+            {onDelete && isConfirmingDelete && (
+              <>
+                <span className="text-xs text-muted-foreground">
+                  Delete this {kindLabel.toLowerCase()}?
+                </span>
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
-                  className="gap-2 text-destructive hover:text-destructive"
-                  onClick={() => {
-                    setDeleteError(null);
-                    setIsConfirmingDelete(true);
-                  }}
-                  disabled={isSaving || isDeleting}
+                  onClick={() => setIsConfirmingDelete(false)}
+                  disabled={isDeleting}
                 >
-                  <Trash2 className="size-4" />
-                  Delete
+                  Cancel
                 </Button>
-              )
-            ) : null}
-            {saveError ? (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? "Deleting..." : "Delete"}
+                </Button>
+              </>
+            )}
+            {onDelete && !isConfirmingDelete && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-2 text-destructive hover:text-destructive"
+                onClick={() => {
+                  setDeleteError(null);
+                  setIsConfirmingDelete(true);
+                }}
+                disabled={isSaving || isDeleting}
+              >
+                <Trash2 className="size-4" />
+                Delete
+              </Button>
+            )}
+            {saveError && (
               <p className="text-xs text-destructive">{saveError}</p>
-            ) : deleteError ? (
+            )}
+            {deleteError && (
               <p className="text-xs text-destructive">{deleteError}</p>
-            ) : null}
+            )}
           </div>
           <div className="flex items-center gap-2">
             <Button
