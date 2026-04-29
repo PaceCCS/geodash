@@ -6,7 +6,7 @@ import { useActivityLog } from "@/contexts/activity-log-context";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { DetailsPanel } from "@/components/flow/details-panel";
-import { SearchDetailsPanel } from "@/components/flow/search-details-panel";
+
 import {
   Sheet,
   SheetContent,
@@ -106,7 +106,6 @@ function RightSidebarContent() {
             Properties
           </div>
         </div>
-        <SearchDetailsPanel />
         <DetailsPanel />
       </div>
     </div>
