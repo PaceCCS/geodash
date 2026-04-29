@@ -42,6 +42,9 @@ export type CommandItem = {
   shortcut?: ShortcutString;
   group?: string;
   icon?: React.ReactNode;
+  checked?: boolean;
+  separatorBefore?: boolean;
+  menuOrder?: number;
 };
 
 export type KeybindContextValue = {
@@ -297,7 +300,10 @@ export function useCommands(initial?: CommandItem[] | (() => CommandItem[])) {
   const resolvedItems = (typeof initial === "function" ? initial() : initial) ?? [];
 
   const commandsKey = resolvedItems
-    .map((c) => `${c.id}:${c.group ?? ""}:${c.label}:${c.shortcut ?? ""}`)
+    .map(
+      (c) =>
+        `${c.id}:${c.group ?? ""}:${c.label}:${c.shortcut ?? ""}:${c.checked ?? ""}:${c.separatorBefore ?? ""}:${c.menuOrder ?? ""}`,
+    )
     .join("|");
 
   useEffect(() => {

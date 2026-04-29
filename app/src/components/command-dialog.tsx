@@ -86,6 +86,7 @@ export function GlobalCommandDialog() {
       shortcut: "Mod+B",
       group: "View",
       icon: leftOpen ? <PanelLeftClose /> : <PanelLeftOpen />,
+      menuOrder: 100,
     },
     {
       id: "toggle-right-sidebar",
@@ -97,6 +98,7 @@ export function GlobalCommandDialog() {
       shortcut: "Mod+.",
       group: "View",
       icon: rightOpen ? <PanelRightClose /> : <PanelRightOpen />,
+      menuOrder: 101,
     },
   ].filter((command) => command.id !== "settings" || pathname !== "/settings"));
 

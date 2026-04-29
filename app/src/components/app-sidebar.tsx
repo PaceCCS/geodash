@@ -39,6 +39,8 @@ function ThemeToggle() {
       },
       group: "View",
       icon: displayTheme === "light" ? <Moon /> : <Sun />,
+      separatorBefore: true,
+      menuOrder: 1000,
     },
   ]);
 

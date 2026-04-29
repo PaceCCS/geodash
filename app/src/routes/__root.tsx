@@ -16,11 +16,9 @@ import KeybindProvider from "@/contexts/keybind-provider";
 import {
   SidebarProvider,
   SidebarInset,
-  useSidebar,
 } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { RightSidebarProvider } from "@/contexts/right-sidebar-context";
-import { useRightSidebar } from "@/contexts/right-sidebar-context";
 import { RightSidebar } from "@/components/right-sidebar";
 import {
   HeaderSlotProvider,
@@ -188,7 +186,13 @@ function AppMenubar() {
       ["File", "Edit", "View", "Run"]
         .map((group) => ({
           group,
-          commands: commands.filter((command) => command.group === group),
+          commands: commands
+            .filter((command) => command.group === group)
+            .sort(
+              (a, b) =>
+                (a.menuOrder ?? Number.MAX_SAFE_INTEGER) -
+                (b.menuOrder ?? Number.MAX_SAFE_INTEGER),
+            ),
         }))
         .filter((group) => group.commands.length > 0),
     [commands],
@@ -205,7 +209,9 @@ function AppMenubar() {
                 <MenubarCommandItem
                   key={command.id}
                   command={command}
-                  separatorBefore={command.id === "close" && index > 0}
+                  separatorBefore={
+                    command.separatorBefore || (command.id === "close" && index > 0)
+                  }
                   onRun={runCommand}
                 />
               ))}
@@ -241,12 +247,8 @@ function MenubarCommandItem({
   separatorBefore?: boolean;
   onRun: ReturnType<typeof useCommands>["runCommand"];
 }) {
-  const { open: leftOpen } = useSidebar();
-  const { open: rightOpen } = useRightSidebar();
-  const isCheckbox =
-    command.id === "toggle-left-sidebar" ||
-    command.id === "toggle-right-sidebar";
-  const checked = command.id === "toggle-left-sidebar" ? leftOpen : rightOpen;
+  const isCheckbox = typeof command.checked === "boolean";
+  const checked = command.checked ?? false;
   const item = isCheckbox ? (
     <MenubarCheckboxItem
       checked={checked}

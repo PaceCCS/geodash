@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLiveQuery } from "@tanstack/react-db";
-import { FolderOpen, EyeOff, Save } from "lucide-react";
+import { FolderOpen, EyeOff, Map, Save, Workflow } from "lucide-react";
 
 import { SelectionEditorOverlay } from "@/components/flow/editor/selection-editor-overlay";
 import { DirectoryBrowserDialog } from "@/components/directory-browser-dialog";
@@ -46,7 +46,18 @@ type WatchSearch = {
   directory?: string;
   selected?: string;
   edit?: "1";
+  view?: NetworkViewMode;
 };
+
+type NetworkViewMode = "schematic" | "geographic";
+
+const NETWORK_VIEW_MODES = ["schematic", "geographic"] as const;
+
+function normalizeNetworkViewMode(value: unknown): NetworkViewMode {
+  return NETWORK_VIEW_MODES.includes(value as NetworkViewMode)
+    ? (value as NetworkViewMode)
+    : "schematic";
+}
 
 const DEFAULT_NETWORK_CONFIG = `id = "new-project"
 label = "New project"
@@ -74,6 +85,7 @@ export const Route = createFileRoute("/network/watch")({
     [FLOW_EDITOR_QUERY_PARAM]: normalizeFlowEditorQuery(
       search[FLOW_EDITOR_QUERY_PARAM],
     ),
+    view: normalizeNetworkViewMode(search.view),
   }),
   component: WatchPage,
 });
@@ -99,6 +111,7 @@ function WatchPage() {
   const selectedQuery = search.selected;
   const isEditorOpen = search.edit === "1";
   const directoryQuery = search.directory;
+  const viewMode = search.view ?? "schematic";
 
   const handleSelectedQueryChange = useCallback(
     (nextQuery: string | null) => {
@@ -128,6 +141,21 @@ function WatchPage() {
           ...prev,
           [FLOW_EDITOR_QUERY_PARAM]:
             open && prev[FLOW_SELECTION_QUERY_PARAM] ? "1" : undefined,
+        }),
+      });
+    },
+    [navigate],
+  );
+
+  const handleViewModeChange = useCallback(
+    (nextViewMode: NetworkViewMode) => {
+      navigate({
+        replace: true,
+        search: (prev) => ({
+          ...prev,
+          view: nextViewMode === "schematic" ? undefined : nextViewMode,
+          [FLOW_EDITOR_QUERY_PARAM]:
+            nextViewMode === "schematic" ? prev[FLOW_EDITOR_QUERY_PARAM] : undefined,
         }),
       });
     },
@@ -263,6 +291,33 @@ function WatchPage() {
     watchMode.enabled
       ? [
           {
+            id: "network-view-schematic",
+            label: "Schematic",
+            run: (dialog) => {
+              handleViewModeChange("schematic");
+              dialog.close();
+            },
+            group: "View",
+            icon: <Workflow />,
+            shortcut: "Mod+H",
+            checked: viewMode === "schematic",
+            separatorBefore: true,
+            menuOrder: 200,
+          },
+          {
+            id: "network-view-geographic",
+            label: "Geographic",
+            run: (dialog) => {
+              handleViewModeChange("geographic");
+              dialog.close();
+            },
+            group: "View",
+            icon: <Map />,
+            shortcut: "Mod+G",
+            checked: viewMode === "geographic",
+            menuOrder: 201,
+          },
+          {
             id: "select-directory",
             label: "Change Watch Directory",
             run: (dialog) => {
@@ -360,6 +415,7 @@ function WatchPage() {
                 selectedQuery={selectedQuery}
                 syncDirectory={watchMode.directoryPath}
                 suspendPersistence={isApplyingExternalChange}
+                viewMode={viewMode}
                 onEditorOpenChange={handleEditorOpenChange}
                 onEditNode={(nodeId) => {
                   navigate({
@@ -415,6 +471,7 @@ function HydratedWatchNetwork({
   selectedQuery,
   syncDirectory,
   suspendPersistence,
+  viewMode,
   onEditorOpenChange,
   onEditNode,
   onOpenNodeInFinder,
@@ -425,6 +482,7 @@ function HydratedWatchNetwork({
   selectedQuery?: string;
   syncDirectory: string;
   suspendPersistence: boolean;
+  viewMode: NetworkViewMode;
   onEditorOpenChange: (open: boolean) => void;
   onEditNode?: (nodeId: string) => void;
   onOpenNodeInFinder?: (nodeId: string) => void;
@@ -511,24 +569,45 @@ function HydratedWatchNetwork({
 
   return (
     <div className="relative h-full w-full">
-      <FlowNetwork
-        nodes={nodes}
-        edges={edges}
-        onPropagationInputsChanged={reloadPersistedNetwork}
-        syncDirectory={syncDirectory}
-        suspendPersistence={suspendPersistence}
-        selectedQuery={selectedQuery}
-        onEditNode={onEditNode}
-        onOpenNodeInFinder={onOpenNodeInFinder}
-        onSelectedQueryChange={onSelectedQueryChange}
-      />
-      <SelectionEditorOverlay
-        open={isEditorOpen}
-        selection={editableSelection}
-        configMetadata={configMetadata}
-        onClose={() => onEditorOpenChange(false)}
-        onSave={handleSaveSelection}
-      />
+      {viewMode === "schematic" ? (
+        <>
+          <FlowNetwork
+            nodes={nodes}
+            edges={edges}
+            onPropagationInputsChanged={reloadPersistedNetwork}
+            syncDirectory={syncDirectory}
+            suspendPersistence={suspendPersistence}
+            selectedQuery={selectedQuery}
+            onEditNode={onEditNode}
+            onOpenNodeInFinder={onOpenNodeInFinder}
+            onSelectedQueryChange={onSelectedQueryChange}
+          />
+          <SelectionEditorOverlay
+            open={isEditorOpen}
+            selection={editableSelection}
+            configMetadata={configMetadata}
+            onClose={() => onEditorOpenChange(false)}
+            onSave={handleSaveSelection}
+          />
+        </>
+      ) : (
+        <GeographicNetworkView syncDirectory={syncDirectory} />
+      )}
+    </div>
+  );
+}
+
+function GeographicNetworkView({ syncDirectory }: { syncDirectory: string }) {
+  return (
+    <div className="flex h-full w-full items-center justify-center bg-muted/30 p-6">
+      <div className="max-w-md rounded-lg border bg-background/95 p-6 text-center shadow-sm">
+        <Map className="mx-auto mb-4 size-10 text-muted-foreground" />
+        <h2 className="text-lg font-semibold">Geographic view</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Map rendering is ready to be added here. This view will use geographic route
+          data from KMZ or shapefile sources in {syncDirectory}.
+        </p>
+      </div>
     </div>
   );
 }
