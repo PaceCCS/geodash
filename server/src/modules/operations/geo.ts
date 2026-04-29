@@ -14,14 +14,48 @@ import type { GeodashServerConfig } from "../../config";
 import { computeRouteKp, loadNetwork } from "../../services/core";
 import { resolveNetworkPath } from "../../utils/network";
 
-type GeoFormat = "shapefile" | "kmz" | "csv" | "coordinates";
+type GeoFormat = "shapefile" | "kmz" | "kml" | "csv" | "coordinates";
+type GeoMapStatus =
+  | "ready"
+  | "needs_reprojection"
+  | "missing_crs"
+  | "unsupported"
+  | "missing_file"
+  | "parse_error";
+
+type GeoCoordinate = {
+  lon: number;
+  lat: number;
+  z: number | null;
+};
+
+type RouteGeometry = {
+  type: "LineString";
+  coordinates: GeoCoordinate[];
+};
+
+type RouteInfo = {
+  path: string | null;
+  format: GeoFormat;
+  length_m: number | null;
+  displayLength: string | null;
+  mapStatus: GeoMapStatus;
+  sourceCrs: string | null;
+  targetCrs: "EPSG:4326";
+  message: string | null;
+};
 
 type MappableBlock = {
   branchId: string;
   blockIndex: number;
+  type: string | null;
   format: GeoFormat;
   routePath: string | null;
   routeLength: string | null;
+  route: RouteInfo;
+  routeGeometry: RouteGeometry | null;
+  previousRouteEndpoint: GeoCoordinate | null;
+  nextRouteEndpoint: GeoCoordinate | null;
 };
 
 type InspectResult = {
@@ -67,6 +101,21 @@ function hasCoordinates(block: NetworkBlock): boolean {
   );
 }
 
+function getBlockCoordinate(block: NetworkBlock): GeoCoordinate | null {
+  for (const [latKey, lngKey] of COORDINATE_KEYS) {
+    const lat = block[latKey];
+    const lon = block[lngKey];
+    if (typeof lat === "number" && typeof lon === "number") {
+      return { lat, lon, z: null };
+    }
+  }
+  return null;
+}
+
+function displayLength(lengthM: number | null): string | null {
+  return lengthM === null ? null : `${lengthM} m`;
+}
+
 async function detectRouteFormat(
   networkDir: string,
   route: string,
@@ -77,7 +126,7 @@ async function detectRouteFormat(
     const fullPath = join(networkDir, route);
     try {
       await fs.access(fullPath);
-      return "kmz";
+      return lower.endsWith(".kml") ? "kml" : "kmz";
     } catch {
       return null;
     }
@@ -111,25 +160,151 @@ async function detectRouteFormat(
   return null;
 }
 
-async function computeShapefileLength(
+async function findShapefileStem(networkDir: string, route: string): Promise<string | null> {
+  const routePath = join(networkDir, route);
+  const stat = await fs.stat(routePath);
+  if (stat.isFile() && routePath.toLowerCase().endsWith(".shp")) {
+    return routePath.slice(0, -4);
+  }
+  if (!stat.isDirectory()) return null;
+
+  const entries = await fs.readdir(routePath);
+  const shpFile = entries.find((e) => e.toLowerCase().endsWith(".shp"));
+  return shpFile ? join(routePath, shpFile.slice(0, -4)) : null;
+}
+
+async function inspectShapefileCrs(stem: string): Promise<Pick<RouteInfo, "mapStatus" | "sourceCrs" | "message">> {
+  try {
+    const prj = await fs.readFile(`${stem}.prj`, "utf8");
+    const normalized = prj.toLowerCase();
+    const isWgs84 =
+      normalized.includes("wgs_1984") ||
+      normalized.includes("wgs 84") ||
+      normalized.includes("epsg\",4326") ||
+      normalized.includes("epsg:4326");
+
+    if (isWgs84) {
+      return { mapStatus: "ready", sourceCrs: "EPSG:4326", message: null };
+    }
+
+    return {
+      mapStatus: "needs_reprojection",
+      sourceCrs: prj.split(/\r?\n/)[0]?.slice(0, 160) || "Projected CRS",
+      message:
+        "This shapefile uses projected coordinates and must be reprojected to EPSG:4326 before it can be drawn on the map.",
+    };
+  } catch {
+    return {
+      mapStatus: "missing_crs",
+      sourceCrs: null,
+      message:
+        "This shapefile has no .prj file, so its coordinates cannot be safely drawn on the map.",
+    };
+  }
+}
+
+async function inspectShapefileRoute(
   networkDir: string,
   route: string,
-): Promise<string | null> {
+): Promise<{ lengthM: number | null; mapStatus: GeoMapStatus; sourceCrs: string | null; message: string | null }> {
   try {
-    const routePath = join(networkDir, route);
-    const entries = await fs.readdir(routePath);
-    const shpFile = entries.find((e) => e.toLowerCase().endsWith(".shp"));
-    if (!shpFile) return null;
+    const stem = await findShapefileStem(networkDir, route);
+    if (!stem) {
+      return {
+        lengthM: null,
+        mapStatus: "missing_file",
+        sourceCrs: null,
+        message: "No .shp file was found for this route.",
+      };
+    }
 
-    const shpData = await fs.readFile(join(routePath, shpFile));
+    const crs = await inspectShapefileCrs(stem);
+    if (crs.mapStatus === "ready") {
+      return { lengthM: null, ...crs };
+    }
+
+    const shpData = await fs.readFile(`${stem}.shp`);
     const shpB64 = Buffer.from(shpData).toString("base64");
     const result = await computeRouteKp(shpB64);
+    const lengthM = result.segments?.reduce((sum, s) => sum + s.length_m, 0) ?? null;
 
-    if (!result.segments || result.segments.length === 0) return null;
-    const totalM = result.segments.reduce((sum, s) => sum + s.length_m, 0);
-    return `${totalM} m`;
+    return { lengthM, ...crs };
   } catch {
-    return null;
+    return {
+      lengthM: null,
+      mapStatus: "parse_error",
+      sourceCrs: null,
+      message: "This shapefile could not be read.",
+    };
+  }
+}
+
+async function inspectRoute(networkDir: string, routePath: string, format: GeoFormat): Promise<{
+  route: RouteInfo;
+  routeGeometry: RouteGeometry | null;
+}> {
+  if (format === "shapefile") {
+    const info = await inspectShapefileRoute(networkDir, routePath);
+    return {
+      route: {
+        path: routePath,
+        format,
+        length_m: info.lengthM,
+        displayLength: displayLength(info.lengthM),
+        mapStatus: info.mapStatus,
+        sourceCrs: info.sourceCrs,
+        targetCrs: "EPSG:4326",
+        message: info.message,
+      },
+      routeGeometry: null,
+    };
+  }
+
+  return {
+    route: {
+      path: routePath,
+      format,
+      length_m: null,
+      displayLength: null,
+      mapStatus: "ready",
+      sourceCrs: "EPSG:4326",
+      targetCrs: "EPSG:4326",
+      message:
+        "This route is in a map-ready geographic format. Route coordinates will be returned after the Zig/WASM route geometry operation is added.",
+    },
+    routeGeometry: null,
+  };
+}
+
+function routeStart(block: MappableBlock): GeoCoordinate | null {
+  return block.routeGeometry?.coordinates[0] ?? null;
+}
+
+function routeEnd(block: MappableBlock): GeoCoordinate | null {
+  const coordinates = block.routeGeometry?.coordinates;
+  return coordinates?.[coordinates.length - 1] ?? null;
+}
+
+function attachNeighborRouteEndpoints(blocks: MappableBlock[]) {
+  for (let index = 0; index < blocks.length; index++) {
+    const block = blocks[index];
+    if (block.routeGeometry) continue;
+
+    for (let previousIndex = index - 1; previousIndex >= 0; previousIndex--) {
+      const endpoint = routeEnd(blocks[previousIndex]);
+      if (endpoint) {
+        block.previousRouteEndpoint = endpoint;
+        break;
+      }
+    }
+
+    for (let nextIndex = index + 1; nextIndex < blocks.length; nextIndex++) {
+      const endpoint = routeStart(blocks[nextIndex]);
+      if (endpoint) {
+        block.nextRouteEndpoint = endpoint;
+        break;
+      }
+    }
   }
 }
 
@@ -165,20 +340,38 @@ export const geoModule = createOperationModule({
 
             yield* tryPromise(
               async () => {
-                const checks: Promise<void>[] = [];
-
                 for (const node of nodes) {
                   const blocks = node.data.blocks ?? [];
+                  const branchBlocks: MappableBlock[] = [];
+
                   for (let blockIndex = 0; blockIndex < blocks.length; blockIndex++) {
                     const block = blocks[blockIndex];
+                    const type = typeof block.type === "string" ? block.type : null;
 
                     if (hasCoordinates(block)) {
-                      mappableBlocks.push({
+                      const coordinate = getBlockCoordinate(block);
+                      branchBlocks.push({
                         branchId: node.id,
                         blockIndex,
+                        type,
                         format: "coordinates",
                         routePath: null,
                         routeLength: null,
+                        route: {
+                          path: null,
+                          format: "coordinates",
+                          length_m: null,
+                          displayLength: null,
+                          mapStatus: coordinate ? "ready" : "parse_error",
+                          sourceCrs: "EPSG:4326",
+                          targetCrs: "EPSG:4326",
+                          message: null,
+                        },
+                        routeGeometry: coordinate
+                          ? { type: "LineString", coordinates: [coordinate] }
+                          : null,
+                        previousRouteEndpoint: null,
+                        nextRouteEndpoint: null,
                       });
                       continue;
                     }
@@ -188,31 +381,74 @@ export const geoModule = createOperationModule({
                         ? block.route
                         : null;
                     if (!route) {
+                      branchBlocks.push({
+                        branchId: node.id,
+                        blockIndex,
+                        type,
+                        format: "coordinates",
+                        routePath: null,
+                        routeLength: null,
+                        route: {
+                          path: null,
+                          format: "coordinates",
+                          length_m: null,
+                          displayLength: null,
+                          mapStatus: "unsupported",
+                          sourceCrs: null,
+                          targetCrs: "EPSG:4326",
+                          message: "This block does not define its own route geometry.",
+                        },
+                        routeGeometry: null,
+                        previousRouteEndpoint: null,
+                        nextRouteEndpoint: null,
+                      });
                       continue;
                     }
 
-                    checks.push(
-                      detectRouteFormat(networkDir, route).then(async (format) => {
-                        if (!format) return;
+                    const format = await detectRouteFormat(networkDir, route);
+                    if (!format) {
+                      branchBlocks.push({
+                        branchId: node.id,
+                        blockIndex,
+                        type,
+                        format: "coordinates",
+                        routePath: route,
+                        routeLength: null,
+                        route: {
+                          path: route,
+                          format: "coordinates",
+                          length_m: null,
+                          displayLength: null,
+                          mapStatus: "missing_file",
+                          sourceCrs: null,
+                          targetCrs: "EPSG:4326",
+                          message: "The route file could not be found or is unsupported.",
+                        },
+                        routeGeometry: null,
+                        previousRouteEndpoint: null,
+                        nextRouteEndpoint: null,
+                      });
+                      continue;
+                    }
 
-                        let routeLength: string | null = null;
-                        if (format === "shapefile") {
-                          routeLength = await computeShapefileLength(networkDir, route);
-                        }
-
-                        mappableBlocks.push({
-                          branchId: node.id,
-                          blockIndex,
-                          format,
-                          routePath: route,
-                          routeLength,
-                        });
-                      }),
-                    );
+                    const inspected = await inspectRoute(networkDir, route, format);
+                    branchBlocks.push({
+                      branchId: node.id,
+                      blockIndex,
+                      type,
+                      format,
+                      routePath: route,
+                      routeLength: inspected.route.displayLength,
+                      route: inspected.route,
+                      routeGeometry: inspected.routeGeometry,
+                      previousRouteEndpoint: null,
+                      nextRouteEndpoint: null,
+                    });
                   }
-                }
 
-                await Promise.all(checks);
+                  attachNeighborRouteEndpoints(branchBlocks);
+                  mappableBlocks.push(...branchBlocks);
+                }
               },
               (error) =>
                 internalError("Failed to inspect network blocks", {

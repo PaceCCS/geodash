@@ -26,7 +26,7 @@ type = "Capture Unit"
 
 [[block]]
 type = "Pipe"
-route = "assets/spirit"
+route = "assets/spirit_wgs84"
 
 [[block]]
 type = "Compressor"

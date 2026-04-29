@@ -2,63 +2,57 @@ const std = @import("std");
 const shapefile = @import("shapefile");
 const crs = @import("crs");
 
-pub fn main() void {
-    run() catch |err| {
-        var buf: [256]u8 = undefined;
-        const msg = std.fmt.bufPrint(&buf, "Error: {s}\n", .{@errorName(err)}) catch "Error: (unknown)\n";
-        std.fs.File.stderr().writeAll(msg) catch {};
+pub fn main(init: std.process.Init) void {
+    run(init) catch |err| {
+        std.debug.print("Error: {s}\n", .{@errorName(err)});
         std.process.exit(1);
     };
 }
 
-fn run() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
-
-    const args = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, args);
+fn run(init: std.process.Init) !void {
+    const allocator = init.gpa;
+    var args = try std.process.Args.Iterator.initAllocator(init.minimal.args, allocator);
+    defer args.deinit();
 
     // Parse: crs-tool --to <crs> <input.shp> <output.shp>
     var target_crs: ?[]const u8 = null;
     var input_path: ?[]const u8 = null;
     var output_path: ?[]const u8 = null;
 
-    var i: usize = 1;
-    while (i < args.len) : (i += 1) {
-        if (std.mem.eql(u8, args[i], "--to")) {
-            i += 1;
-            if (i >= args.len) {
-                std.fs.File.stderr().writeAll("Error: --to requires an argument\n") catch {};
+    _ = args.skip();
+    while (args.next()) |arg| {
+        if (std.mem.eql(u8, arg, "--to")) {
+            const next = args.next() orelse {
+                std.debug.print("Error: --to requires an argument\n", .{});
                 std.process.exit(1);
-            }
-            target_crs = args[i];
+            };
+            target_crs = next;
         } else if (input_path == null) {
-            input_path = args[i];
+            input_path = arg;
         } else if (output_path == null) {
-            output_path = args[i];
+            output_path = arg;
         }
     }
 
     const target = target_crs orelse {
-        std.fs.File.stderr().writeAll("Usage: crs-tool --to <crs> <input.shp> <output.shp>\n") catch {};
+        std.debug.print("Usage: crs-tool --to <crs> <input.shp> <output.shp>\n", .{});
         std.process.exit(1);
     };
     const inp = input_path orelse {
-        std.fs.File.stderr().writeAll("Usage: crs-tool --to <crs> <input.shp> <output.shp>\n") catch {};
+        std.debug.print("Usage: crs-tool --to <crs> <input.shp> <output.shp>\n", .{});
         std.process.exit(1);
     };
     const out = output_path orelse {
-        std.fs.File.stderr().writeAll("Usage: crs-tool --to <crs> <input.shp> <output.shp>\n") catch {};
+        std.debug.print("Usage: crs-tool --to <crs> <input.shp> <output.shp>\n", .{});
         std.process.exit(1);
     };
 
     if (!std.mem.endsWith(u8, inp, ".shp")) {
-        std.fs.File.stderr().writeAll("Error: input must have .shp extension\n") catch {};
+        std.debug.print("Error: input must have .shp extension\n", .{});
         std.process.exit(1);
     }
     if (!std.mem.endsWith(u8, out, ".shp")) {
-        std.fs.File.stderr().writeAll("Error: output must have .shp extension\n") catch {};
+        std.debug.print("Error: output must have .shp extension\n", .{});
         std.process.exit(1);
     }
 
@@ -123,7 +117,5 @@ fn run() !void {
     // Write reprojected shapefile
     try shapefile.shp.write(out, shx_path, allocator, records);
 
-    var msg_buf: [512]u8 = undefined;
-    const msg = try std.fmt.bufPrint(&msg_buf, "Wrote {d} records to {s}\n", .{ records.len, out });
-    try std.fs.File.stdout().writeAll(msg);
+    std.debug.print("Wrote {d} records to {s}\n", .{ records.len, out });
 }
