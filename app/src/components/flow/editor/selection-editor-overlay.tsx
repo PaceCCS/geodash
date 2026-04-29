@@ -122,6 +122,24 @@ export function SelectionEditorOverlay({
     configMetadata,
   ]);
 
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) {
+        return;
+      }
+
+      event.preventDefault();
+      onClose();
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [open, onClose]);
+
   if (!open || !selection) {
     return null;
   }
@@ -224,6 +242,9 @@ export function SelectionEditorOverlay({
     >
       <div
         className="flex h-full max-h-full flex-col overflow-hidden rounded-xl border border-border bg-background shadow-2xl"
+        role="dialog"
+        aria-modal="false"
+        aria-label={`${kindLabel} editor: ${title}`}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">

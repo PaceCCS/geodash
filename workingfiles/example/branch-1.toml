@@ -34,3 +34,4 @@ pressure = "120 bar"
 
 [[block]]
 type = "Pipe"
+route = "assets/kmz_routes/route.kmz"
