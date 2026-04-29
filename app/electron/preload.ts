@@ -38,6 +38,8 @@ const desktopApi = {
     ipcRenderer.invoke("desktop:read-network-directory", path) as Promise<
       Array<{ path: string; content: string }>
     >,
+  moveFileSystemEntry: (sourcePath: string, destinationPath: string) =>
+    ipcRenderer.invoke("desktop:move-file-system-entry", sourcePath, destinationPath) as Promise<void>,
   writeNetworkFile: (path: string, content: string) =>
     ipcRenderer.invoke("desktop:write-network-file", path, content) as Promise<void>,
   deleteNetworkFile: (path: string) =>

@@ -1,7 +1,9 @@
 import {
   prepareFileTreeInput,
   type ContextMenuOpenContext,
+  type FileTreeDropResult,
   type FileTreePreparedInput,
+  type FileTreeRenameEvent,
 } from "@pierre/trees";
 import { FileTree, useFileTree } from "@pierre/trees/react";
 import { FilePlus2, FolderPlus } from "lucide-react";
@@ -11,6 +13,7 @@ import { createPortal } from "react-dom";
 
 import {
   createDirectory,
+  moveFileSystemEntry,
   onFileChanged,
   readFileTree,
   writeNetworkFile,
@@ -53,6 +56,7 @@ type TreeSelectionModel = {
     select: () => void;
   } | null;
   getSelectedPaths: () => readonly string[];
+  startRenaming: (path?: string) => boolean;
 };
 
 function joinTreePath(rootPath: string, treePath: string): string {
@@ -95,6 +99,29 @@ function getParentTreePath(path: string): string {
   const normalizedPath = path.replace(/\/+$/, "");
   const lastSlash = normalizedPath.lastIndexOf("/");
   return lastSlash === -1 ? "" : `${normalizedPath.slice(0, lastSlash)}/`;
+}
+
+function getTreePathName(path: string): string {
+  const normalizedPath = path.replace(/[\\/]+$/g, "");
+  const lastSlash = Math.max(
+    normalizedPath.lastIndexOf("/"),
+    normalizedPath.lastIndexOf("\\"),
+  );
+
+  return lastSlash === -1 ? normalizedPath : normalizedPath.slice(lastSlash + 1);
+}
+
+function getDropDestinationTreePath(
+  sourcePath: string,
+  targetDirectoryPath: string | null,
+): string {
+  const directoryPath = targetDirectoryPath?.replace(/\/+$/, "") ?? "";
+  const destinationName = getTreePathName(sourcePath);
+  const destinationPath = directoryPath
+    ? `${directoryPath}/${destinationName}`
+    : destinationName;
+
+  return sourcePath.endsWith("/") ? `${destinationPath}/` : destinationPath;
 }
 
 function getSelectedTargetDirectory(model: TreeSelectionModel): string {
@@ -169,6 +196,22 @@ export function SidebarFileTree({ directoryPath }: SidebarFileTreeProps) {
       shapefileDirectorySetRef.current.has(item.path)
         ? { text: "shp", title: "Shapefile" }
         : null,
+    renaming: {
+      onError: (message) => {
+        console.error("[sidebar] Failed to rename tree item:", message);
+      },
+      onRename: (event) => {
+        void handleRename(event);
+      },
+    },
+    dragAndDrop: {
+      onDropComplete: (event) => {
+        void handleDropComplete(event);
+      },
+      onDropError: (message) => {
+        console.error("[sidebar] Failed to move tree item:", message);
+      },
+    },
   });
   const loadedPaths = state.status === "ready" ? state.paths.join("\n") : "";
   const currentPaths = state.status === "ready" ? state.paths : [];
@@ -232,6 +275,38 @@ export function SidebarFileTree({ directoryPath }: SidebarFileTreeProps) {
     model.resetPaths(next.paths, { preparedInput: next.preparedInput });
     setState({ status: "ready", ...next });
   };
+
+  async function handleMoveFailure(message: string, err: unknown) {
+    console.error(message, err);
+    await reloadTree();
+  }
+
+  async function handleRename(event: FileTreeRenameEvent) {
+    try {
+      await moveFileSystemEntry(
+        joinTreePath(directoryPath, event.sourcePath),
+        joinTreePath(directoryPath, event.destinationPath),
+      );
+    } catch (err) {
+      await handleMoveFailure("[sidebar] Failed to persist rename:", err);
+    }
+  }
+
+  async function handleDropComplete(event: FileTreeDropResult) {
+    try {
+      for (const sourcePath of event.draggedPaths) {
+        await moveFileSystemEntry(
+          joinTreePath(directoryPath, sourcePath),
+          joinTreePath(
+            directoryPath,
+            getDropDestinationTreePath(sourcePath, event.target.directoryPath),
+          ),
+        );
+      }
+    } catch (err) {
+      await handleMoveFailure("[sidebar] Failed to persist drag/drop move:", err);
+    }
+  }
 
   const handleCreateFile = async () => {
     const targetDirectory = getSelectedTargetDirectory(model);
@@ -411,6 +486,16 @@ function SidebarFileTreeContextMenu({
         }
       >
         View
+      </FileTreeContextMenuButton>
+      <FileTreeContextMenuButton
+        onClick={() =>
+          closeAndRun(() => {
+            selectTreePath(model, target.treePath);
+            model.startRenaming(target.treePath);
+          })
+        }
+      >
+        Rename
       </FileTreeContextMenuButton>
       <FileTreeContextMenuButton
         disabled={target.isConfig || !target.canEdit || !actions.editPath}

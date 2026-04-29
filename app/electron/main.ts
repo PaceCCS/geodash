@@ -385,6 +385,30 @@ async function createDirectory(inputPath: string): Promise<FileSystemBrowseResul
   return browseFileSystem(directoryPath);
 }
 
+async function moveFileSystemEntry(
+  sourceInputPath: string,
+  destinationInputPath: string,
+): Promise<void> {
+  const sourcePath = resolveBrowsePath(sourceInputPath);
+  const destinationPath = resolveBrowsePath(destinationInputPath);
+  const sourceStats = await fs.stat(sourcePath);
+
+  recordOwnWrite(sourcePath);
+  recordOwnWrite(destinationPath);
+  try {
+    await fs.rename(sourcePath, destinationPath);
+  } catch (error) {
+    clearOwnWrite(sourcePath);
+    clearOwnWrite(destinationPath);
+    throw error;
+  }
+
+  if (sourceStats.isDirectory()) {
+    clearOwnWrite(sourcePath);
+    clearOwnWrite(destinationPath);
+  }
+}
+
 async function assertWatchableDirectory(
   directoryPath: string,
   extensions: string[],
@@ -661,6 +685,13 @@ function registerIpcHandlers(): void {
         }),
     );
   });
+
+  ipcMain.handle(
+    "desktop:move-file-system-entry",
+    async (_event, sourcePath: string, destinationPath: string) => {
+      await moveFileSystemEntry(sourcePath, destinationPath);
+    },
+  );
 
   ipcMain.handle("desktop:write-network-file", async (_event, filePath: string, content: string) => {
     recordOwnWrite(filePath);
