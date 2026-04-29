@@ -11,7 +11,7 @@ import {
   tryPromise,
 } from "../../core/http";
 import type { GeodashServerConfig } from "../../config";
-import { computeRouteKp, loadNetwork } from "../../services/core";
+import { computeRouteKp, loadNetwork, readRouteGeometry } from "../../services/core";
 import { resolveNetworkPath } from "../../utils/network";
 
 type GeoFormat = "shapefile" | "kmz" | "kml" | "csv" | "coordinates";
@@ -206,7 +206,13 @@ async function inspectShapefileCrs(stem: string): Promise<Pick<RouteInfo, "mapSt
 async function inspectShapefileRoute(
   networkDir: string,
   route: string,
-): Promise<{ lengthM: number | null; mapStatus: GeoMapStatus; sourceCrs: string | null; message: string | null }> {
+): Promise<{
+  lengthM: number | null;
+  mapStatus: GeoMapStatus;
+  sourceCrs: string | null;
+  message: string | null;
+  routeGeometry: RouteGeometry | null;
+}> {
   try {
     const stem = await findShapefileStem(networkDir, route);
     if (!stem) {
@@ -215,26 +221,41 @@ async function inspectShapefileRoute(
         mapStatus: "missing_file",
         sourceCrs: null,
         message: "No .shp file was found for this route.",
+        routeGeometry: null,
       };
     }
 
     const crs = await inspectShapefileCrs(stem);
-    if (crs.mapStatus === "ready") {
-      return { lengthM: null, ...crs };
-    }
-
     const shpData = await fs.readFile(`${stem}.shp`);
     const shpB64 = Buffer.from(shpData).toString("base64");
+
+    if (crs.mapStatus === "ready") {
+      const geometry = await readRouteGeometry(shpB64);
+      return {
+        lengthM: null,
+        ...crs,
+        routeGeometry: {
+          type: geometry.geometry.type,
+          coordinates: geometry.geometry.coordinates.map(([lon, lat, z]) => ({
+            lon,
+            lat,
+            z,
+          })),
+        },
+      };
+    }
+
     const result = await computeRouteKp(shpB64);
     const lengthM = result.segments?.reduce((sum, s) => sum + s.length_m, 0) ?? null;
 
-    return { lengthM, ...crs };
+    return { lengthM, ...crs, routeGeometry: null };
   } catch {
     return {
       lengthM: null,
       mapStatus: "parse_error",
       sourceCrs: null,
       message: "This shapefile could not be read.",
+      routeGeometry: null,
     };
   }
 }
@@ -256,7 +277,7 @@ async function inspectRoute(networkDir: string, routePath: string, format: GeoFo
         targetCrs: "EPSG:4326",
         message: info.message,
       },
-      routeGeometry: null,
+      routeGeometry: info.routeGeometry,
     };
   }
 

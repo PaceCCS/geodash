@@ -97,7 +97,10 @@ describe("POST /api/operations/geo/inspect", () => {
           sourceCrs: string | null;
           message: string | null;
         };
-        routeGeometry: unknown;
+        routeGeometry: {
+          type: "LineString";
+          coordinates: Array<{ lon: number; lat: number; z: number | null }>;
+        } | null;
       }>;
     };
 
@@ -116,7 +119,13 @@ describe("POST /api/operations/geo/inspect", () => {
     expect(spiritRoute!.route.sourceCrs).toBe("EPSG:4326");
     expect(spiritRoute!.route.length_m).toBeNull();
     expect(spiritRoute!.route.message).toBeNull();
-    expect(spiritRoute!.routeGeometry).toBeNull();
+    expect(spiritRoute!.routeGeometry).toBeDefined();
+    expect(spiritRoute!.routeGeometry!.type).toBe("LineString");
+    expect(spiritRoute!.routeGeometry!.coordinates.length).toBeGreaterThan(1000);
+    expect(spiritRoute!.routeGeometry!.coordinates[0]!.lon).toBeGreaterThan(-10);
+    expect(spiritRoute!.routeGeometry!.coordinates[0]!.lon).toBeLessThan(5);
+    expect(spiritRoute!.routeGeometry!.coordinates[0]!.lat).toBeGreaterThan(50);
+    expect(spiritRoute!.routeGeometry!.coordinates[0]!.lat).toBeLessThan(60);
 
     expect(kmzRoute).toBeDefined();
     expect(kmzRoute!.route.format).toBe("kmz");

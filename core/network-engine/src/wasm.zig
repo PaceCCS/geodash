@@ -794,6 +794,67 @@ fn runComputeRouteKp(input: []const u8) ![]u8 {
     return out_buf.toOwnedSlice(wasm_alloc);
 }
 
+// ── geodash_read_route_geometry ───────────────────────────────────────────────
+//
+// Input:  { shp_b64: string }
+// Output: { geometry: { type: "LineString", coordinates: [[lon, lat, z], ...] } }
+
+export fn geodash_read_route_geometry(in_ptr: u32, in_len: u32, out_ptr: u32, out_len: u32) i32 {
+    const input = @as([*]const u8, @ptrFromInt(in_ptr))[0..in_len];
+    const data = runReadRouteGeometry(input) catch |e| return setError(e, out_ptr, out_len);
+    return setOutput(out_ptr, out_len, data);
+}
+
+fn runReadRouteGeometry(input: []const u8) ![]u8 {
+    const json_parsed = try std.json.parseFromSlice(std.json.Value, wasm_alloc, input, .{});
+    defer json_parsed.deinit();
+
+    var arena = std.heap.ArenaAllocator.init(wasm_alloc);
+    defer arena.deinit();
+    const a = arena.allocator();
+
+    const obj = switch (json_parsed.value) {
+        .object => |o| o,
+        else => return error.InvalidInput,
+    };
+    const shp_b64: []const u8 = switch (obj.get("shp_b64") orelse return error.MissingShpB64) {
+        .string => |s| s,
+        else => return error.InvalidInput,
+    };
+
+    const dec = std.base64.standard.Decoder;
+    const shp_len = try dec.calcSizeForSlice(shp_b64);
+    const shp_bytes = try a.alloc(u8, shp_len);
+    try dec.decode(shp_bytes, shp_b64);
+
+    const records = try shapefile.readShpFromBytes(a, shp_bytes);
+
+    var out_buf: Buf = .empty;
+    errdefer out_buf.deinit(wasm_alloc);
+
+    try bufAppendSlice(&out_buf, wasm_alloc, "{\"geometry\":{\"type\":\"LineString\",\"coordinates\":[");
+    var first = true;
+    for (records) |record| {
+        switch (record.geometry) {
+            .point_z => |point| {
+                if (!first) try bufAppend(&out_buf, wasm_alloc, ',');
+                first = false;
+                try bufPrint(&out_buf, wasm_alloc, "[{d},{d},{d}]", .{ point.x, point.y, point.z });
+            },
+            .poly_line_z => |poly| {
+                for (poly.points, 0..) |coords, index| {
+                    if (!first) try bufAppend(&out_buf, wasm_alloc, ',');
+                    first = false;
+                    try bufPrint(&out_buf, wasm_alloc, "[{d},{d},{d}]", .{ coords[0], coords[1], poly.z[index] });
+                }
+            },
+        }
+    }
+    try bufAppendSlice(&out_buf, wasm_alloc, "]}}");
+
+    return out_buf.toOwnedSlice(wasm_alloc);
+}
+
 // ── geodash_create_route ──────────────────────────────────────────────────────
 //
 // Input:  { segments: [{length_m, elevation_m}], root: {x, y, z} }

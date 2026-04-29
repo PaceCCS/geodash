@@ -32,6 +32,7 @@ type CoreExports = {
   geodash_olga_import: WasmFn;
   geodash_olga_export: WasmFn;
   geodash_compute_route_kp: WasmFn;
+  geodash_read_route_geometry: WasmFn;
   geodash_create_route: WasmFn;
   geodash_read_shapefile: WasmFn;
   geodash_build_shapefile: WasmFn;
@@ -81,6 +82,7 @@ async function init(): Promise<void> {
       "geodash_olga_import",
       "geodash_olga_export",
       "geodash_compute_route_kp",
+      "geodash_read_route_geometry",
       "geodash_create_route",
       "geodash_read_shapefile",
       "geodash_build_shapefile",
@@ -285,6 +287,13 @@ export type BuildShapefileResult = {
   prj_b64?: string;
 };
 
+export type RouteGeometryResult = {
+  geometry: {
+    type: "LineString";
+    coordinates: [number, number, number][];
+  };
+};
+
 export async function importFromOlga(
   keyContent: string,
   rootLocation?: { x: number; y: number; z: number }
@@ -323,6 +332,17 @@ export async function computeRouteKp(shpB64: string): Promise<RouteKpResult> {
     (a, b, c, d) => rt.geodash_compute_route_kp(a, b, c, d),
     { shp_b64: shpB64 }
   ) as RouteKpResult;
+}
+
+export async function readRouteGeometry(shpB64: string): Promise<RouteGeometryResult> {
+  await init();
+  const rt = runtime!;
+  return callWasm(
+    "read_route_geometry",
+    rt,
+    (a, b, c, d) => rt.geodash_read_route_geometry(a, b, c, d),
+    { shp_b64: shpB64 }
+  ) as RouteGeometryResult;
 }
 
 export async function createRoute(
