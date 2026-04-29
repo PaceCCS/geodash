@@ -521,6 +521,14 @@ function SidebarFileTreeContextMenu({
       >
         Open in Finder
       </FileTreeContextMenuButton>
+      <FileTreeContextMenuButton
+        disabled={!actions.copyPath}
+        onClick={() =>
+          closeAndRun(() => actions.copyPath?.(target.treePath))
+        }
+      >
+        Copy Path
+      </FileTreeContextMenuButton>
     </div>,
     document.body,
   );

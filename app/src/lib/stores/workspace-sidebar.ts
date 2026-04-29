@@ -6,6 +6,7 @@ type WorkspaceSidebarDirectory = {
 };
 
 export type WorkspaceItemActions = {
+  copyPath?: (path: string) => void;
   editPath?: (path: string) => void;
   openInFinder?: (path: string) => void;
   viewPath?: (path: string) => void;

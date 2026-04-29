@@ -282,6 +282,11 @@ function WatchPage() {
           console.error("[sidebar] Failed to reveal path:", err),
         );
       },
+      copyPath: (path) => {
+        void navigator.clipboard.writeText(path).catch((err) =>
+          console.error("[sidebar] Failed to copy path:", err),
+        );
+      },
     });
 
     return () => setSidebarItemActions({});
