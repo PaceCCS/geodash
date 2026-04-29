@@ -179,25 +179,29 @@ export function FlowNetwork({
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
-      const relevantChanges = changes.filter(
-        (change) => change.type !== "select",
-      );
-      if (relevantChanges.length === 0) {
+      if (changes.length === 0) {
         return;
       }
 
-      const currentNodes = localNodesRef.current;
       const updated = applyNodeChanges(
-        relevantChanges,
-        currentNodes as Node[],
+        changes,
+        localNodesRef.current as Node[],
       ) as FlowNode[];
 
       localNodesRef.current = updated;
       setLocalNodes(updated);
 
-      if (shouldPersistNodeChanges(relevantChanges) && !suspendPersistence) {
+      const persistedChanges = changes.filter(
+        (change) => change.type !== "select",
+      );
+
+      if (
+        persistedChanges.length > 0 &&
+        shouldPersistNodeChanges(persistedChanges) &&
+        !suspendPersistence
+      ) {
         const shouldReloadDerivedData =
-          shouldRefreshDerivedDataForNodeChanges(relevantChanges);
+          shouldRefreshDerivedDataForNodeChanges(persistedChanges);
         const activityEntries = diffNetworkSnapshots(
           createNetworkSnapshotFromFlow(
             persistedNodesRef.current,
@@ -221,23 +225,23 @@ export function FlowNetwork({
 
   const onEdgesChange = useCallback(
     (changes: EdgeChange[]) => {
-      const persistedChanges = changes.filter(
-        (change) => change.type !== "select",
-      );
-      if (persistedChanges.length === 0) {
+      if (changes.length === 0) {
         return;
       }
 
-      const currentEdges = localEdgesRef.current;
       const updated = applyEdgeChanges(
-        persistedChanges,
-        currentEdges as Edge[],
+        changes,
+        localEdgesRef.current as Edge[],
       ) as FlowEdge[];
 
       localEdgesRef.current = updated;
       setLocalEdges(updated);
 
-      if (!suspendPersistence) {
+      const persistedChanges = changes.filter(
+        (change) => change.type !== "select",
+      );
+
+      if (persistedChanges.length > 0 && !suspendPersistence) {
         const activityEntries = diffNetworkSnapshots(
           createNetworkSnapshotFromFlow(
             persistedNodesRef.current,
@@ -257,6 +261,13 @@ export function FlowNetwork({
       }
     },
     [scheduleSyncToFiles, suspendPersistence],
+  );
+
+  const handleDeleteEdge = useCallback(
+    (edgeId: string) => {
+      onEdgesChange([{ type: "remove", id: edgeId }]);
+    },
+    [onEdgesChange],
   );
 
   const onConnect = useCallback(
@@ -333,6 +344,18 @@ export function FlowNetwork({
       setMenuTarget({
         kind: "node",
         node,
+        clientX: event.clientX,
+        clientY: event.clientY,
+      });
+    },
+    [],
+  );
+
+  const onEdgeContextMenu = useCallback(
+    (event: ReactMouseEvent, edge: Edge) => {
+      setMenuTarget({
+        kind: "edge",
+        edge,
         clientX: event.clientX,
         clientY: event.clientY,
       });
@@ -450,10 +473,12 @@ export function FlowNetwork({
                 onConnect={onConnect}
                 onNodeClick={onNodeClick}
                 onNodeContextMenu={onNodeContextMenu}
+                onEdgeContextMenu={onEdgeContextMenu}
                 onPaneContextMenu={onPaneContextMenu}
                 onPaneClick={onPaneClick}
                 nodeTypes={nodeTypes}
                 colorMode={colorMode}
+                deleteKeyCode={["Backspace", "Delete"]}
                 fitView
                 onlyRenderVisibleElements
               >
@@ -471,6 +496,7 @@ export function FlowNetwork({
               onCreateBranch={
                 onCreateBranch ? handleCreateBranchAtTarget : undefined
               }
+              onDeleteEdge={handleDeleteEdge}
             />
           </ContextMenuContent>
         </ContextMenu>
@@ -481,18 +507,21 @@ export function FlowNetwork({
 
 type MenuTarget =
   | { kind: "pane"; clientX: number; clientY: number }
-  | { kind: "node"; node: Node; clientX: number; clientY: number };
+  | { kind: "node"; node: Node; clientX: number; clientY: number }
+  | { kind: "edge"; edge: Edge; clientX: number; clientY: number };
 
 function FlowContextMenuItems({
   target,
   onEditNode,
   onOpenNodeInFinder,
   onCreateBranch,
+  onDeleteEdge,
 }: {
   target: MenuTarget | null;
   onEditNode?: (nodeId: string) => void;
   onOpenNodeInFinder?: (nodeId: string) => void;
   onCreateBranch?: (parentId?: string) => void;
+  onDeleteEdge?: (edgeId: string) => void;
 }) {
   if (!target) {
     return null;
@@ -507,6 +536,31 @@ function FlowContextMenuItems({
       <ContextMenuItem onSelect={() => onCreateBranch()}>
         Create Branch
       </ContextMenuItem>
+    );
+  }
+
+  if (target.kind === "edge") {
+    const { edge } = target;
+    const weight =
+      typeof edge.data?.weight === "number" ? edge.data.weight : null;
+
+    return (
+      <>
+        <div className="px-2 py-1.5 text-xs text-muted-foreground">
+          {weight === null ? "No weight" : `Weight: ${weight}`}
+        </div>
+        {onDeleteEdge ? (
+          <>
+            <ContextMenuSeparator />
+            <ContextMenuItem
+              variant="destructive"
+              onSelect={() => onDeleteEdge(edge.id)}
+            >
+              Delete
+            </ContextMenuItem>
+          </>
+        ) : null}
+      </>
     );
   }
 

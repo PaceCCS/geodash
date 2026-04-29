@@ -184,7 +184,7 @@ export async function getNetworkSourceFromCollections(): Promise<{
 export async function resetFlowToNetwork(
   network: NetworkResponse
 ): Promise<void> {
-  await clearFlowCollections();
+  await Promise.all([nodesCollection.preload(), edgesCollection.preload()]);
 
   const flowNodes: FlowNode[] = network.nodes.map((node) => ({
     ...node,
@@ -209,7 +209,6 @@ export async function resetFlowToNetwork(
 
   const sortedNodes = sortNodesWithParentsFirst(flowNodes);
 
-  const nodesTx = nodesCollection.insert(sortedNodes);
-  const edgesTx = edgesCollection.insert(validEdges);
-  await Promise.all([nodesTx.isPersisted.promise, edgesTx.isPersisted.promise]);
+  writeNodesToCollection(sortedNodes);
+  writeEdgesToCollection(validEdges);
 }

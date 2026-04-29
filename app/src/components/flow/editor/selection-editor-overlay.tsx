@@ -20,6 +20,7 @@ import { useNetworkOptional } from "@/contexts/network-context";
 import { geoCollection } from "@/lib/collections/geo";
 import type { PropertyMetadata } from "@/hooks/use-schema-properties";
 import type { NetworkConfigMetadata, NetworkValue } from "@/lib/api-client";
+import type { FlowEdge } from "@/lib/collections/flow-nodes";
 import {
   applySelectionEditorAuthoredValues,
   getConfigUnitFallback,
@@ -57,13 +58,22 @@ type EditorFieldDraft = {
   defaultUnit?: string;
 };
 
+type OutgoingDraft = {
+  edgeId: string;
+  target: string;
+  weightText: string;
+  removed: boolean;
+};
+
 type SelectionEditorOverlayProps = {
   open: boolean;
   selection?: EditableFlowSelection;
+  edges: FlowEdge[];
   configMetadata: NetworkConfigMetadata | null;
   onClose: () => void;
   onSave: (
     nextNode: ReturnType<typeof applySelectionEditorAuthoredValues>,
+    nextEdges?: FlowEdge[],
   ) => Promise<void>;
   onAddBlock?: (branchId: string) => void;
   onDelete?: (selection: EditableFlowSelection) => Promise<void>;
@@ -72,6 +82,7 @@ type SelectionEditorOverlayProps = {
 export function SelectionEditorOverlay({
   open,
   selection,
+  edges,
   configMetadata,
   onClose,
   onSave,
@@ -83,6 +94,10 @@ export function SelectionEditorOverlay({
     [selection],
   );
   const [fields, setFields] = useState<EditorFieldDraft[]>([]);
+  const [outgoingDrafts, setOutgoingDrafts] = useState<OutgoingDraft[]>([]);
+  const [outgoingErrors, setOutgoingErrors] = useState<
+    Record<string, string>
+  >({});
   const [newFieldName, setNewFieldName] = useState("");
   const [newFieldKind, setNewFieldKind] = useState<AddFieldKind>("text");
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -94,10 +109,15 @@ export function SelectionEditorOverlay({
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  const branchSourceId =
+    selection?.kind === "branch" ? selection.node.id : null;
+
   useEffect(() => {
     if (!open || !selection) {
       setFields([]);
       setFieldErrors({});
+      setOutgoingDrafts([]);
+      setOutgoingErrors({});
       setSaveError(null);
       setAddError(null);
       setIsConfirmingDelete(false);
@@ -120,6 +140,21 @@ export function SelectionEditorOverlay({
         ),
       ),
     );
+    if (branchSourceId) {
+      setOutgoingDrafts(
+        edges
+          .filter((edge) => edge.source === branchSourceId)
+          .map((edge) => ({
+            edgeId: edge.id,
+            target: edge.target,
+            weightText: String(edge.data.weight),
+            removed: false,
+          })),
+      );
+    } else {
+      setOutgoingDrafts([]);
+    }
+    setOutgoingErrors({});
     setFieldErrors({});
     setSaveError(null);
     setAddError(null);
@@ -131,6 +166,8 @@ export function SelectionEditorOverlay({
     selection?.query,
     selection?.kind === "block" ? selection.block?.type : undefined,
     configMetadata,
+    branchSourceId,
+    edges,
   ]);
 
   useEffect(() => {
@@ -173,6 +210,38 @@ export function SelectionEditorOverlay({
 
       const next = { ...previous };
       delete next[key];
+      return next;
+    });
+  };
+
+  const updateOutgoingWeight = (edgeId: string, weightText: string) => {
+    setOutgoingDrafts((previous) =>
+      previous.map((draft) =>
+        draft.edgeId === edgeId ? { ...draft, weightText } : draft,
+      ),
+    );
+    setOutgoingErrors((previous) => {
+      if (!(edgeId in previous)) {
+        return previous;
+      }
+      const next = { ...previous };
+      delete next[edgeId];
+      return next;
+    });
+  };
+
+  const toggleOutgoingRemoved = (edgeId: string) => {
+    setOutgoingDrafts((previous) =>
+      previous.map((draft) =>
+        draft.edgeId === edgeId ? { ...draft, removed: !draft.removed } : draft,
+      ),
+    );
+    setOutgoingErrors((previous) => {
+      if (!(edgeId in previous)) {
+        return previous;
+      }
+      const next = { ...previous };
+      delete next[edgeId];
       return next;
     });
   };
@@ -241,19 +310,93 @@ export function SelectionEditorOverlay({
       }
     }
 
-    if (Object.keys(nextFieldErrors).length > 0) {
+    const nextOutgoingErrors: Record<string, string> = {};
+    const validatedOutgoing: Array<{
+      edgeId: string;
+      target: string;
+      weight: number;
+      removed: boolean;
+    }> = [];
+
+    if (branchSourceId) {
+      for (const draft of outgoingDrafts) {
+        if (draft.removed) {
+          validatedOutgoing.push({ ...draft, weight: 0 });
+          continue;
+        }
+
+        const trimmed = draft.weightText.trim();
+        if (!trimmed) {
+          nextOutgoingErrors[draft.edgeId] = "Weight is required.";
+          continue;
+        }
+
+        const parsed = Number(trimmed);
+        if (!Number.isFinite(parsed)) {
+          nextOutgoingErrors[draft.edgeId] = "Enter a valid number.";
+          continue;
+        }
+
+        validatedOutgoing.push({ ...draft, weight: parsed });
+      }
+    }
+
+    if (
+      Object.keys(nextFieldErrors).length > 0 ||
+      Object.keys(nextOutgoingErrors).length > 0
+    ) {
       setFieldErrors(nextFieldErrors);
+      setOutgoingErrors(nextOutgoingErrors);
       setSaveError("Fix the highlighted fields before applying changes.");
       return;
     }
 
     setFieldErrors({});
+    setOutgoingErrors({});
     setSaveError(null);
     setIsSaving(true);
+
+    let nextEdges: FlowEdge[] | undefined;
+    if (branchSourceId) {
+      const originalById = new Map(
+        edges
+          .filter((edge) => edge.source === branchSourceId)
+          .map((edge) => [edge.id, edge]),
+      );
+
+      const branchEdgesChanged = validatedOutgoing.some((draft) => {
+        if (draft.removed) {
+          return true;
+        }
+        const original = originalById.get(draft.edgeId);
+        return !original || original.data.weight !== draft.weight;
+      });
+
+      if (branchEdgesChanged) {
+        const otherEdges = edges.filter(
+          (edge) => edge.source !== branchSourceId,
+        );
+        const updatedBranchEdges = validatedOutgoing
+          .filter((draft) => !draft.removed)
+          .map((draft) => {
+            const original = originalById.get(draft.edgeId);
+            if (!original) {
+              return null;
+            }
+            return {
+              ...original,
+              data: { ...original.data, weight: draft.weight },
+            };
+          })
+          .filter((edge): edge is FlowEdge => edge !== null);
+        nextEdges = [...otherEdges, ...updatedBranchEdges];
+      }
+    }
 
     try {
       await onSave(
         applySelectionEditorAuthoredValues(selection, nextAuthoredValues),
+        nextEdges,
       );
     } catch (error) {
       setSaveError(
@@ -350,6 +493,86 @@ export function SelectionEditorOverlay({
                 />
               ))}
             </div>
+
+            {branchSourceId ? (
+              <div className="border-t border-border">
+                <div className="px-5 py-4">
+                  <p className="text-sm font-medium">Outgoing</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Connections from this branch. Drag from the right handle in
+                    the canvas to add new ones.
+                  </p>
+                </div>
+                {outgoingDrafts.length === 0 ? (
+                  <p className="px-5 pb-4 text-xs text-muted-foreground">
+                    No outgoing connections.
+                  </p>
+                ) : (
+                  <div className="divide-y divide-border/60">
+                    {outgoingDrafts.map((draft) => (
+                      <div
+                        key={draft.edgeId}
+                        className="grid gap-3 px-5 py-3 md:grid-cols-[minmax(0,12rem)_minmax(0,1fr)_auto] md:items-start"
+                      >
+                        <div className="space-y-1">
+                          <p
+                            className={
+                              draft.removed
+                                ? "font-mono text-sm break-all line-through text-muted-foreground"
+                                : "font-mono text-sm break-all"
+                            }
+                          >
+                            {draft.target}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {draft.removed ? "Will be removed" : "Weight"}
+                          </p>
+                        </div>
+                        <div className="space-y-2 min-w-0">
+                          <Input
+                            type="number"
+                            step="any"
+                            value={draft.weightText}
+                            disabled={draft.removed}
+                            onChange={(event) =>
+                              updateOutgoingWeight(
+                                draft.edgeId,
+                                event.target.value,
+                              )
+                            }
+                          />
+                          {outgoingErrors[draft.edgeId] ? (
+                            <p className="text-xs text-destructive">
+                              {outgoingErrors[draft.edgeId]}
+                            </p>
+                          ) : null}
+                        </div>
+                        <div className="flex justify-end">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => toggleOutgoingRemoved(draft.edgeId)}
+                            title={
+                              draft.removed
+                                ? "Restore connection"
+                                : "Remove connection"
+                            }
+                          >
+                            <Trash2 className="size-4" />
+                            <span className="sr-only">
+                              {draft.removed
+                                ? "Restore connection"
+                                : "Remove connection"}
+                            </span>
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : null}
 
             <div className="border-t border-border px-5 py-4">
               <div className="flex flex-col gap-3 md:flex-row md:items-end">

@@ -572,21 +572,27 @@ function HydratedWatchNetwork({
   }, [syncDirectory]);
 
   const handleSaveSelection = useCallback(
-    async (nextNode: FlowNode) => {
+    async (nextNode: FlowNode, nextEdgesArg?: FlowEdge[]) => {
       const previousNodes = sortNodesWithParentsFirst(nodesRaw);
       const nextNodes = previousNodes.map((node) =>
         node.id === nextNode.id ? nextNode : node,
       );
+      const nextEdges = nextEdgesArg ?? edgesRaw;
+      const edgesChanged = nextEdgesArg !== undefined;
+
       const activityEntries = diffNetworkSnapshots(
         createNetworkSnapshotFromFlow(previousNodes, edgesRaw),
-        createNetworkSnapshotFromFlow(nextNodes, edgesRaw),
+        createNetworkSnapshotFromFlow(nextNodes, nextEdges),
         {
           source: "details",
         },
       );
 
       writeNodesToCollection(nextNodes);
-      await exportNetworkToToml(nextNodes, edgesRaw, syncDirectory);
+      if (edgesChanged) {
+        writeEdgesToCollection(nextEdges);
+      }
+      await exportNetworkToToml(nextNodes, nextEdges, syncDirectory);
       await reloadPersistedNetwork();
       appendActivityLogEntries(activityEntries);
     },
@@ -730,6 +736,7 @@ function HydratedWatchNetwork({
           <SelectionEditorOverlay
             open={isEditorOpen}
             selection={editableSelection}
+            edges={edgesRaw}
             configMetadata={configMetadata}
             onClose={() => onEditorOpenChange(false)}
             onSave={handleSaveSelection}
