@@ -21,7 +21,7 @@ export function BranchNode({ data, selected }: NodeProps) {
     <div
       data-testid={`branch-node-${nodeData.id}`}
       className={cn(
-        "bg-card text-card-foreground border border-border rounded-lg shadow-sm pt-2 pb-3 min-w-[200px]",
+        "bg-card text-card-foreground border border-border rounded-lg shadow-sm pt-2 pb-0.5 min-w-[200px]",
         selected && "ring-2 ring-primary",
       )}
     >
@@ -35,10 +35,13 @@ export function BranchNode({ data, selected }: NodeProps) {
         </div>
       </div>
       {blocks && blocks.length > 0 && (
-        <div className="space-y-1 px-0.5 mb-1">
+        <div className="space-y-1 px-0.5">
           {blocks.map((block, index) => {
             const hasOwnRouteGeometry = geoBlocks.some(
-              (b) => b.branchId === nodeData.id && b.blockIndex === index && b.routeGeometry !== null,
+              (b) =>
+                b.branchId === nodeData.id &&
+                b.blockIndex === index &&
+                b.routeGeometry !== null,
             );
 
             return (

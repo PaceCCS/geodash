@@ -12,6 +12,7 @@ import {
   edgesCollection,
   resetFlowToNetwork,
   sortNodesWithParentsFirst,
+  writeEdgesToCollection,
   writeNodesToCollection,
 } from "@/lib/collections/flow";
 import { refreshGeoCollection } from "@/lib/collections/geo";
@@ -34,14 +35,17 @@ import {
   normalizeFlowSelectionQuery,
   resolveFlowSelection,
 } from "@/lib/flow-selection";
-import type { FlowNode } from "@/lib/collections/flow-nodes";
+import type { FlowEdge, FlowNode } from "@/lib/collections/flow-nodes";
 import { createNetworkSnapshotFromFlow, diffNetworkSnapshots } from "@/lib/network-activity";
 import {
   getNetworkFromPath,
   type NetworkConfigMetadata,
 } from "@/lib/api-client";
 import { isBranchNode } from "@/lib/collections/flow-nodes";
-import { isEditableFlowSelection } from "@/lib/selection-editor";
+import {
+  isEditableFlowSelection,
+  type EditableFlowSelection,
+} from "@/lib/selection-editor";
 import { useWorkspaceSidebar } from "@/lib/stores/workspace-sidebar";
 
 type WatchSearch = {
@@ -589,6 +593,74 @@ function HydratedWatchNetwork({
     [edgesRaw, nodesRaw, reloadPersistedNetwork, syncDirectory],
   );
 
+  const handleDeleteSelection = useCallback(
+    async (target: EditableFlowSelection) => {
+      const previousNodes = sortNodesWithParentsFirst(nodesRaw);
+      const previousEdges = edgesRaw;
+
+      let nextNodes: FlowNode[] = previousNodes;
+      let nextEdges: FlowEdge[] = previousEdges;
+      let edgesChanged = false;
+
+      if (target.kind === "block") {
+        nextNodes = previousNodes.map((node) => {
+          if (node.id !== target.node.id || !isBranchNode(node)) {
+            return node;
+          }
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              blocks: node.data.blocks.filter(
+                (_, index) => index !== target.blockIndex,
+              ),
+            },
+          };
+        });
+      } else if (target.kind === "branch") {
+        nextNodes = previousNodes.filter((node) => node.id !== target.node.id);
+        nextEdges = previousEdges.filter(
+          (edge) =>
+            edge.source !== target.node.id && edge.target !== target.node.id,
+        );
+        edgesChanged = nextEdges.length !== previousEdges.length;
+      } else {
+        nextNodes = previousNodes
+          .filter((node) => node.id !== target.node.id)
+          .map((node) =>
+            node.parentId === target.node.id
+              ? { ...node, parentId: undefined, extent: undefined }
+              : node,
+          );
+      }
+
+      const activityEntries = diffNetworkSnapshots(
+        createNetworkSnapshotFromFlow(previousNodes, previousEdges),
+        createNetworkSnapshotFromFlow(nextNodes, nextEdges),
+        {
+          source: "details",
+        },
+      );
+
+      writeNodesToCollection(nextNodes);
+      if (edgesChanged) {
+        writeEdgesToCollection(nextEdges);
+      }
+      await exportNetworkToToml(nextNodes, nextEdges, syncDirectory);
+      await reloadPersistedNetwork();
+      appendActivityLogEntries(activityEntries);
+
+      onSelectedQueryChange(target.kind === "block" ? target.node.id : null);
+    },
+    [
+      edgesRaw,
+      nodesRaw,
+      onSelectedQueryChange,
+      reloadPersistedNetwork,
+      syncDirectory,
+    ],
+  );
+
   return (
     <div className="relative h-full w-full">
       {viewMode === "schematic" ? (
@@ -612,6 +684,7 @@ function HydratedWatchNetwork({
             onClose={() => onEditorOpenChange(false)}
             onSave={handleSaveSelection}
             onAddBlock={setAddBlockBranchId}
+            onDelete={handleDeleteSelection}
           />
           <BlockCreatorDialog
             open={Boolean(addBlockBranch)}

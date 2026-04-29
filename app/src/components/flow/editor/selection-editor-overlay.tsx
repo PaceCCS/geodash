@@ -66,6 +66,7 @@ type SelectionEditorOverlayProps = {
     nextNode: ReturnType<typeof applySelectionEditorAuthoredValues>,
   ) => Promise<void>;
   onAddBlock?: (branchId: string) => void;
+  onDelete?: (selection: EditableFlowSelection) => Promise<void>;
 };
 
 export function SelectionEditorOverlay({
@@ -75,6 +76,7 @@ export function SelectionEditorOverlay({
   onClose,
   onSave,
   onAddBlock,
+  onDelete,
 }: SelectionEditorOverlayProps) {
   const derivedValues = useMemo(
     () => (selection ? getSelectionEditorDerivedValues(selection) : {}),
@@ -88,6 +90,9 @@ export function SelectionEditorOverlay({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [resetToken, setResetToken] = useState(0);
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open || !selection) {
@@ -95,6 +100,8 @@ export function SelectionEditorOverlay({
       setFieldErrors({});
       setSaveError(null);
       setAddError(null);
+      setIsConfirmingDelete(false);
+      setDeleteError(null);
       return;
     }
 
@@ -116,6 +123,8 @@ export function SelectionEditorOverlay({
     setFieldErrors({});
     setSaveError(null);
     setAddError(null);
+    setIsConfirmingDelete(false);
+    setDeleteError(null);
     setResetToken((previous) => previous + 1);
   }, [
     open,
@@ -190,6 +199,26 @@ export function SelectionEditorOverlay({
     setNewFieldName("");
     setNewFieldKind("text");
     setAddError(null);
+  };
+
+  const handleDelete = async () => {
+    if (!selection || !onDelete) {
+      return;
+    }
+
+    setDeleteError(null);
+    setIsDeleting(true);
+
+    try {
+      await onDelete(selection);
+    } catch (error) {
+      setDeleteError(
+        error instanceof Error ? error.message : "Failed to delete selection.",
+      );
+      setIsConfirmingDelete(false);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleSave = async () => {
@@ -390,9 +419,53 @@ export function SelectionEditorOverlay({
         </div>
 
         <div className="flex items-center justify-between gap-3 border-t border-border px-5 py-4">
-          <div className="min-h-5">
+          <div className="flex min-h-5 items-center gap-2">
+            {onDelete ? (
+              isConfirmingDelete ? (
+                <>
+                  <span className="text-xs text-muted-foreground">
+                    Delete this {kindLabel.toLowerCase()}?
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsConfirmingDelete(false)}
+                    disabled={isDeleting}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    onClick={handleDelete}
+                    disabled={isDeleting}
+                  >
+                    {isDeleting ? "Deleting..." : "Delete"}
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-2 text-destructive hover:text-destructive"
+                  onClick={() => {
+                    setDeleteError(null);
+                    setIsConfirmingDelete(true);
+                  }}
+                  disabled={isSaving || isDeleting}
+                >
+                  <Trash2 className="size-4" />
+                  Delete
+                </Button>
+              )
+            ) : null}
             {saveError ? (
               <p className="text-xs text-destructive">{saveError}</p>
+            ) : deleteError ? (
+              <p className="text-xs text-destructive">{deleteError}</p>
             ) : null}
           </div>
           <div className="flex items-center gap-2">
@@ -400,11 +473,15 @@ export function SelectionEditorOverlay({
               type="button"
               variant="outline"
               onClick={onClose}
-              disabled={isSaving}
+              disabled={isSaving || isDeleting}
             >
               Close
             </Button>
-            <Button type="button" onClick={handleSave} disabled={isSaving}>
+            <Button
+              type="button"
+              onClick={handleSave}
+              disabled={isSaving || isDeleting}
+            >
               {isSaving ? "Applying..." : "Apply Changes"}
             </Button>
           </div>
