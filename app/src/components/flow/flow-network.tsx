@@ -71,6 +71,7 @@ const SYNC_DEBOUNCE_MS = 300;
 type FlowNetworkProps = {
   nodes: FlowNode[];
   edges: FlowEdge[];
+  viewMode?: "schematic" | "fluid";
   selectedQuery?: string;
   onSelectedQueryChange?: (query: string | null) => void;
   onEditNode?: (nodeId: string) => void;
@@ -96,6 +97,7 @@ type FlowNetworkProps = {
 export function FlowNetwork({
   nodes,
   edges,
+  viewMode = "schematic",
   selectedQuery,
   onEditNode,
   onOpenNodeInFinder,
@@ -450,6 +452,7 @@ export function FlowNetwork({
     <div className="h-full w-full">
       <FlowSelectionProvider
         value={{
+          viewMode,
           selectedQuery,
           setSelectedQuery: handleSelectedQueryChange,
           onAddBlockToBranch,

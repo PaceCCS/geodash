@@ -1,6 +1,7 @@
 import { createContext, useContext } from "react";
 
 type FlowSelectionContextValue = {
+  viewMode?: "schematic" | "fluid";
   selectedQuery?: string;
   setSelectedQuery?: (query: string | null) => void;
   onAddBlockToBranch?: (branchId: string) => void;

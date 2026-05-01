@@ -14,6 +14,7 @@ import {
   Save,
   Workflow,
   Map as MapIcon,
+  Droplets,
 } from "lucide-react";
 
 import { BlockCreatorDialog } from "@/components/flow/editor/block-creator-dialog";
@@ -78,9 +79,9 @@ type WatchSearch = {
   view?: NetworkViewMode;
 };
 
-type NetworkViewMode = "schematic" | "geographic";
+type NetworkViewMode = "schematic" | "geographic" | "fluid";
 
-const NETWORK_VIEW_MODES = ["schematic", "geographic"] as const;
+const NETWORK_VIEW_MODES = ["schematic", "geographic", "fluid"] as const;
 
 function normalizeNetworkViewMode(value: unknown): NetworkViewMode {
   return NETWORK_VIEW_MODES.includes(value as NetworkViewMode)
@@ -380,6 +381,19 @@ function WatchPage() {
             shortcut: "Mod+G",
             checked: viewMode === "geographic",
             menuOrder: 201,
+          },
+          {
+            id: "network-view-fluid",
+            label: "Fluid",
+            run: (dialog) => {
+              handleViewModeChange("fluid");
+              dialog.close();
+            },
+            group: "View",
+            icon: <Droplets />,
+            shortcut: "Mod+U",
+            checked: viewMode === "fluid",
+            menuOrder: 202,
           },
           {
             id: "select-directory",
@@ -772,11 +786,12 @@ function HydratedWatchNetwork({
 
   return (
     <div className="relative h-full w-full">
-      {viewMode === "schematic" ? (
+      {viewMode === "schematic" || viewMode === "fluid" ? (
         <>
           <FlowNetwork
             nodes={nodes}
             edges={edges}
+            viewMode={viewMode}
             onPropagationInputsChanged={reloadPersistedNetwork}
             syncDirectory={syncDirectory}
             suspendPersistence={suspendPersistence}
