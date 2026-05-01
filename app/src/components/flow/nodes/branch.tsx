@@ -9,6 +9,8 @@ import { getSelectedBlockPath } from "@/lib/flow-selection";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 
+const HEADER_HANDLE_TOP = 20;
+
 export function BranchNode({ data, selected }: NodeProps) {
   const nodeData = data as BranchNodeData;
   const { label, blocks } = nodeData;
@@ -25,7 +27,11 @@ export function BranchNode({ data, selected }: NodeProps) {
         selected && "ring-2 ring-primary",
       )}
     >
-      <Handle type="target" position={Position.Left} />
+      <Handle
+        type="target"
+        position={Position.Left}
+        style={{ top: HEADER_HANDLE_TOP }}
+      />
       <div className="flex items-center gap-2 mb-2 px-2.5 justify-between border-b border-border pb-2">
         <div className="text-sm font-medium">{label || nodeData.id}</div>
         <div className="flex items-center gap-2">
@@ -94,7 +100,11 @@ export function BranchNode({ data, selected }: NodeProps) {
           </button>
         </div>
       ) : null}
-      <Handle type="source" position={Position.Right} />
+      <Handle
+        type="source"
+        position={Position.Right}
+        style={{ top: HEADER_HANDLE_TOP }}
+      />
     </div>
   );
 }
