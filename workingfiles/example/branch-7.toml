@@ -7,6 +7,12 @@ y = 227.7440178736691
 
 [[block]]
 type = "Source"
+flow_rate = 1
+
+[block.composition]
+carbonDioxideFraction = 0.96
+hydrogenFraction = 0.0075
+nitrogenFraction = 0.0325
 
 [[block]]
 type = "Pipe"
