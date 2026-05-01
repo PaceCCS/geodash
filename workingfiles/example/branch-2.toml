@@ -4,8 +4,8 @@ parentId = "group-1"
 diameter = "0.8 m"
 
 [position]
-x = 412.7516711069858
-y = 18.285460123872497
+x = 411.60511028391477
+y = 144.43722424195255
 
 [[outgoing]]
 target = "branch-3"
@@ -28,21 +28,6 @@ type = "Pipe"
 [[block]]
 type = "Pipe"
 label = "special pipe"
-
-[[block]]
-type = "Pipe"
-
-[[block]]
-type = "Pipe"
-
-[[block]]
-type = "Pipe"
-
-[[block]]
-type = "Pipe"
-
-[[block]]
-type = "Pipe"
 
 [[block]]
 type = "Pipe"
