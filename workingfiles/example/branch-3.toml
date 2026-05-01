@@ -9,13 +9,4 @@ y = -150.83168889699513
 type = "Pipe"
 
 [[block]]
-type = "Pipe"
-
-[[block]]
-type = "Pipe"
-
-[[block]]
-type = "Pipe"
-
-[[block]]
 type = "Sink"

@@ -28,6 +28,3 @@ type = "Pipe"
 [[block]]
 type = "Pipe"
 label = "special pipe"
-
-[[block]]
-type = "Pipe"

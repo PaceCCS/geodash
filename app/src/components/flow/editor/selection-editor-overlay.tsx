@@ -280,6 +280,7 @@ export function SelectionEditorOverlay({
 
     try {
       await onDelete(selection);
+      onClose();
     } catch (error) {
       setDeleteError(
         error instanceof Error ? error.message : "Failed to delete selection.",
