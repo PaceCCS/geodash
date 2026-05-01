@@ -59,7 +59,17 @@ export function SchematicBranchBody() {
 }
 
 export function FluidBranchBody() {
+  const { node } = useBranchNode();
+  const hasComposition = node.composition !== undefined;
+
   return (
-    <div className="mx-0.5 h-28 rounded-b-md border border-dashed border-border bg-muted/30" />
+    <div
+      className={cn(
+        "mx-0.5 h-28 rounded-b-md border border-dashed",
+        hasComposition
+          ? "border-border bg-muted/30"
+          : "border-amber-500/40 bg-amber-500/10",
+      )}
+    />
   );
 }
