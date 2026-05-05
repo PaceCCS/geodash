@@ -460,6 +460,10 @@ function expandScientificNotation(value: string): string {
   const digits = `${integerPart}${fractionPart}`.replace(/^0+/, "") || "0";
   const decimalIndex = integerPart.length + exponent;
 
+  if (Math.abs(decimalIndex) > 4096) {
+    return value;
+  }
+
   if (digits === "0") {
     return "0";
   }
