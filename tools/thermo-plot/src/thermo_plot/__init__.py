@@ -1,0 +1,2 @@
+"""Thermodynamic plotting tool scaffold."""
+

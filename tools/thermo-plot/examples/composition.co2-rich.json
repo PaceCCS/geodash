@@ -1,0 +1,9 @@
+{
+  "basis": "mole_fraction",
+  "components": {
+    "CO2": 0.965,
+    "N2": 0.02,
+    "H2": 0.005,
+    "METHANE": 0.01
+  }
+}
