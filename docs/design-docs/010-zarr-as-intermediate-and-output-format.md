@@ -224,6 +224,65 @@ That makes it possible to prepare thermo slices from:
 
 while presenting one common downstream interface.
 
+### Relationship to `tools/thermo-plot`
+
+The experimental [`tools/thermo-plot`](../../tools/thermo-plot/README.md) CLI is
+a useful first producer and inspector for thermodynamic Zarr stores, but it
+should be treated as a **prototype/intermediate producer**, not the final
+compute-shader store shape.
+
+Current useful behaviour:
+
+- it can generate pressure-enthalpy thermodynamic grids from the local
+  Multiflash-trained ONNX model family
+- it is structured around backend authorities, so a future official KBC
+  Multiflash Python backend can replace the ONNX backend without changing the
+  plotting path
+- it writes inspectable Zarr arrays with axes, fields, units, composition, source
+  metadata, and validity data
+- its plotting path consumes only Zarr, so charts can be regenerated without
+  re-running the thermodynamic authority
+
+Current limitations relative to the Geodash compute-shader direction:
+
+- it writes a flat store with `axes/`, `fields/`, and `metadata.json`; Geodash
+  should eventually write the versioned `/thermo/<model_id>/<version>/...`
+  hierarchy shown above
+- the ONNX model backend naturally uses `enthalpy_kj_per_mol`, while Geodash
+  runtime data should prefer canonical SI fields such as `enthalpy_j_per_kg`
+- it stores scalar scientific fields separately, which is good for inspection,
+  but not yet the packed `RGBA32Float`-style texture-ready representation needed
+  for direct WebGPU upload
+- phase and validity fields should become explicit integer/boolean arrays in the
+  Geodash store, even if plotting tools convert them as needed
+
+Future work should add a Geodash export mode to `thermo-plot` or a companion
+converter that writes:
+
+```text
+/thermo/<model_id>/<version>/metadata.json
+/thermo/<model_id>/<version>/source/
+/thermo/<model_id>/<version>/grids/ph/
+  axes/
+    pressure_pa
+    enthalpy_j_per_kg
+  fields/
+    temperature_k
+    density_kg_per_m3
+    entropy_j_per_kg_k
+    viscosity_pa_s
+    gas_fraction
+    phase_code
+    validity_mask
+/thermo/<model_id>/<version>/derived/texture_ready/
+  properties_rgba
+  viscosity_phase_rgba
+```
+
+In that future shape, the canonical grid remains the scientific/cache/archive
+layer, while `derived/texture_ready` contains the specific packed arrays that the
+browser can load into WebGPU textures or buffers.
+
 ## Branch Evaluation Output Sketch
 
 Suggested shape:
